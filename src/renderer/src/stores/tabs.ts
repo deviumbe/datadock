@@ -1,0 +1,490 @@
+import { defineStore } from 'pinia'
+import { ref, markRaw } from 'vue'
+import type {
+  AlterOp,
+  FilterSpec,
+  HistoryEntry,
+  QueryResult,
+  RowChangeSet,
+  RowEdit,
+  SortSpec,
+  TableInfo,
+  TableStructure
+} from '@shared/types'
+
+export type TabKind = 'query' | 'table' | 'databases' | 'users' | 'processes' | 'history'
+
+export interface Tab {
+  id: string
+  connectionId: string
+  kind: TabKind
+  title: string
+  query: string
+  table?: TableInfo
+  result: QueryResult | null
+  error: string | null
+  running: boolean
+  databases?: string[]
+  entries?: HistoryEntry[]
+
+  // table-tab state
+  primaryKeys: string[]
+  pageSize: number
+  offset: number
+  sort?: SortSpec
+  filters: FilterSpec[]
+  edits: Record<number, Record<string, unknown>>
+  inserts: Record<string, unknown>[]
+  deletes: number[]
+  selectedRow: number | null
+  viewMode: 'data' | 'structure'
+  structure: TableStructure | null
+  history: DraftSnapshot[]
+  future: DraftSnapshot[]
+}
+
+/** Snapshot of a table tab's pending (uncommitted) edits, for undo/redo. */
+interface DraftSnapshot {
+  edits: Record<number, Record<string, unknown>>
+  inserts: Record<string, unknown>[]
+  deletes: number[]
+}
+
+let counter = 0
+const uid = (): string => `tab-${Date.now()}-${counter++}`
+const plainTable = (t: TableInfo): TableInfo => ({ schema: t.schema, name: t.name, type: t.type })
+
+export const useTabs = defineStore('tabs', () => {
+  const tabs = ref<Tab[]>([])
+  const activeByConn = ref<Record<string, string>>({})
+
+  const forConnection = (connId: string): Tab[] =>
+    tabs.value.filter((t) => t.connectionId === connId)
+  const activeTab = (connId: string): Tab | null =>
+    tabs.value.find((t) => t.id === activeByConn.value[connId]) ?? null
+
+  function setActive(connId: string, tabId: string): void {
+    activeByConn.value[connId] = tabId
+  }
+
+  function base(connectionId: string, kind: TabKind, title: string): Tab {
+    return {
+      id: uid(),
+      connectionId,
+      kind,
+      title,
+      query: '',
+      result: null,
+      error: null,
+      running: false,
+      primaryKeys: [],
+      pageSize: 200,
+      offset: 0,
+      filters: [],
+      edits: {},
+      inserts: [],
+      deletes: [],
+      selectedRow: null,
+      viewMode: 'data',
+      structure: null,
+      history: [],
+      future: []
+    }
+  }
+
+  // ---- draft history (undo/redo) --------------------------------------------
+  const snapshot = (tab: Tab): DraftSnapshot =>
+    JSON.parse(JSON.stringify({ edits: tab.edits, inserts: tab.inserts, deletes: tab.deletes }))
+
+  /** Capture the current draft before a mutating change, so it can be undone. */
+  function record(tab: Tab): void {
+    tab.history.push(snapshot(tab))
+    if (tab.history.length > 100) tab.history.shift()
+    tab.future = []
+  }
+
+  function restore(tab: Tab, s: DraftSnapshot): void {
+    tab.edits = JSON.parse(JSON.stringify(s.edits))
+    tab.inserts = JSON.parse(JSON.stringify(s.inserts))
+    tab.deletes = JSON.parse(JSON.stringify(s.deletes))
+  }
+
+  function undo(tab: Tab): void {
+    if (!tab.history.length) return
+    tab.future.push(snapshot(tab))
+    restore(tab, tab.history.pop()!)
+  }
+  function redo(tab: Tab): void {
+    if (!tab.future.length) return
+    tab.history.push(snapshot(tab))
+    restore(tab, tab.future.pop()!)
+  }
+  const canUndo = (tab: Tab): boolean => tab.history.length > 0
+  const canRedo = (tab: Tab): boolean => tab.future.length > 0
+
+  function push(tab: Tab): Tab {
+    tabs.value.push(tab)
+    // Return the reactive proxy stored in the array — not the raw `tab` — so
+    // async mutations (initTable/run) trigger re-renders instead of silently
+    // updating a detached object that the UI never sees.
+    const stored = tabs.value[tabs.value.length - 1]
+    setActive(stored.connectionId, stored.id)
+    return stored
+  }
+
+  function openQuery(connId: string): Tab {
+    return push(base(connId, 'query', 'Query'))
+  }
+
+  function openTable(connId: string, table: TableInfo): Tab {
+    const t = plainTable(table)
+    const existing = tabs.value.find(
+      (x) => x.connectionId === connId && x.kind === 'table' && x.table?.name === t.name && x.table?.schema === t.schema
+    )
+    if (existing) {
+      setActive(connId, existing.id)
+      return existing
+    }
+    const tab = push({ ...base(connId, 'table', t.name), table: t })
+    void initTable(tab)
+    return tab
+  }
+
+  function openServer(connId: string, kind: 'databases' | 'users' | 'processes'): Tab {
+    const titles = { databases: 'Databases', users: 'Users', processes: 'Processes' }
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === kind)
+    const tab = existing ?? push(base(connId, kind, titles[kind]))
+    if (existing) setActive(connId, existing.id)
+    void run(tab)
+    return tab
+  }
+
+  function openHistory(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'history')
+    const tab = existing ?? push(base(connId, 'history', 'Query History'))
+    if (existing) setActive(connId, existing.id)
+    void run(tab)
+    return tab
+  }
+
+  function closeTab(id: string): void {
+    const idx = tabs.value.findIndex((t) => t.id === id)
+    if (idx < 0) return
+    const { connectionId } = tabs.value[idx]
+    const wasActive = activeByConn.value[connectionId] === id
+    tabs.value.splice(idx, 1)
+    if (wasActive) {
+      const siblings = forConnection(connectionId)
+      activeByConn.value[connectionId] = siblings.length ? siblings[siblings.length - 1].id : ''
+    }
+  }
+
+  function closeForConnection(connId: string): void {
+    tabs.value = tabs.value.filter((t) => t.connectionId !== connId)
+    delete activeByConn.value[connId]
+  }
+
+  /** First load of a table tab: detect primary keys, then fetch the first page. */
+  async function initTable(tab: Tab): Promise<void> {
+    try {
+      tab.primaryKeys = await window.api.db.primaryKeys(tab.connectionId, plainTable(tab.table!))
+    } catch {
+      tab.primaryKeys = [] // no PK / unsupported -> read-only
+    }
+    await reloadTable(tab)
+  }
+
+  async function reloadTable(tab: Tab): Promise<void> {
+    if (!tab.table) return
+    tab.running = true
+    tab.error = null
+    try {
+      // Send plain copies — `tab.sort`/`tab.filters` are reactive Proxies, which
+      // can't be structured-cloned across the IPC boundary.
+      const result = await window.api.db.tableData(tab.connectionId, plainTable(tab.table), {
+        limit: tab.pageSize,
+        offset: tab.offset,
+        sort: tab.sort ? { column: tab.sort.column, dir: tab.sort.dir } : undefined,
+        filters: tab.filters
+          .filter((f) => f.column)
+          .map((f) => ({ column: f.column, op: f.op, value: f.value }))
+      })
+      tab.result = markRaw(result)
+      tab.edits = {}
+      tab.inserts = []
+      tab.deletes = []
+      tab.history = []
+      tab.future = []
+      tab.selectedRow = null
+    } catch (e) {
+      tab.error = e instanceof Error ? e.message : String(e)
+    } finally {
+      tab.running = false
+    }
+  }
+
+  async function run(tab: Tab): Promise<void> {
+    if (tab.kind === 'table') return reloadTable(tab)
+    if (tab.kind === 'query' && !tab.query.trim()) return
+    tab.running = true
+    tab.error = null
+    try {
+      if (tab.kind === 'query') {
+        const sql = tab.query
+        try {
+          const res = await window.api.db.query(tab.connectionId, sql)
+          tab.result = markRaw(res)
+          void window.api.history.add({
+            connectionId: tab.connectionId,
+            sql,
+            durationMs: res.durationMs,
+            rowCount: res.rowCount
+          })
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          tab.error = msg
+          void window.api.history.add({ connectionId: tab.connectionId, sql, error: msg })
+        }
+      } else if (tab.kind === 'users') {
+        tab.result = markRaw(await window.api.db.listUsers(tab.connectionId))
+      } else if (tab.kind === 'processes') {
+        tab.result = markRaw(await window.api.db.listProcesses(tab.connectionId))
+      } else if (tab.kind === 'databases') {
+        tab.databases = await window.api.db.listDatabases(tab.connectionId)
+      } else if (tab.kind === 'history') {
+        tab.entries = await window.api.history.list()
+      }
+    } catch (e) {
+      tab.error = e instanceof Error ? e.message : String(e)
+    } finally {
+      tab.running = false
+    }
+  }
+
+  /** Open a new query tab seeded with SQL (e.g. from history). */
+  function openQueryWith(connId: string, sql: string): Tab {
+    const tab = push(base(connId, 'query', 'Query'))
+    tab.query = sql
+    return tab
+  }
+
+  async function clearHistory(tab: Tab): Promise<void> {
+    await window.api.history.clear()
+    tab.entries = []
+  }
+
+  // ---- structure ------------------------------------------------------------
+  function setViewMode(tab: Tab, mode: 'data' | 'structure'): void {
+    tab.viewMode = mode
+    tab.error = null // don't carry a stale error between views
+    if (mode === 'structure' && !tab.structure) void loadStructure(tab)
+  }
+
+  async function loadStructure(tab: Tab): Promise<void> {
+    if (!tab.table) return
+    tab.running = true
+    tab.error = null
+    try {
+      tab.structure = await window.api.db.tableStructure(tab.connectionId, plainTable(tab.table))
+    } catch (e) {
+      tab.structure = null
+      tab.error = e instanceof Error ? e.message : String(e)
+    } finally {
+      tab.running = false
+    }
+  }
+
+  async function applyAlter(tab: Tab, op: AlterOp): Promise<void> {
+    if (!tab.table) return
+    tab.running = true
+    tab.error = null
+    try {
+      await window.api.db.alterTable(tab.connectionId, plainTable(tab.table), op)
+      await loadStructure(tab)
+      tab.primaryKeys = await window.api.db
+        .primaryKeys(tab.connectionId, plainTable(tab.table))
+        .catch(() => [])
+      await reloadTable(tab)
+    } catch (e) {
+      tab.error = e instanceof Error ? e.message : String(e)
+      tab.running = false
+    }
+  }
+
+  // ---- pagination / sort / filter -------------------------------------------
+  function nextPage(tab: Tab): void {
+    if (tab.result && tab.result.rows.length < tab.pageSize) return
+    tab.offset += tab.pageSize
+    void reloadTable(tab)
+  }
+  function prevPage(tab: Tab): void {
+    tab.offset = Math.max(0, tab.offset - tab.pageSize)
+    void reloadTable(tab)
+  }
+  function setPageSize(tab: Tab, size: number): void {
+    tab.pageSize = size
+    tab.offset = 0
+    void reloadTable(tab)
+  }
+  function toggleSort(tab: Tab, column: string): void {
+    if (tab.sort?.column !== column) tab.sort = { column, dir: 'asc' }
+    else if (tab.sort.dir === 'asc') tab.sort = { column, dir: 'desc' }
+    else tab.sort = undefined
+    tab.offset = 0
+    void reloadTable(tab)
+  }
+  function setFilters(tab: Tab, filters: FilterSpec[]): void {
+    tab.filters = filters
+    tab.offset = 0
+    void reloadTable(tab)
+  }
+
+  // ---- editing --------------------------------------------------------------
+  const dirtyCount = (tab: Tab): number =>
+    Object.values(tab.edits).reduce((n, cols) => n + Object.keys(cols).length, 0) +
+    tab.inserts.length +
+    tab.deletes.length
+
+  const editsAllowed = (tab: Tab): boolean => tab.kind === 'table' && tab.primaryKeys.length > 0
+
+  function editCell(tab: Tab, rowIndex: number, column: string, value: unknown): void {
+    if (!editsAllowed(tab)) return
+    record(tab)
+    const original = tab.result?.rows[rowIndex]
+    const colIdx = tab.result?.columns.findIndex((c) => c.name === column) ?? -1
+    const current = tab.edits[rowIndex] ?? {}
+    if (colIdx >= 0 && String(original?.[colIdx] ?? '') === String(value ?? '')) {
+      delete current[column] // back to original -> not dirty
+    } else {
+      current[column] = value
+    }
+    if (Object.keys(current).length) tab.edits = { ...tab.edits, [rowIndex]: current }
+    else {
+      const copy = { ...tab.edits }
+      delete copy[rowIndex]
+      tab.edits = copy
+    }
+  }
+
+  function discardEdits(tab: Tab): void {
+    record(tab)
+    tab.edits = {}
+    tab.inserts = []
+    tab.deletes = []
+  }
+
+  /** Append a blank new row to fill in. */
+  function addInsertRow(tab: Tab): void {
+    if (!editsAllowed(tab)) return
+    record(tab)
+    tab.inserts = [...tab.inserts, {}]
+  }
+  function editInsert(tab: Tab, index: number, column: string, value: unknown): void {
+    record(tab)
+    const row = { ...tab.inserts[index] }
+    if (value === '' || value === null || value === undefined) delete row[column]
+    else row[column] = value
+    const copy = [...tab.inserts]
+    copy[index] = row
+    tab.inserts = copy
+  }
+  function removeInsert(tab: Tab, index: number): void {
+    record(tab)
+    tab.inserts = tab.inserts.filter((_, i) => i !== index)
+  }
+
+  /** Mark / unmark an existing data row for deletion. */
+  function toggleDelete(tab: Tab, rowIndex: number): void {
+    if (!editsAllowed(tab)) return
+    record(tab)
+    tab.deletes = tab.deletes.includes(rowIndex)
+      ? tab.deletes.filter((r) => r !== rowIndex)
+      : [...tab.deletes, rowIndex]
+  }
+  const isDeleted = (tab: Tab, rowIndex: number): boolean => tab.deletes.includes(rowIndex)
+
+  async function commit(tab: Tab): Promise<void> {
+    if (!tab.table || !tab.result || dirtyCount(tab) === 0) return
+    const colIndex: Record<string, number> = {}
+    tab.result.columns.forEach((c, i) => (colIndex[c.name] = i))
+
+    // Build plain (non-reactive) payloads for IPC.
+    const updates: RowEdit[] = Object.entries(tab.edits)
+      .filter(([rowIdx]) => !tab.deletes.includes(Number(rowIdx))) // a deleted row needs no update
+      .map(([rowIdx, changes]) => {
+        const row = tab.result!.rows[Number(rowIdx)]
+        const pk: Record<string, unknown> = {}
+        for (const k of tab.primaryKeys) pk[k] = row[colIndex[k]]
+        return { pk, changes: { ...changes } }
+      })
+
+    const deletes = tab.deletes.map((rowIdx) => {
+      const row = tab.result!.rows[rowIdx]
+      const pk: Record<string, unknown> = {}
+      for (const k of tab.primaryKeys) pk[k] = row[colIndex[k]]
+      return pk
+    })
+
+    const inserts = tab.inserts
+      .map((r) => {
+        const obj: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(r)) {
+          if (v !== '' && v !== null && v !== undefined) obj[k] = v
+        }
+        return obj
+      })
+      .filter((r) => Object.keys(r).length > 0)
+
+    const changeset: RowChangeSet = { updates, inserts, deletes }
+
+    tab.running = true
+    tab.error = null
+    try {
+      await window.api.db.applyChanges(tab.connectionId, plainTable(tab.table), changeset)
+      await reloadTable(tab)
+    } catch (e) {
+      tab.error = e instanceof Error ? e.message : String(e)
+      tab.running = false
+    }
+  }
+
+  return {
+    tabs,
+    activeByConn,
+    forConnection,
+    activeTab,
+    setActive,
+    openQuery,
+    openQueryWith,
+    openTable,
+    openServer,
+    openHistory,
+    clearHistory,
+    closeTab,
+    closeForConnection,
+    run,
+    reloadTable,
+    setViewMode,
+    loadStructure,
+    applyAlter,
+    nextPage,
+    prevPage,
+    setPageSize,
+    toggleSort,
+    setFilters,
+    dirtyCount,
+    editsAllowed,
+    editCell,
+    addInsertRow,
+    editInsert,
+    removeInsert,
+    toggleDelete,
+    isDeleted,
+    discardEdits,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    commit
+  }
+})

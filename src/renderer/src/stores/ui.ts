@@ -1,0 +1,39 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+
+export const useUi = defineStore('ui', () => {
+  const sidebarCollapsed = ref(false)
+  const tablesCollapsed = ref(false)
+  const autoCollapsedOnce = ref(false)
+
+  // Menu-triggered modals (rendered by MainPanel).
+  const importOpen = ref(false)
+  const exportDbOpen = ref(false)
+
+  const isMac = window.api?.platform === 'darwin'
+
+  function toggleSidebar(): void {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+  function toggleTables(): void {
+    tablesCollapsed.value = !tablesCollapsed.value
+  }
+  /** Collapse the project sidebar the first time a connection opens. */
+  function autoCollapseOnConnect(): void {
+    if (!autoCollapsedOnce.value) {
+      sidebarCollapsed.value = true
+      autoCollapsedOnce.value = true
+    }
+  }
+
+  return {
+    sidebarCollapsed,
+    tablesCollapsed,
+    importOpen,
+    exportDbOpen,
+    isMac,
+    toggleSidebar,
+    toggleTables,
+    autoCollapseOnConnect
+  }
+})

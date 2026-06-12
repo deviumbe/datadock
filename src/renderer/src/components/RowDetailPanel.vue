@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import type { ColumnMeta } from '@shared/types'
+
+const props = defineProps<{
+  columns: ColumnMeta[]
+  row: unknown[]
+  rowIndex: number
+  edits?: Record<string, unknown>
+  primaryKeys: string[]
+  editable: boolean
+  dirtyCount: number
+}>()
+
+const emit = defineEmits<{
+  editCell: [rowIndex: number, column: string, value: unknown]
+  commit: []
+  discard: []
+  close: []
+}>()
+
+function value(col: ColumnMeta, i: number): string {
+  const e = props.edits
+  const v = e && col.name in e ? e[col.name] : props.row[i]
+  return v === null || v === undefined ? '' : String(v)
+}
+function isNull(col: ColumnMeta, i: number): boolean {
+  const e = props.edits
+  const v = e && col.name in e ? e[col.name] : props.row[i]
+  return v === null || v === undefined
+}
+function dirty(col: ColumnMeta): boolean {
+  return !!props.edits && col.name in props.edits
+}
+function onInput(col: ColumnMeta, ev: Event): void {
+  emit('editCell', props.rowIndex, col.name, (ev.target as HTMLInputElement).value)
+}
+function isPk(name: string): boolean {
+  return props.primaryKeys.includes(name)
+}
+</script>
+
+<template>
+  <aside class="detail">
+    <header class="detail-head">
+      <span class="title">Row {{ rowIndex + 1 }}</span>
+      <div class="spacer" />
+      <button class="btn-ghost close" @click="emit('close')">✕</button>
+    </header>
+
+    <div class="fields">
+      <div v-for="(col, i) in columns" :key="col.name" class="field-row" :class="{ dirty: dirty(col) }">
+        <label>
+          {{ col.name }}
+          <span v-if="isPk(col.name)" class="pk" title="Primary key">PK</span>
+          <span v-if="col.type" class="type">{{ col.type }}</span>
+        </label>
+        <input
+          class="input"
+          :class="{ 'is-null': isNull(col, i) }"
+          :value="value(col, i)"
+          :placeholder="isNull(col, i) ? 'NULL' : ''"
+          :readonly="!editable"
+          @input="onInput(col, $event)"
+        />
+      </div>
+    </div>
+
+    <footer v-if="editable" class="detail-foot">
+      <span class="dirty-info" v-if="dirtyCount">{{ dirtyCount }} unsaved</span>
+      <div class="spacer" />
+      <button class="btn btn-ghost" :disabled="!dirtyCount" @click="emit('discard')">Discard</button>
+      <button class="btn btn-primary" :disabled="!dirtyCount" @click="emit('commit')">Save ⌘S</button>
+    </footer>
+    <footer v-else class="detail-foot readonly">No primary key — read-only</footer>
+  </aside>
+</template>
+
+<style scoped>
+.detail {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  font-weight: 600;
+}
+.spacer {
+  flex: 1;
+}
+.close {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+.close:hover {
+  background: var(--bg-hover);
+}
+.fields {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-left: 8px;
+  border-left: 2px solid transparent;
+}
+.field-row.dirty {
+  border-left-color: var(--warn);
+}
+.field-row label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pk {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.type {
+  font-weight: 400;
+  color: var(--text-faint);
+  text-transform: none;
+}
+.input {
+  font-family: var(--mono);
+}
+.input.is-null {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.detail-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.detail-foot.readonly {
+  color: var(--text-faint);
+  font-size: 12px;
+  justify-content: center;
+}
+.dirty-info {
+  font-size: 11px;
+  color: var(--warn);
+}
+</style>

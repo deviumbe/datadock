@@ -1,0 +1,61 @@
+import type {
+  AlterOp,
+  ConnectionConfig,
+  QueryResult,
+  RowChangeSet,
+  TableInfo,
+  TableQueryOptions,
+  TableStructure
+} from '@shared/types'
+
+/**
+ * A live driver instance for a single connection. Implementations are created
+ * with fully-resolved (decrypted) config. `query` accepts arbitrary engine SQL
+ * (or Flux for InfluxDB) and returns a uniform tabular result.
+ */
+export interface DbAdapter {
+  readonly config: ConnectionConfig
+  /** Open a throwaway connection to validate credentials, then close it. */
+  test(): Promise<void>
+  /** Establish the long-lived connection/pool held by the manager. */
+  connect(): Promise<void>
+  disconnect(): Promise<void>
+  listTables(): Promise<TableInfo[]>
+  tableData(table: TableInfo, opts: TableQueryOptions): Promise<QueryResult>
+  query(sql: string): Promise<QueryResult>
+
+  /** Map of table name -> column names, for editor autocomplete. */
+  schema?(): Promise<Record<string, string[]>>
+
+  // Optional editing capabilities (SQL engines with primary keys).
+  primaryKeys?(table: TableInfo): Promise<string[]>
+  applyChanges?(table: TableInfo, changes: RowChangeSet): Promise<number>
+
+  /** CREATE TABLE statement for structure export. */
+  tableDDL?(table: TableInfo): Promise<string>
+
+  /** Read columns + foreign keys for the structure editor. */
+  tableStructure?(table: TableInfo): Promise<TableStructure>
+  /** Apply a single structural change (one ALTER, in its own transaction). */
+  alterTable?(table: TableInfo, op: AlterOp): Promise<void>
+
+  // Optional server-level capabilities (see DRIVER_CAPS).
+  listDatabases?(): Promise<string[]>
+  createDatabase?(name: string): Promise<void>
+  dropDatabase?(name: string): Promise<void>
+  listProcesses?(): Promise<QueryResult>
+  killProcess?(id: string | number): Promise<void>
+  listUsers?(): Promise<QueryResult>
+}
+
+/** Reject identifiers that aren't safe to interpolate into DDL. */
+export function assertIdent(name: string): string {
+  if (!/^[A-Za-z0-9_$]+$/.test(name)) {
+    throw new Error(`Invalid identifier: "${name}". Use letters, digits, _ or $ only.`)
+  }
+  return name
+}
+
+export function now(): number {
+  return performance.now()
+}
