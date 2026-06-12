@@ -2,6 +2,8 @@ import Database from 'better-sqlite3'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -125,6 +127,31 @@ export class SQLiteAdapter implements DbAdapter {
     const map: Record<string, string[]> = {}
     for (const r of rows) (map[r.t] ??= []).push(r.c)
     return map
+  }
+
+  async createTable(spec: CreateTableSpec): Promise<void> {
+    const lines = spec.columns.map((c) => {
+      let l = `${q(c.name)} ${c.type}`
+      if (!c.nullable) l += ' not null'
+      if (c.default) l += ` default ${c.default}`
+      return l
+    })
+    const pks = spec.columns.filter((c) => c.primaryKey).map((c) => q(c.name))
+    if (pks.length) lines.push(`primary key (${pks.join(', ')})`)
+    this.db!.exec(`create table ${q(spec.name)} (${lines.join(', ')})`)
+  }
+
+  async dropTables(tables: TableInfo[], opts: DropTableOptions): Promise<void> {
+    const off = !!(opts.ignoreForeignKeys || opts.cascade)
+    if (off) this.db!.pragma('foreign_keys = OFF')
+    try {
+      const txn = this.db!.transaction(() => {
+        for (const t of tables) this.db!.exec(`drop table if exists ${q(t.name)}`)
+      })
+      txn()
+    } finally {
+      if (off) this.db!.pragma('foreign_keys = ON')
+    }
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

@@ -2,6 +2,8 @@ import { ipcMain, dialog } from 'electron'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   DumpFormat,
   ExportFormat,
   ExportPayload,
@@ -11,11 +13,12 @@ import type {
   TableInfo,
   TableQueryOptions
 } from '@shared/types'
-import type { HistoryEntry } from '@shared/types'
+import type { HistoryEntry, Snippet } from '@shared/types'
 import * as store from './storage'
 import * as db from './db'
 import * as io from './io'
 import * as history from './history'
+import * as snippets from './snippets'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
 
@@ -93,6 +96,12 @@ export function registerIpc(): void {
   handle('db:alterTable', (id: string, table: TableInfo, op: AlterOp) =>
     db.capability(id, 'alterTable')(table, op)
   )
+  handle('db:createTable', (id: string, spec: CreateTableSpec) =>
+    db.capability(id, 'createTable')(spec)
+  )
+  handle('db:dropTables', (id: string, tables: TableInfo[], opts: DropTableOptions) =>
+    db.capability(id, 'dropTables')(tables, opts)
+  )
 
   // Import / export
   handle('io:exportData', (id: string, format: ExportFormat, payload: ExportPayload) =>
@@ -112,6 +121,16 @@ export function registerIpc(): void {
   handle('history:list', () => history.listHistory())
   handle('history:clear', () => {
     history.clearHistory()
+    return true
+  })
+
+  // Saved queries / snippets
+  handle('snippets:list', () => snippets.listSnippets())
+  handle('snippets:save', (input: Partial<Snippet> & { name: string; sql: string }) =>
+    snippets.saveSnippet(input)
+  )
+  handle('snippets:remove', (id: string) => {
+    snippets.removeSnippet(id)
     return true
   })
 

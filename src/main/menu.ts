@@ -74,6 +74,7 @@ export function buildMenu(): void {
         { label: 'Users & Roles', click: () => send('users') },
         { label: 'Process List', click: () => send('processes') },
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
+        { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
         { type: 'separator' },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },

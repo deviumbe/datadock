@@ -2,6 +2,8 @@ import mysql from 'mysql2/promise'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -279,6 +281,28 @@ export class MySQLAdapter implements DbAdapter {
         break
     }
     await this.conn!.query(sql)
+  }
+
+  async createTable(spec: CreateTableSpec): Promise<void> {
+    const lines = spec.columns.map((c) => {
+      let l = `${q(assertIdent(c.name))} ${c.type}`
+      if (!c.nullable) l += ' not null'
+      if (c.default) l += ` default ${c.default}`
+      return l
+    })
+    const pks = spec.columns.filter((c) => c.primaryKey).map((c) => q(c.name))
+    if (pks.length) lines.push(`primary key (${pks.join(', ')})`)
+    await this.conn!.query(`create table ${q(assertIdent(spec.name))} (${lines.join(', ')})`)
+  }
+
+  async dropTables(tables: TableInfo[], opts: DropTableOptions): Promise<void> {
+    const off = !!(opts.ignoreForeignKeys || opts.cascade)
+    if (off) await this.conn!.query('set foreign_key_checks = 0')
+    try {
+      for (const t of tables) await this.conn!.query(`drop table if exists ${q(t.name)}`)
+    } finally {
+      if (off) await this.conn!.query('set foreign_key_checks = 1')
+    }
   }
 
   async listDatabases(): Promise<string[]> {

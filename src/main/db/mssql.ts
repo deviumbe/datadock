@@ -2,6 +2,8 @@ import sql from 'mssql'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -336,6 +338,25 @@ export class MSSQLAdapter implements DbAdapter {
         break
     }
     await req.query(sql)
+  }
+
+  async createTable(spec: CreateTableSpec): Promise<void> {
+    const ident = `${q(spec.schema ?? 'dbo')}.${q(assertIdent(spec.name))}`
+    const lines = spec.columns.map((c) => {
+      let l = `${q(assertIdent(c.name))} ${c.type}`
+      l += c.nullable ? ' null' : ' not null'
+      if (c.default) l += ` default ${c.default}`
+      return l
+    })
+    const pks = spec.columns.filter((c) => c.primaryKey).map((c) => q(c.name))
+    if (pks.length) lines.push(`primary key (${pks.join(', ')})`)
+    await this.pool!.request().query(`create table ${ident} (${lines.join(', ')})`)
+  }
+
+  async dropTables(tables: TableInfo[], _opts: DropTableOptions): Promise<void> {
+    // SQL Server has no global FK toggle or CASCADE for DROP TABLE; if a table
+    // is referenced by a foreign key the drop will error (the caller is warned).
+    for (const t of tables) await this.pool!.request().query(`drop table if exists ${this.ident(t)}`)
   }
 
   async listDatabases(): Promise<string[]> {

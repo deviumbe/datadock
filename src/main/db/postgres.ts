@@ -2,6 +2,8 @@ import pg from 'pg'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -302,6 +304,34 @@ export class PostgresAdapter implements DbAdapter {
         break
     }
     await this.pool!.query(sql)
+  }
+
+  async createTable(spec: CreateTableSpec): Promise<void> {
+    const t = `${quoteIdent(spec.schema ?? 'public')}.${quoteIdent(assertIdent(spec.name))}`
+    const lines = spec.columns.map((c) => {
+      let l = `${quoteIdent(assertIdent(c.name))} ${c.type}`
+      if (!c.nullable) l += ' not null'
+      if (c.default) l += ` default ${c.default}`
+      return l
+    })
+    const pks = spec.columns.filter((c) => c.primaryKey).map((c) => quoteIdent(c.name))
+    if (pks.length) lines.push(`primary key (${pks.join(', ')})`)
+    await this.pool!.query(`create table ${t} (${lines.join(', ')})`)
+  }
+
+  async dropTables(tables: TableInfo[], opts: DropTableOptions): Promise<void> {
+    const cascade = opts.cascade || opts.ignoreForeignKeys ? ' cascade' : ''
+    const client = await this.pool!.connect()
+    try {
+      await client.query('begin')
+      for (const t of tables) await client.query(`drop table if exists ${this.ident(t)}${cascade}`)
+      await client.query('commit')
+    } catch (err) {
+      await client.query('rollback')
+      throw err
+    } finally {
+      client.release()
+    }
   }
 
   async listDatabases(): Promise<string[]> {

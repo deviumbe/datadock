@@ -1,6 +1,8 @@
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -38,6 +40,10 @@ export interface DbAdapter {
   tableStructure?(table: TableInfo): Promise<TableStructure>
   /** Apply a single structural change (one ALTER, in its own transaction). */
   alterTable?(table: TableInfo, op: AlterOp): Promise<void>
+  /** Create a new table from column definitions. */
+  createTable?(spec: CreateTableSpec): Promise<void>
+  /** Drop one or more tables, honoring FK options. */
+  dropTables?(tables: TableInfo[], opts: DropTableOptions): Promise<void>
 
   // Optional server-level capabilities (see DRIVER_CAPS).
   listDatabases?(): Promise<string[]>

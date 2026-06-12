@@ -67,13 +67,15 @@ Click your way down — **project → environment → connection** — and you'r
 - Stack up changes across many rows and **commit them all at once with ⌘S** — every batch runs in a transaction.
 
 #### 🧱 Visual structure editor
-- Add / rename / drop **columns**, change types and nullability, manage **foreign keys** — no hand-written DDL.
+- **Create new tables** (define columns inline) and **drop tables** — multi-select in the list, with *Ignore foreign-key checks* and *Cascade* options.
+- Add / rename / drop **columns**, change types and nullability, manage **foreign keys** and **indexes** — no hand-written DDL.
 
 #### 🧰 Query, your way
 - Multi-**tab** workspace — open a tab per table, plus scratch SQL/Flux tabs.
 - Real SQL editor (CodeMirror) with syntax highlighting and **⌘↵ to run**.
 - **Schema-aware autocomplete** — table and column names from the connected database, right as you type.
 - **Undo / redo** of pending row edits (⌘Z / ⌘⇧Z) and **query history** to re-run past statements.
+- **Saved queries / snippets** — star a query to keep it in a reusable library and reopen it in one click.
 
 #### 📦 Import & export
 - Export a result, a table, or a **whole database** to **CSV, Excel, JSON, SQL or zipped SQL**.
@@ -149,10 +151,10 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] Streaming exports for very large tables
 - [x] Packaged installers (macOS `.dmg`, Windows `.exe`, Linux `AppImage`)
 - [x] SQL autocomplete for table & column names
+- [x] Saved queries / snippets library
 
 **Planned**
 
-- [ ] Saved queries / snippets library
 - [ ] ER diagram & schema visualization
 - [ ] Read-only "safe mode" to guard production connections
 - [ ] Find & replace within result grids

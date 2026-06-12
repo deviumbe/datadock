@@ -11,6 +11,8 @@ import FilterBar from './FilterBar.vue'
 import ExportModal from './ExportModal.vue'
 import ExportDbModal from './ExportDbModal.vue'
 import ImportModal from './ImportModal.vue'
+import NamePrompt from './NamePrompt.vue'
+import CreateTableModal from './CreateTableModal.vue'
 import { type FilterSpec, type TableInfo } from '@shared/types'
 import logoUrl from '../assets/logo.png'
 
@@ -22,6 +24,71 @@ const tableFilter = ref('')
 const newDbName = ref('')
 
 const exportOpen = ref(false)
+const saveSnippetOpen = ref(false)
+const createTableOpen = ref(false)
+
+// ---- table drop staging (multi-select in the tables list) ------------------
+const dropSel = ref<string[]>([])
+const dropOpts = ref({ ignoreForeignKeys: false, cascade: false })
+const tableKey = (t: TableInfo): string => `${t.schema ?? ''}.${t.name}`
+const isDropMarked = (t: TableInfo): boolean => dropSel.value.includes(tableKey(t))
+const dropCount = computed(() => dropSel.value.length)
+
+function toggleDrop(t: TableInfo): void {
+  const k = tableKey(t)
+  dropSel.value = dropSel.value.includes(k)
+    ? dropSel.value.filter((x) => x !== k)
+    : [...dropSel.value, k]
+}
+function cancelDrops(): void {
+  dropSel.value = []
+  dropOpts.value = { ignoreForeignKeys: false, cascade: false }
+}
+async function commitDrops(): Promise<void> {
+  const conn = activeConn.value
+  if (!conn) return
+  const sel = ws.tables.filter((t) => dropSel.value.includes(tableKey(t)))
+  if (sel.length === 0) return
+  const opts = { ...dropOpts.value }
+  const detail = [
+    `Drop ${sel.length} table(s): ${sel.map((t) => t.name).join(', ')}?`,
+    opts.cascade ? '• CASCADE (dependent objects/rows)' : '',
+    opts.ignoreForeignKeys ? '• Ignoring foreign-key checks' : '',
+    'This cannot be undone.'
+  ]
+    .filter(Boolean)
+    .join('\n')
+  if (!confirm(detail)) return
+  const plain = sel.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
+  try {
+    await window.api.db.dropTables(conn.id, plain, opts)
+    const dropped = new Set(sel.map((t) => t.name))
+    for (const tab of tabsStore.forConnection(conn.id)) {
+      if (tab.kind === 'table' && tab.table && dropped.has(tab.table.name)) tabsStore.closeTab(tab.id)
+    }
+    cancelDrops()
+    await ws.refreshTables(conn.id)
+  } catch (e) {
+    ws.error = e instanceof Error ? e.message : String(e)
+  }
+}
+
+// reset staging when switching connections
+watch(
+  () => ws.activeConnectionId,
+  () => cancelDrops()
+)
+
+function openSaveSnippet(): void {
+  if (active.value?.kind === 'query' && active.value.query.trim()) saveSnippetOpen.value = true
+}
+function submitSaveSnippet(name: string): void {
+  if (active.value?.kind === 'query') void tabsStore.saveSnippet(name, active.value.query)
+  saveSnippetOpen.value = false
+}
+function useSnippet(sql: string): void {
+  if (ws.activeConnectionId) tabsStore.openQueryWith(ws.activeConnectionId, sql)
+}
 
 const activeConn = computed(() =>
   ws.activeConnectionId ? ws.findConnection(ws.activeConnectionId) : undefined
@@ -180,19 +247,38 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <div class="tables" v-show="!ui.tablesCollapsed">
           <div class="tables-head">
             <input class="input filter" v-model="tableFilter" placeholder="Filter tables…" />
+            <button v-if="!isInflux" class="icon-btn sm" title="New table" @click="createTableOpen = true">＋</button>
             <button class="icon-btn sm" title="Collapse list" @click="ui.toggleTables()">‹</button>
           </div>
-          <div class="table-list">
+          <div class="table-list" :class="{ selecting: dropCount > 0 }">
             <div
               v-for="t in filteredTables"
               :key="(t.schema || '') + t.name"
               class="table-item"
+              :class="{ 'drop-marked': isDropMarked(t) }"
               @click="openTable(t)"
             >
+              <input
+                v-if="!isInflux"
+                type="checkbox"
+                class="drop-check"
+                :checked="isDropMarked(t)"
+                @click.stop="toggleDrop(t)"
+              />
               <span class="ticon">{{ t.type === 'view' ? '◫' : '▦' }}</span>
               <span class="tname">{{ t.name }}</span>
             </div>
             <div v-if="filteredTables.length === 0" class="no-tables">No tables</div>
+          </div>
+
+          <div v-if="dropCount > 0" class="drop-bar">
+            <div class="drop-title">{{ dropCount }} table(s) to drop</div>
+            <label class="opt"><input type="checkbox" v-model="dropOpts.ignoreForeignKeys" /> Ignore FK checks</label>
+            <label class="opt"><input type="checkbox" v-model="dropOpts.cascade" /> Cascade</label>
+            <div class="drop-actions">
+              <button class="btn btn-ghost sm" @click="cancelDrops">Cancel</button>
+              <button class="btn drop-go sm" @click="commitDrops">Drop</button>
+            </div>
           </div>
         </div>
         <button v-if="ui.tablesCollapsed" class="tables-expand" title="Show tables" @click="ui.toggleTables()">›</button>
@@ -231,6 +317,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
               </span>
+              <button class="btn btn-ghost" :disabled="!active.query.trim()" @click="openSaveSnippet" title="Save as snippet">☆ Save</button>
               <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true">⤓ Export</button>
             </div>
             <div class="editor-host">
@@ -421,6 +508,34 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <div v-if="!active.entries || active.entries.length === 0" class="no-tables">No queries yet.</div>
             </div>
           </div>
+
+          <!-- Saved queries / snippets tab -->
+          <div v-else-if="active.kind === 'snippets'" class="server-pane">
+            <div class="toolbar">
+              <strong>Saved Queries</strong>
+              <div class="spacer" />
+              <span class="status-mini">{{ active.snippets?.length || 0 }} saved</span>
+              <button class="btn btn-ghost" @click="tabsStore.run(active)">⟳</button>
+            </div>
+            <div class="history-list">
+              <div
+                v-for="s in active.snippets"
+                :key="s.id"
+                class="history-item snippet"
+                @click="useSnippet(s.sql)"
+                title="Click to open in a new query tab"
+              >
+                <div class="snippet-head">
+                  <span class="snippet-name">{{ s.name }}</span>
+                  <button class="btn-ghost drop" @click.stop="tabsStore.deleteSnippet(active!, s.id)">✕</button>
+                </div>
+                <pre class="history-sql">{{ s.sql }}</pre>
+              </div>
+              <div v-if="!active.snippets || active.snippets.length === 0" class="no-tables">
+                No saved queries yet. Write a query and press ☆ Save.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -445,6 +560,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :tables="ws.tables"
         @close="ui.importOpen = false"
         @done="ws.refreshTables(activeConn.id)"
+      />
+      <NamePrompt
+        v-if="saveSnippetOpen"
+        title="Save query as…"
+        submit-label="Save"
+        @submit="submitSaveSnippet"
+        @close="saveSnippetOpen = false"
+      />
+      <CreateTableModal
+        v-if="createTableOpen"
+        :conn-id="activeConn.id"
+        @created="ws.refreshTables(activeConn.id)"
+        @close="createTableOpen = false"
       />
     </template>
   </main>
@@ -620,6 +748,62 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .table-item:hover {
   background: var(--bg-hover);
 }
+.drop-check {
+  flex-shrink: 0;
+  opacity: 0;
+  margin: 0;
+}
+.table-item:hover .drop-check,
+.table-list.selecting .drop-check,
+.drop-check:checked {
+  opacity: 1;
+}
+.table-item.drop-marked {
+  background: rgba(229, 97, 106, 0.16);
+}
+.table-item.drop-marked .tname {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+.drop-bar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drop-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.drop-bar .opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.drop-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.drop-actions .sm {
+  flex: 1;
+  padding: 5px 8px;
+}
+.drop-go {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+.drop-go:hover {
+  background: #d6535c;
+}
 .ticon {
   color: var(--accent);
   font-size: 12px;
@@ -693,6 +877,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.history {
   background: #888f9c;
+}
+.tab-kind.snippets {
+  background: #3fcf8e;
 }
 .tab-title {
   overflow: hidden;
@@ -881,6 +1068,29 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .history-meta .err {
   color: var(--danger);
+}
+.snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.snippet-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.history-item.snippet:hover .drop {
+  opacity: 1;
+}
+.snippet .drop {
+  opacity: 0.5;
+  color: var(--danger);
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+.snippet .drop:hover {
+  background: rgba(229, 97, 106, 0.15);
 }
 .btn-danger {
   color: var(--danger);

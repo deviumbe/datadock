@@ -7,12 +7,20 @@ import type {
   QueryResult,
   RowChangeSet,
   RowEdit,
+  Snippet,
   SortSpec,
   TableInfo,
   TableStructure
 } from '@shared/types'
 
-export type TabKind = 'query' | 'table' | 'databases' | 'users' | 'processes' | 'history'
+export type TabKind =
+  | 'query'
+  | 'table'
+  | 'databases'
+  | 'users'
+  | 'processes'
+  | 'history'
+  | 'snippets'
 
 export interface Tab {
   id: string
@@ -26,6 +34,7 @@ export interface Tab {
   running: boolean
   databases?: string[]
   entries?: HistoryEntry[]
+  snippets?: Snippet[]
 
   // table-tab state
   primaryKeys: string[]
@@ -167,6 +176,14 @@ export const useTabs = defineStore('tabs', () => {
     return tab
   }
 
+  function openSnippets(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'snippets')
+    const tab = existing ?? push(base(connId, 'snippets', 'Saved Queries'))
+    if (existing) setActive(connId, existing.id)
+    void run(tab)
+    return tab
+  }
+
   function closeTab(id: string): void {
     const idx = tabs.value.findIndex((t) => t.id === id)
     if (idx < 0) return
@@ -253,6 +270,8 @@ export const useTabs = defineStore('tabs', () => {
         tab.databases = await window.api.db.listDatabases(tab.connectionId)
       } else if (tab.kind === 'history') {
         tab.entries = await window.api.history.list()
+      } else if (tab.kind === 'snippets') {
+        tab.snippets = await window.api.snippets.list()
       }
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
@@ -271,6 +290,20 @@ export const useTabs = defineStore('tabs', () => {
   async function clearHistory(tab: Tab): Promise<void> {
     await window.api.history.clear()
     tab.entries = []
+  }
+
+  /** Refresh the snippet list in any open Saved Queries tabs. */
+  async function refreshSnippetTabs(): Promise<void> {
+    const list = await window.api.snippets.list()
+    for (const t of tabs.value) if (t.kind === 'snippets') t.snippets = list
+  }
+  async function saveSnippet(name: string, sql: string): Promise<void> {
+    await window.api.snippets.save({ name, sql })
+    await refreshSnippetTabs()
+  }
+  async function deleteSnippet(tab: Tab, id: string): Promise<void> {
+    await window.api.snippets.remove(id)
+    tab.snippets = await window.api.snippets.list()
   }
 
   // ---- structure ------------------------------------------------------------
@@ -459,7 +492,10 @@ export const useTabs = defineStore('tabs', () => {
     openTable,
     openServer,
     openHistory,
+    openSnippets,
     clearHistory,
+    saveSnippet,
+    deleteSnippet,
     closeTab,
     closeForConnection,
     run,

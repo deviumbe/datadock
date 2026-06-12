@@ -181,6 +181,25 @@ export type AlterOp =
   | { kind: 'addIndex'; name?: string; columns: string[]; unique: boolean }
   | { kind: 'dropIndex'; name: string }
 
+export interface NewColumn {
+  name: string
+  type: string
+  nullable: boolean
+  primaryKey: boolean
+  default?: string
+}
+
+export interface CreateTableSpec {
+  name: string
+  schema?: string
+  columns: NewColumn[]
+}
+
+export interface DropTableOptions {
+  ignoreForeignKeys?: boolean
+  cascade?: boolean
+}
+
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 /** Server-level features a driver supports beyond querying tables. */
@@ -236,6 +255,15 @@ export interface HistoryEntry {
   durationMs?: number
   rowCount?: number
   error?: string
+}
+
+export interface Snippet {
+  id: string
+  name: string
+  sql: string
+  description?: string
+  createdAt: string
+  updatedAt: string
 }
 
 /** Standard envelope returned by every IPC handler. */

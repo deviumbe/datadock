@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AlterOp,
   ConnectionConfig,
+  CreateTableSpec,
+  DropTableOptions,
   DumpFormat,
   ExportFormat,
   ExportPayload,
@@ -9,6 +11,7 @@ import type {
   HistoryEntry,
   ImportResult,
   IpcResult,
+  Snippet,
   QueryResult,
   RowChangeSet,
   TableDumpSpec,
@@ -72,7 +75,11 @@ const api = {
     tableStructure: (id: string, table: TableInfo) =>
       invoke<TableStructure>('db:tableStructure', id, table),
     alterTable: (id: string, table: TableInfo, op: AlterOp) =>
-      invoke<void>('db:alterTable', id, table, op)
+      invoke<void>('db:alterTable', id, table, op),
+    createTable: (id: string, spec: CreateTableSpec) =>
+      invoke<void>('db:createTable', id, spec),
+    dropTables: (id: string, tables: TableInfo[], opts: DropTableOptions) =>
+      invoke<void>('db:dropTables', id, tables, opts)
   },
   io: {
     exportData: (id: string, format: ExportFormat, payload: ExportPayload) =>
@@ -89,6 +96,12 @@ const api = {
     add: (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => invoke<HistoryEntry>('history:add', entry),
     list: () => invoke<HistoryEntry[]>('history:list'),
     clear: () => invoke<boolean>('history:clear')
+  },
+  snippets: {
+    list: () => invoke<Snippet[]>('snippets:list'),
+    save: (input: Partial<Snippet> & { name: string; sql: string }) =>
+      invoke<Snippet>('snippets:save', input),
+    remove: (id: string) => invoke<boolean>('snippets:remove', id)
   },
   pickFile: () => invoke<string | null>('app:pickFile')
 }

@@ -57,6 +57,9 @@ function handleMenu(action: string): void {
     case 'history':
       tabs.openHistory(id)
       break
+    case 'snippets':
+      tabs.openSnippets(id)
+      break
     case 'import':
       ui.importOpen = true
       break
