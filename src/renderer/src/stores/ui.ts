@@ -12,6 +12,20 @@ export const useUi = defineStore('ui', () => {
 
   const isMac = window.api?.platform === 'darwin'
 
+  // Theme (persisted to localStorage; applied to <html data-theme>).
+  const theme = ref<'dark' | 'light'>(
+    (localStorage.getItem('datadock-theme') as 'dark' | 'light') || 'dark'
+  )
+  function applyTheme(): void {
+    document.documentElement.setAttribute('data-theme', theme.value)
+  }
+  function toggleTheme(): void {
+    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('datadock-theme', theme.value)
+    applyTheme()
+  }
+  applyTheme()
+
   function toggleSidebar(): void {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
@@ -32,6 +46,8 @@ export const useUi = defineStore('ui', () => {
     importOpen,
     exportDbOpen,
     isMac,
+    theme,
+    toggleTheme,
     toggleSidebar,
     toggleTables,
     autoCollapseOnConnect

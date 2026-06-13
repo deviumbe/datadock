@@ -41,7 +41,7 @@ const highlight = HighlightStyle.define([
   { tag: [t.number, t.bool, t.null], color: '#e0a14a' },
   { tag: [t.lineComment, t.blockComment], color: '#6b7280', fontStyle: 'italic' },
   { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#9b7ede' },
-  { tag: t.variableName, color: '#e6e8ed' },
+  { tag: t.variableName, color: 'var(--text)' },
   { tag: [t.typeName, t.className], color: '#1fb6a6' },
   { tag: t.operator, color: '#9aa1ad' }
 ])

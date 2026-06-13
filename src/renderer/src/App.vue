@@ -23,6 +23,18 @@ function handleMenu(action: string): void {
     ui.toggleSidebar()
     return
   }
+  if (action === 'toggleTheme') {
+    ui.toggleTheme()
+    return
+  }
+  if (action === 'exportConnections') {
+    void ws.exportConnections()
+    return
+  }
+  if (action === 'importConnections') {
+    void ws.importConnections()
+    return
+  }
   const id = ws.activeConnectionId
   if (!id) return
   const tab = tabs.activeTab(id)
@@ -61,7 +73,11 @@ function handleMenu(action: string): void {
       tabs.openSnippets(id)
       break
     case 'import':
-      ui.importOpen = true
+      if (ws.findConnection(id)?.readOnly) {
+        ws.error = 'Read-only connection: import is disabled.'
+      } else {
+        ui.importOpen = true
+      }
       break
     case 'exportDb':
       ui.exportDbOpen = true

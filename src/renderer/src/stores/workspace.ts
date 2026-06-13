@@ -108,6 +108,20 @@ export const useWorkspace = defineStore('workspace', () => {
     void loadSchema(id)
   }
 
+  async function exportConnections(): Promise<void> {
+    await window.api.io.exportConnections()
+  }
+  async function importConnections(): Promise<void> {
+    const res = await window.api.io.importConnections()
+    if (res && !res.canceled && res.workspace) {
+      applyWorkspace(res.workspace)
+      for (const p of res.workspace.projects) {
+        expandedProjects.add(p.id)
+        for (const e of p.environments) expandedEnvs.add(e.id)
+      }
+    }
+  }
+
   /** Load the table/column map for autocomplete (best-effort, non-blocking). */
   async function loadSchema(id: string): Promise<void> {
     try {
@@ -140,6 +154,8 @@ export const useWorkspace = defineStore('workspace', () => {
     deleteConnection,
     connectAndOpen,
     disconnect,
-    refreshTables
+    refreshTables,
+    exportConnections,
+    importConnections
   }
 })

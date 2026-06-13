@@ -11,7 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now } from './types'
-import { buildClauses, groupIndexes, indexName } from './clauses'
+import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
+import type { ErModel } from '@shared/types'
 
 const q = (ident: string): string => `"${ident.replace(/"/g, '""')}"`
 
@@ -152,6 +153,29 @@ export class SQLiteAdapter implements DbAdapter {
     } finally {
       if (off) this.db!.pragma('foreign_keys = ON')
     }
+  }
+
+  async erModel(): Promise<ErModel> {
+    const tables = this.db!
+      .prepare(`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name`)
+      .all() as { name: string }[]
+    const cols: { t: string; col: string; isPk: boolean }[] = []
+    const rels: { fromTable: string; fromColumn: string; toTable: string; toColumn: string }[] = []
+    for (const { name } of tables) {
+      const info = this.db!.prepare(`pragma table_info(${q(name)})`).all() as {
+        name: string
+        pk: number
+      }[]
+      for (const ci of info) cols.push({ t: name, col: ci.name, isPk: ci.pk > 0 })
+      const fks = this.db!.prepare(`pragma foreign_key_list(${q(name)})`).all() as {
+        from: string
+        table: string
+        to: string
+      }[]
+      for (const fk of fks)
+        rels.push({ fromTable: name, fromColumn: fk.from, toTable: fk.table, toColumn: fk.to })
+    }
+    return buildErModel(cols, rels)
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

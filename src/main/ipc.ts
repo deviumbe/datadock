@@ -71,6 +71,7 @@ export function registerIpc(): void {
   )
   handle('db:query', (id: string, sql: string) => db.getAdapter(id).query(sql))
   handle('db:schema', (id: string) => db.capability(id, 'schema')())
+  handle('db:erModel', (id: string) => db.capability(id, 'erModel')())
   handle('db:primaryKeys', (id: string, table: TableInfo) =>
     db.capability(id, 'primaryKeys')(table)
   )
@@ -115,6 +116,8 @@ export function registerIpc(): void {
   )
   handle('io:importSql', (id: string) => io.importSql(id))
   handle('io:importCsv', (id: string, table: TableInfo) => io.importCsv(id, table))
+  handle('io:exportConnections', () => io.exportConnections())
+  handle('io:importConnections', () => io.importConnections())
 
   // Query history
   handle('history:add', (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => history.addHistory(entry))

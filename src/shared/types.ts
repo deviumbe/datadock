@@ -10,6 +10,27 @@ export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[
   { type: 'influxdb', label: 'InfluxDB' }
 ]
 
+/** Common column types offered in the "New table" dropdown, per engine. */
+export const COLUMN_TYPES: Record<DriverType, string[]> = {
+  postgres: [
+    'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'numeric', 'real',
+    'double precision', 'boolean', 'text', 'varchar(255)', 'char(1)', 'date',
+    'timestamp', 'timestamptz', 'time', 'uuid', 'json', 'jsonb', 'bytea'
+  ],
+  mysql: [
+    'int', 'bigint', 'smallint', 'tinyint', 'decimal(10,2)', 'float', 'double',
+    'boolean', 'varchar(255)', 'text', 'char(1)', 'date', 'datetime', 'timestamp',
+    'time', 'json', 'blob'
+  ],
+  sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB'],
+  mssql: [
+    'int', 'bigint', 'smallint', 'tinyint', 'decimal(18,2)', 'float', 'bit',
+    'varchar(255)', 'nvarchar(255)', 'char(1)', 'text', 'date', 'datetime',
+    'datetime2', 'time', 'uniqueidentifier', 'varbinary(max)'
+  ],
+  influxdb: []
+}
+
 /**
  * A stored database connection. Secret fields (`password`, `token`) are only
  * ever held in plaintext transiently in the renderer form or the main-process
@@ -21,6 +42,8 @@ export interface ConnectionConfig {
   name: string
   driver: DriverType
   color?: string
+  /** Safe mode: block edits, inserts/deletes, DDL, imports and mutating SQL. */
+  readOnly?: boolean
 
   // Network drivers (postgres, mysql, mssql)
   host?: string
@@ -161,6 +184,28 @@ export interface TableStructure {
   columns: ColumnDef[]
   foreignKeys: ForeignKeyDef[]
   indexes: IndexDef[]
+}
+
+// ---- ER diagram -------------------------------------------------------------
+
+export interface ErColumn {
+  name: string
+  isPrimaryKey: boolean
+  isForeignKey: boolean
+}
+export interface ErTable {
+  name: string
+  columns: ErColumn[]
+}
+export interface ErRelation {
+  fromTable: string
+  fromColumn: string
+  toTable: string
+  toColumn: string
+}
+export interface ErModel {
+  tables: ErTable[]
+  relations: ErRelation[]
 }
 
 export type AlterOp =

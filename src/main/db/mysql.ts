@@ -11,7 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now, assertIdent } from './types'
-import { buildClauses, groupIndexes, indexName } from './clauses'
+import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
+import type { ErModel } from '@shared/types'
 
 const q = (ident: string): string => `\`${ident.replace(/`/g, '``')}\``
 
@@ -178,6 +179,33 @@ export class MySQLAdapter implements DbAdapter {
     const map: Record<string, string[]> = {}
     for (const r of rows as { t: string; c: string }[]) (map[r.t] ??= []).push(r.c)
     return map
+  }
+
+  async erModel(): Promise<ErModel> {
+    const [cols] = await this.conn!.query(
+      `select table_name as t, column_name as col, (column_key = 'PRI') as is_pk
+         from information_schema.columns where table_schema = database()
+        order by table_name, ordinal_position`
+    )
+    const [rels] = await this.conn!.query(
+      `select table_name as from_table, column_name as from_column,
+              referenced_table_name as to_table, referenced_column_name as to_column
+         from information_schema.key_column_usage
+        where table_schema = database() and referenced_table_name is not null`
+    )
+    return buildErModel(
+      (cols as Record<string, unknown>[]).map((r) => ({
+        t: String(r.t),
+        col: String(r.col),
+        isPk: !!Number(r.is_pk)
+      })),
+      (rels as Record<string, unknown>[]).map((r) => ({
+        fromTable: String(r.from_table),
+        fromColumn: String(r.from_column),
+        toTable: String(r.to_table),
+        toColumn: String(r.to_column)
+      }))
+    )
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

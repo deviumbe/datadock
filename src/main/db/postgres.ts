@@ -11,7 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now, assertIdent } from './types'
-import { buildClauses, groupIndexes, indexName } from './clauses'
+import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
+import type { ErModel } from '@shared/types'
 
 // Return numeric/bigint columns as strings instead of JS numbers where lossy,
 // and dates as ISO strings so they serialize cleanly over IPC.
@@ -79,6 +80,42 @@ export class PostgresAdapter implements DbAdapter {
     const map: Record<string, string[]> = {}
     for (const r of res.rows) (map[r.t as string] ??= []).push(r.c as string)
     return map
+  }
+
+  async erModel(): Promise<ErModel> {
+    const cols = await this.pool!.query(
+      `select c.table_name as t, c.column_name as col, (pk.column_name is not null) as is_pk
+         from information_schema.columns c
+         left join (
+           select kcu.table_name, kcu.column_name
+             from information_schema.table_constraints tc
+             join information_schema.key_column_usage kcu
+               on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
+            where tc.constraint_type = 'PRIMARY KEY'
+         ) pk on pk.table_name = c.table_name and pk.column_name = c.column_name
+        where c.table_schema not in ('pg_catalog', 'information_schema')
+        order by c.table_name, c.ordinal_position`
+    )
+    const rels = await this.pool!.query(
+      `select tc.table_name as from_table, kcu.column_name as from_column,
+              ccu.table_name as to_table, ccu.column_name as to_column
+         from information_schema.table_constraints tc
+         join information_schema.key_column_usage kcu
+           on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
+         join information_schema.constraint_column_usage ccu
+           on ccu.constraint_name = tc.constraint_name and ccu.table_schema = tc.table_schema
+        where tc.constraint_type = 'FOREIGN KEY'
+          and tc.table_schema not in ('pg_catalog', 'information_schema')`
+    )
+    return buildErModel(
+      cols.rows.map((r) => ({ t: r.t as string, col: r.col as string, isPk: !!r.is_pk })),
+      rels.rows.map((r) => ({
+        fromTable: r.from_table as string,
+        fromColumn: r.from_column as string,
+        toTable: r.to_table as string,
+        toColumn: r.to_column as string
+      }))
+    )
   }
 
   private ident(table: TableInfo): string {

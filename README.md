@@ -54,6 +54,8 @@ Click your way down — **project → environment → connection** — and you'r
 - **Projects → Environment folders → Connections** — a real hierarchy, not a flat list.
 - Color-coded connections with live status dots.
 - Credentials **encrypted at rest** with the OS keychain (Electron `safeStorage`) — never stored in plain text.
+- **Read-only "safe mode"** per connection — guard production by blocking edits, inserts/deletes, DDL, imports and mutating SQL, with a clear 🔒 badge.
+- **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
 
 #### 🔌 Multi-engine
 - **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · InfluxDB** — all from one app.
@@ -69,6 +71,10 @@ Click your way down — **project → environment → connection** — and you'r
 #### 🧱 Visual structure editor
 - **Create new tables** (define columns inline) and **drop tables** — multi-select in the list, with *Ignore foreign-key checks* and *Cascade* options.
 - Add / rename / drop **columns**, change types and nullability, manage **foreign keys** and **indexes** — no hand-written DDL.
+
+#### 🎨 Comfortable to live in
+- **Dark and light themes** (⌘⇧T or the top-bar toggle), remembered between sessions.
+- Collapsible sidebar and table list to maximize screen for data.
 
 #### 🧰 Query, your way
 - Multi-**tab** workspace — open a tab per table, plus scratch SQL/Flux tabs.
@@ -152,15 +158,18 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] Packaged installers (macOS `.dmg`, Windows `.exe`, Linux `AppImage`)
 - [x] SQL autocomplete for table & column names
 - [x] Saved queries / snippets library
+- [x] Read-only "safe mode" to guard production connections
+- [x] Light theme
+- [x] Export/import of connection definitions (shareable, secrets stripped)
 
 **Planned**
 
 - [ ] ER diagram & schema visualization
-- [ ] Read-only "safe mode" to guard production connections
 - [ ] Find & replace within result grids
 - [ ] Result charts (quick visualizations from a query)
-- [ ] Export/import of connection definitions (shareable, secrets stripped)
-- [ ] Light theme
+- [ ] Command palette (⌘K) for fast connection / table / action jumping
+- [ ] Pinned / favorite tables at the top of the list
+- [ ] Duplicate a connection (quick clone of an existing config)
 
 ---
 

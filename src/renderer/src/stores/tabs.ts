@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, markRaw } from 'vue'
+import { useWorkspace } from './workspace'
 import type {
   AlterOp,
   FilterSpec,
@@ -59,6 +60,10 @@ interface DraftSnapshot {
   deletes: number[]
 }
 
+// Best-effort detection of write statements, for read-only mode.
+const MUTATING_SQL =
+  /(^|;)\s*(insert|update|delete|drop|alter|create|truncate|grant|revoke|replace|merge|call)\b/i
+
 let counter = 0
 const uid = (): string => `tab-${Date.now()}-${counter++}`
 const plainTable = (t: TableInfo): TableInfo => ({ schema: t.schema, name: t.name, type: t.type })
@@ -66,6 +71,22 @@ const plainTable = (t: TableInfo): TableInfo => ({ schema: t.schema, name: t.nam
 export const useTabs = defineStore('tabs', () => {
   const tabs = ref<Tab[]>([])
   const activeByConn = ref<Record<string, string>>({})
+  const savedSnippets = ref<Snippet[]>([])
+
+  async function loadSnippets(): Promise<void> {
+    try {
+      savedSnippets.value = await window.api.snippets.list()
+    } catch {
+      savedSnippets.value = []
+    }
+  }
+  void loadSnippets()
+
+  /** The saved snippet whose SQL matches `sql` (trimmed), if any. */
+  const matchingSnippet = (sql: string): Snippet | undefined => {
+    const t = sql.trim()
+    return t ? savedSnippets.value.find((s) => s.sql.trim() === t) : undefined
+  }
 
   const forConnection = (connId: string): Tab[] =>
     tabs.value.filter((t) => t.connectionId === connId)
@@ -248,6 +269,10 @@ export const useTabs = defineStore('tabs', () => {
     try {
       if (tab.kind === 'query') {
         const sql = tab.query
+        if (isReadOnly(tab.connectionId) && MUTATING_SQL.test(sql)) {
+          tab.error = 'Read-only mode: this statement modifies data and was blocked.'
+          return
+        }
         try {
           const res = await window.api.db.query(tab.connectionId, sql)
           tab.result = markRaw(res)
@@ -280,9 +305,9 @@ export const useTabs = defineStore('tabs', () => {
     }
   }
 
-  /** Open a new query tab seeded with SQL (e.g. from history). */
-  function openQueryWith(connId: string, sql: string): Tab {
-    const tab = push(base(connId, 'query', 'Query'))
+  /** Open a new query tab seeded with SQL (e.g. from history or a snippet). */
+  function openQueryWith(connId: string, sql: string, title?: string): Tab {
+    const tab = push(base(connId, 'query', title || 'Query'))
     tab.query = sql
     return tab
   }
@@ -292,18 +317,19 @@ export const useTabs = defineStore('tabs', () => {
     tab.entries = []
   }
 
-  /** Refresh the snippet list in any open Saved Queries tabs. */
+  /** Refresh the global snippet list + any open Saved Queries tabs. */
   async function refreshSnippetTabs(): Promise<void> {
     const list = await window.api.snippets.list()
+    savedSnippets.value = list
     for (const t of tabs.value) if (t.kind === 'snippets') t.snippets = list
   }
   async function saveSnippet(name: string, sql: string): Promise<void> {
     await window.api.snippets.save({ name, sql })
     await refreshSnippetTabs()
   }
-  async function deleteSnippet(tab: Tab, id: string): Promise<void> {
+  async function deleteSnippet(_tab: Tab, id: string): Promise<void> {
     await window.api.snippets.remove(id)
-    tab.snippets = await window.api.snippets.list()
+    await refreshSnippetTabs()
   }
 
   // ---- structure ------------------------------------------------------------
@@ -378,7 +404,11 @@ export const useTabs = defineStore('tabs', () => {
     tab.inserts.length +
     tab.deletes.length
 
-  const editsAllowed = (tab: Tab): boolean => tab.kind === 'table' && tab.primaryKeys.length > 0
+  const isReadOnly = (connId: string): boolean =>
+    !!useWorkspace().findConnection(connId)?.readOnly
+
+  const editsAllowed = (tab: Tab): boolean =>
+    tab.kind === 'table' && tab.primaryKeys.length > 0 && !isReadOnly(tab.connectionId)
 
   function editCell(tab: Tab, rowIndex: number, column: string, value: unknown): void {
     if (!editsAllowed(tab)) return
@@ -494,6 +524,8 @@ export const useTabs = defineStore('tabs', () => {
     openHistory,
     openSnippets,
     clearHistory,
+    savedSnippets,
+    matchingSnippet,
     saveSnippet,
     deleteSnippet,
     closeTab,

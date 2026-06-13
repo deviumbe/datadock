@@ -18,6 +18,8 @@ import type {
 } from '@shared/types'
 import { getAdapter } from '../db'
 import type { DbAdapter } from '../db/types'
+import * as store from '../storage'
+import type { Workspace } from '@shared/types'
 import { buildCsv, buildInserts, buildJson, buildXlsx, csvCell, jsonObject, type Dialect } from './format'
 
 const EXT: Record<ExportFormat, string> = { csv: 'csv', json: 'json', xlsx: 'xlsx', sql: 'sql' }
@@ -219,6 +221,28 @@ export async function exportDatabase(
     await streamDump(adapter, specs, filePath)
   }
   return { canceled: false, path: filePath }
+}
+
+// ---- share connections ------------------------------------------------------
+
+export async function exportConnections(): Promise<FileResult> {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: 'datadock-connections.json',
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  })
+  if (canceled || !filePath) return { canceled: true }
+  await writeFile(filePath, JSON.stringify(store.connectionsForExport(), null, 2))
+  return { canceled: false, path: filePath }
+}
+
+export async function importConnections(): Promise<{ canceled?: boolean; workspace?: Workspace }> {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  })
+  if (canceled || !filePaths[0]) return { canceled: true }
+  const data = JSON.parse(await readFile(filePaths[0], 'utf-8'))
+  return { workspace: store.importConnections(data) }
 }
 
 // ---- import -----------------------------------------------------------------

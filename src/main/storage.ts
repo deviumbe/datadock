@@ -222,3 +222,58 @@ export function deleteConnection(id: string): Workspace {
   persist()
   return workspaceForRenderer()
 }
+
+// ---- share: export / import connection definitions (no secrets) -------------
+
+const TRANSIENT = [
+  'id',
+  'password',
+  'token',
+  'sshPassword',
+  'sshPassphrase',
+  'hasPassword',
+  'hasToken',
+  'hasSshPassword',
+  'hasSshPassphrase'
+]
+
+/** Cleaned, secret-free, id-free tree suitable for sharing. */
+export function connectionsForExport(): unknown {
+  return {
+    datadock: 'connections',
+    version: 1,
+    projects: workspace.projects.map((p) => ({
+      name: p.name,
+      environments: p.environments.map((e) => ({
+        name: e.name,
+        connections: e.connections.map((c) => {
+          const clean: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(c)) if (!TRANSIENT.includes(k)) clean[k] = v
+          return clean
+        })
+      }))
+    }))
+  }
+}
+
+interface ImportProject {
+  name?: string
+  environments?: { name?: string; connections?: ConnectionConfig[] }[]
+}
+
+/** Merge imported projects (new ids, no secrets) into the workspace. */
+export function importConnections(data: { projects?: ImportProject[] }): Workspace {
+  for (const p of data.projects ?? []) {
+    const project: Project = { id: randomUUID(), name: p.name || 'Imported', environments: [] }
+    for (const e of p.environments ?? []) {
+      project.environments.push({
+        id: randomUUID(),
+        name: e.name || 'Imported',
+        connections: (e.connections ?? []).map((c) => ({ ...c, id: randomUUID() }))
+      })
+    }
+    workspace.projects.push(project)
+  }
+  persist()
+  return workspaceForRenderer()
+}

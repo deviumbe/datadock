@@ -5,6 +5,7 @@ import type {
   CreateTableSpec,
   DropTableOptions,
   DumpFormat,
+  ErModel,
   ExportFormat,
   ExportPayload,
   FileResult,
@@ -60,6 +61,7 @@ const api = {
       invoke<QueryResult>('db:tableData', id, table, opts),
     query: (id: string, sql: string) => invoke<QueryResult>('db:query', id, sql),
     schema: (id: string) => invoke<Record<string, string[]>>('db:schema', id),
+    erModel: (id: string) => invoke<ErModel>('db:erModel', id),
     primaryKeys: (id: string, table: TableInfo) => invoke<string[]>('db:primaryKeys', id, table),
     applyChanges: (id: string, table: TableInfo, changes: RowChangeSet) =>
       invoke<number>('db:applyChanges', id, table, changes),
@@ -90,7 +92,10 @@ const api = {
       invoke<FileResult>('io:exportDatabase', id, specs, format),
     importSql: (id: string) => invoke<ImportResult & { canceled?: boolean }>('io:importSql', id),
     importCsv: (id: string, table: TableInfo) =>
-      invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table)
+      invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table),
+    exportConnections: () => invoke<FileResult>('io:exportConnections'),
+    importConnections: () =>
+      invoke<{ canceled?: boolean; workspace?: Workspace }>('io:importConnections')
   },
   history: {
     add: (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => invoke<HistoryEntry>('history:add', entry),

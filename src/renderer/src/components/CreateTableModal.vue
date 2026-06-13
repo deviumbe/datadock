@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import Modal from './Modal.vue'
-import type { NewColumn } from '@shared/types'
+import { COLUMN_TYPES, type DriverType, type NewColumn } from '@shared/types'
 
-const props = defineProps<{ connId: string }>()
+const props = defineProps<{ connId: string; driver: DriverType }>()
 const emit = defineEmits<{ close: []; created: [] }>()
 
+const types = computed(() => COLUMN_TYPES[props.driver] ?? [])
+const defaultType = computed(() => types.value[0] ?? 'text')
+
 function blankColumn(): NewColumn {
-  return { name: '', type: 'text', nullable: true, primaryKey: false, default: '' }
+  return { name: '', type: defaultType.value, nullable: true, primaryKey: false, default: '' }
 }
 
 const name = ref('')
 const columns = ref<NewColumn[]>([
-  { name: 'id', type: 'integer', nullable: false, primaryKey: true, default: '' },
+  {
+    name: 'id',
+    type: COLUMN_TYPES[props.driver]?.find((t) => /^(serial|integer|int|INTEGER)$/.test(t)) ?? 'integer',
+    nullable: false,
+    primaryKey: true,
+    default: ''
+  },
   blankColumn()
 ])
 const busy = ref(false)
@@ -75,7 +84,11 @@ async function create(): Promise<void> {
       <tbody>
         <tr v-for="(c, i) in columns" :key="i">
           <td><input class="input sm" v-model="c.name" placeholder="column" /></td>
-          <td><input class="input sm" v-model="c.type" placeholder="type" /></td>
+          <td>
+            <select class="select sm" v-model="c.type">
+              <option v-for="ty in types" :key="ty" :value="ty">{{ ty }}</option>
+            </select>
+          </td>
           <td class="c"><input type="checkbox" v-model="c.nullable" /></td>
           <td class="c"><input type="checkbox" v-model="c.primaryKey" /></td>
           <td><input class="input sm" v-model="c.default" placeholder="optional" /></td>
@@ -131,7 +144,8 @@ async function create(): Promise<void> {
 .cols td.c {
   text-align: center;
 }
-.input.sm {
+.input.sm,
+.select.sm {
   padding: 4px 7px;
   font-size: 12px;
   width: 100%;

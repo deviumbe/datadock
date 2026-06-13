@@ -36,6 +36,9 @@ export function buildMenu(): void {
         { type: 'separator' },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },
+        { type: 'separator' },
+        { label: 'Export Connections…', click: () => send('exportConnections') },
+        { label: 'Import Connections…', click: () => send('importConnections') },
         ...(isMac ? [] : [{ type: 'separator' } as const, { role: 'quit' } as const])
       ]
     },
@@ -86,6 +89,7 @@ export function buildMenu(): void {
       label: 'View',
       submenu: [
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: () => send('toggleSidebar') },
+        { label: 'Toggle Theme', accelerator: 'CmdOrCtrl+Shift+T', click: () => send('toggleTheme') },
         { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },

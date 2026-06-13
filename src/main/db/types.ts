@@ -28,6 +28,8 @@ export interface DbAdapter {
 
   /** Map of table name -> column names, for editor autocomplete. */
   schema?(): Promise<Record<string, string[]>>
+  /** Full entity-relationship model (tables, PK/FK columns, relations). */
+  erModel?(): Promise<import('@shared/types').ErModel>
 
   // Optional editing capabilities (SQL engines with primary keys).
   primaryKeys?(table: TableInfo): Promise<string[]>

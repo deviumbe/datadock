@@ -1,4 +1,26 @@
-import type { IndexDef, TableQueryOptions } from '@shared/types'
+import type { ErModel, ErTable, IndexDef, TableQueryOptions } from '@shared/types'
+
+/** Assemble an ErModel from flat column rows + relation rows. */
+export function buildErModel(
+  cols: { t: string; col: string; isPk: boolean }[],
+  rels: { fromTable: string; fromColumn: string; toTable: string; toColumn: string }[]
+): ErModel {
+  const fkSet = new Set(rels.map((r) => `${r.fromTable}.${r.fromColumn}`))
+  const tables = new Map<string, ErTable>()
+  for (const c of cols) {
+    let t = tables.get(c.t)
+    if (!t) {
+      t = { name: c.t, columns: [] }
+      tables.set(c.t, t)
+    }
+    t.columns.push({
+      name: c.col,
+      isPrimaryKey: c.isPk,
+      isForeignKey: fkSet.has(`${c.t}.${c.col}`)
+    })
+  }
+  return { tables: [...tables.values()], relations: rels }
+}
 
 /** Collapse per-column index rows (pre-ordered) into IndexDef[]. */
 export function groupIndexes(

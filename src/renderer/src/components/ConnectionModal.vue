@@ -25,6 +25,7 @@ function blank(): ConnectionConfig {
     user: '',
     password: '',
     ssl: false,
+    readOnly: false,
     sshEnabled: false,
     sshPort: 22,
     sshAuthMethod: 'key'
@@ -112,6 +113,11 @@ function save(): void {
           />
         </div>
       </div>
+
+      <label class="check span2 ro">
+        <input type="checkbox" v-model="form.readOnly" />
+        <span>🔒 Read-only (safe mode) — block edits, inserts/deletes, DDL, imports & mutating SQL</span>
+      </label>
 
       <!-- Network drivers -->
       <template v-if="isNetwork">

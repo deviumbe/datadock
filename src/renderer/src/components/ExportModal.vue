@@ -5,12 +5,16 @@ import type { ColumnMeta, ExportFormat, TableInfo } from '@shared/types'
 
 const props = defineProps<{
   connId: string
-  columns: ColumnMeta[]
-  rows: unknown[][]
+  columns?: ColumnMeta[] // current in-memory result (for "current page")
+  rows?: unknown[][]
   tableName?: string
-  table?: TableInfo // present for table tabs -> enables "entire table" scope
+  table?: TableInfo // present for tables -> enables "entire table" scope
 }>()
 const emit = defineEmits<{ close: [] }>()
+
+// "Current page" needs an in-memory result; "Entire table" needs a table.
+const hasPage = !!props.rows
+const hasTable = !!props.table
 
 const FORMATS: { value: ExportFormat; label: string; hint: string }[] = [
   { value: 'csv', label: 'CSV', hint: 'Comma-separated values' },
@@ -20,7 +24,7 @@ const FORMATS: { value: ExportFormat; label: string; hint: string }[] = [
 ]
 
 const format = ref<ExportFormat>('csv')
-const scope = ref<'page' | 'all'>(props.table ? 'all' : 'page')
+const scope = ref<'page' | 'all'>(hasTable && !hasPage ? 'all' : hasTable ? 'all' : 'page')
 const busy = ref(false)
 const message = ref('')
 
@@ -32,8 +36,8 @@ async function run(): Promise<void> {
       scope.value === 'all' && props.table
         ? await window.api.io.exportTable(props.connId, props.table, format.value)
         : await window.api.io.exportData(props.connId, format.value, {
-            columns: props.columns.map((c) => ({ name: c.name })),
-            rows: props.rows,
+            columns: (props.columns ?? []).map((c) => ({ name: c.name })),
+            rows: props.rows ?? [],
             tableName: props.tableName
           })
     if (res.canceled) message.value = ''
@@ -51,7 +55,7 @@ async function run(): Promise<void> {
 
 <template>
   <Modal title="Export" @close="emit('close')">
-    <div v-if="table" class="seg-row">
+    <div v-if="hasTable && hasPage" class="seg-row">
       <label>Scope</label>
       <div class="seg">
         <button :class="{ on: scope === 'all' }" @click="scope = 'all'">Entire table</button>
@@ -60,7 +64,7 @@ async function run(): Promise<void> {
     </div>
     <div v-else class="seg-row">
       <label>Scope</label>
-      <span class="hint">Current result ({{ rows.length }} rows)</span>
+      <span class="hint">{{ hasTable ? 'Entire table' : `Current result (${rows?.length ?? 0} rows)` }}</span>
     </div>
 
     <div class="field" style="margin-top: 14px">
