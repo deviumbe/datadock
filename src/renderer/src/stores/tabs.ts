@@ -3,6 +3,7 @@ import { ref, markRaw } from 'vue'
 import { useWorkspace } from './workspace'
 import type {
   AlterOp,
+  ErModel,
   FilterSpec,
   HistoryEntry,
   QueryResult,
@@ -22,6 +23,7 @@ export type TabKind =
   | 'processes'
   | 'history'
   | 'snippets'
+  | 'diagram'
 
 export interface Tab {
   id: string
@@ -36,6 +38,7 @@ export interface Tab {
   databases?: string[]
   entries?: HistoryEntry[]
   snippets?: Snippet[]
+  erModel?: ErModel | null
 
   // table-tab state
   primaryKeys: string[]
@@ -205,6 +208,14 @@ export const useTabs = defineStore('tabs', () => {
     return tab
   }
 
+  function openDiagram(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'diagram')
+    const tab = existing ?? push(base(connId, 'diagram', 'ER Diagram'))
+    if (existing) setActive(connId, existing.id)
+    void run(tab)
+    return tab
+  }
+
   function closeTab(id: string): void {
     const idx = tabs.value.findIndex((t) => t.id === id)
     if (idx < 0) return
@@ -297,6 +308,8 @@ export const useTabs = defineStore('tabs', () => {
         tab.entries = await window.api.history.list()
       } else if (tab.kind === 'snippets') {
         tab.snippets = await window.api.snippets.list()
+      } else if (tab.kind === 'diagram') {
+        tab.erModel = await window.api.db.erModel(tab.connectionId)
       }
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
@@ -523,6 +536,7 @@ export const useTabs = defineStore('tabs', () => {
     openServer,
     openHistory,
     openSnippets,
+    openDiagram,
     clearHistory,
     savedSnippets,
     matchingSnippet,

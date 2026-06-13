@@ -49,7 +49,8 @@ const api = {
     deleteEnvironment: (id: string) => invoke<Workspace>('workspace:deleteEnvironment', id),
     saveConnection: (environmentId: string, config: ConnectionConfig) =>
       invoke<Workspace>('workspace:saveConnection', environmentId, config),
-    deleteConnection: (id: string) => invoke<Workspace>('workspace:deleteConnection', id)
+    deleteConnection: (id: string) => invoke<Workspace>('workspace:deleteConnection', id),
+    duplicateConnection: (id: string) => invoke<Workspace>('workspace:duplicateConnection', id)
   },
   db: {
     test: (config: ConnectionConfig) => invoke<boolean>('db:test', config),

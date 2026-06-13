@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.vue'
 import MainPanel from './components/MainPanel.vue'
 import ConnectionModal from './components/ConnectionModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
+import CommandPalette from './components/CommandPalette.vue'
 import type { ConnectionConfig, Environment, Project } from '@shared/types'
 
 const ws = useWorkspace()
@@ -71,6 +72,9 @@ function handleMenu(action: string): void {
       break
     case 'snippets':
       tabs.openSnippets(id)
+      break
+    case 'diagram':
+      tabs.openDiagram(id)
       break
     case 'import':
       if (ws.findConnection(id)?.readOnly) {
@@ -139,6 +143,16 @@ function submitPrompt(name: string): void {
   prompt.value = false
 }
 
+// ---- command palette --------------------------------------------------------
+function onGlobalKeydown(e: KeyboardEvent): void {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    ui.togglePalette()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
+
 // ---- sidebar event handlers -------------------------------------------------
 const onNewProject = () => askName('New Project', '', (n) => ws.addProject(n))
 const onEditProject = (p: Project) => askName('Rename Project', p.name, (n) => ws.renameProject(p.id, n))
@@ -161,6 +175,9 @@ function onDeleteConnection(c: ConnectionConfig): void {
     ws.deleteConnection(c.id)
   }
 }
+function onDuplicateConnection(c: ConnectionConfig): void {
+  void ws.duplicateConnection(c.id)
+}
 </script>
 
 <template>
@@ -176,6 +193,7 @@ function onDeleteConnection(c: ConnectionConfig): void {
       @new-connection="openNewConnection"
       @edit-connection="openEditConnection"
       @delete-connection="onDeleteConnection"
+      @duplicate-connection="onDuplicateConnection"
     />
     <MainPanel />
 
@@ -193,6 +211,7 @@ function onDeleteConnection(c: ConnectionConfig): void {
       @submit="submitPrompt"
       @close="prompt = false"
     />
+    <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
   </div>
 </template>
 

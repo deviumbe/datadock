@@ -15,6 +15,7 @@ import NamePrompt from './NamePrompt.vue'
 import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
 import ContextMenu from './ContextMenu.vue'
+import ErDiagram from './ErDiagram.vue'
 import type { DropTableOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
@@ -278,6 +279,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
       </template>
       <strong v-else class="brand-title">DataDock</strong>
       <div class="spacer drag" />
+      <button class="icon-btn palette-btn" title="Command palette (⌘K)" @click="ui.openPalette()">⌘K</button>
       <button class="icon-btn" :title="ui.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="ui.toggleTheme()">
         {{ ui.theme === 'dark' ? '☀' : '☾' }}
       </button>
@@ -585,6 +587,15 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               </div>
             </div>
           </div>
+
+          <!-- ER diagram tab -->
+          <div v-else-if="active.kind === 'diagram'" class="server-pane">
+            <ErDiagram
+              :model="active.erModel ?? null"
+              :running="active.running"
+              @reload="tabsStore.run(active!)"
+            />
+          </div>
         </div>
       </div>
 
@@ -686,6 +697,22 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   width: 22px;
   height: 22px;
   font-size: 13px;
+}
+.palette-btn {
+  font-size: 11px;
+  font-weight: 600;
+  width: auto;
+  padding: 0 8px;
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.palette-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 .brand-title {
   font-weight: 700;
@@ -913,6 +940,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.snippets {
   background: #3fcf8e;
+}
+.tab-kind.diagram {
+  background: #f59e0b;
 }
 .tab-title {
   overflow: hidden;

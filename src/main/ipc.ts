@@ -50,6 +50,7 @@ export function registerIpc(): void {
     store.saveConnection(environmentId, config)
   )
   handle('workspace:deleteConnection', (id: string) => store.deleteConnection(id))
+  handle('workspace:duplicateConnection', (id: string) => store.duplicateConnection(id))
 
   // Database operations
   handle('db:test', async (config: ConnectionConfig) => {

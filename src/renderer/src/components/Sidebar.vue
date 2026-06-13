@@ -16,6 +16,7 @@ const emit = defineEmits<{
   newConnection: [environmentId: string]
   editConnection: [conn: ConnectionConfig, environmentId: string]
   deleteConnection: [conn: ConnectionConfig]
+  duplicateConnection: [conn: ConnectionConfig]
 }>()
 
 const empty = computed(() => ws.projects.length === 0)
@@ -95,6 +96,7 @@ const DRIVER_LABEL: Record<string, string> = {
                   :title="ws.connStates[conn.id] || 'disconnected'"
                 />
                 <div class="row-actions" @click.stop>
+                  <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)">⎘</button>
                   <button class="btn-ghost icon" title="Edit" @click="emit('editConnection', conn, env.id)">✎</button>
                   <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteConnection', conn)">🗑</button>
                 </div>

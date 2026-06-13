@@ -72,6 +72,8 @@ export const useWorkspace = defineStore('workspace', () => {
     if (activeConnectionId.value === id) activeConnectionId.value = null
     applyWorkspace(await window.api.workspace.deleteConnection(id))
   }
+  const duplicateConnection = async (id: string) =>
+    applyWorkspace(await window.api.workspace.duplicateConnection(id))
 
   // ---- connecting -----------------------------------------------------------
   async function connectAndOpen(id: string): Promise<void> {
@@ -152,6 +154,7 @@ export const useWorkspace = defineStore('workspace', () => {
     deleteEnvironment,
     saveConnection,
     deleteConnection,
+    duplicateConnection,
     connectAndOpen,
     disconnect,
     refreshTables,

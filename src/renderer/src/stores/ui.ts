@@ -10,6 +10,12 @@ export const useUi = defineStore('ui', () => {
   const importOpen = ref(false)
   const exportDbOpen = ref(false)
 
+  // Command palette
+  const paletteOpen = ref(false)
+  function openPalette(): void { paletteOpen.value = true }
+  function closePalette(): void { paletteOpen.value = false }
+  function togglePalette(): void { paletteOpen.value = !paletteOpen.value }
+
   const isMac = window.api?.platform === 'darwin'
 
   // Theme (persisted to localStorage; applied to <html data-theme>).
@@ -45,6 +51,10 @@ export const useUi = defineStore('ui', () => {
     tablesCollapsed,
     importOpen,
     exportDbOpen,
+    paletteOpen,
+    openPalette,
+    closePalette,
+    togglePalette,
     isMac,
     theme,
     toggleTheme,

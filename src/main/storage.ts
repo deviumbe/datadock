@@ -223,6 +223,24 @@ export function deleteConnection(id: string): Workspace {
   return workspaceForRenderer()
 }
 
+/** Duplicate an existing connection within the same environment. */
+export function duplicateConnection(id: string): Workspace {
+  const found = findConnection(id)
+  if (!found) throw new Error('Connection not found')
+  const env = workspace.projects
+    .flatMap((p) => p.environments)
+    .find((e) => e.id === found.environmentId)
+  if (!env) throw new Error('Environment not found')
+  const clone: ConnectionConfig = {
+    ...found.connection,
+    id: randomUUID(),
+    name: `${found.connection.name} (copy)`
+  }
+  env.connections.push(clone)
+  persist()
+  return workspaceForRenderer()
+}
+
 // ---- share: export / import connection definitions (no secrets) -------------
 
 const TRANSIENT = [

@@ -2,6 +2,11 @@
 import { computed, ref } from 'vue'
 import type { QueryResult, SortSpec } from '@shared/types'
 
+interface CellPos {
+  rowIndex: number
+  colIndex: number
+}
+
 const props = defineProps<{
   result: QueryResult | null
   editable?: boolean
@@ -12,6 +17,8 @@ const props = defineProps<{
   sort?: SortSpec
   selectedRow?: number | null
   actionLabel?: string
+  highlightedCell?: CellPos | null
+  highlightedCells?: CellPos[]
 }>()
 
 const emit = defineEmits<{
@@ -61,6 +68,12 @@ function display(v: unknown): string {
 }
 function isNull(v: unknown): boolean {
   return v === null || v === undefined
+}
+function isFindMatch(r: number, c: number): boolean {
+  return !!props.highlightedCells?.some((p) => p.rowIndex === r && p.colIndex === c)
+}
+function isFindCurrent(r: number, c: number): boolean {
+  return props.highlightedCell?.rowIndex === r && props.highlightedCell?.colIndex === c
 }
 
 function startEdit(kind: 'data' | 'insert', r: number, c: number): void {
@@ -117,7 +130,7 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
           <td
             v-for="(_, c) in row"
             :key="c"
-            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c) }"
+            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c) }"
             :title="display(cellValue(r, c))"
             @dblclick="startEdit('data', r, c)"
           >
@@ -310,6 +323,14 @@ td.null {
 .row-act:hover {
   background: rgba(229, 97, 106, 0.15);
   border-color: var(--danger);
+}
+td.find-match {
+  background: rgba(224, 161, 74, 0.22) !important;
+}
+td.find-current {
+  background: rgba(224, 161, 74, 0.50) !important;
+  outline: 2px solid var(--warn);
+  outline-offset: -2px;
 }
 .message,
 .placeholder {

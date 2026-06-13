@@ -78,6 +78,7 @@ export function buildMenu(): void {
         { label: 'Process List', click: () => send('processes') },
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
+        { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
         { type: 'separator' },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },

@@ -6,7 +6,7 @@
 
 ### The database client that finally organizes itself the way *you* think.
 
-**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server and InfluxDB — with browsing, editing, structure changes, import/export and SSH tunneling built in.
+**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams and a command palette built in.
 
 <br/>
 
@@ -52,7 +52,8 @@ Click your way down — **project → environment → connection** — and you'r
 
 #### 🗄️ Organized connections
 - **Projects → Environment folders → Connections** — a real hierarchy, not a flat list.
-- Color-coded connections with live status dots.
+- Color-coded connections with live status dots (connecting / connected / error).
+- **Duplicate a connection** in one click — useful for cloning a staging config to try against prod.
 - Credentials **encrypted at rest** with the OS keychain (Electron `safeStorage`) — never stored in plain text.
 - **Read-only "safe mode"** per connection — guard production by blocking edits, inserts/deletes, DDL, imports and mutating SQL, with a clear 🔒 badge.
 - **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
@@ -64,7 +65,7 @@ Click your way down — **project → environment → connection** — and you'r
 - Reach databases that only live behind a bastion: **connect via SSH (private key, password, or agent), then to the DB** — exactly how you'd hit a prod/staging box.
 
 #### 📊 Browse & edit data like a spreadsheet
-- Fast, virtualized result grid with **pagination, sorting and column filters**.
+- Fast result grid with **pagination, sorting and column filters**.
 - **Double-click any cell to edit**, or pop open the **row detail panel** on the side.
 - Stack up changes across many rows and **commit them all at once with ⌘S** — every batch runs in a transaction.
 
@@ -72,16 +73,25 @@ Click your way down — **project → environment → connection** — and you'r
 - **Create new tables** (define columns inline) and **drop tables** — multi-select in the list, with *Ignore foreign-key checks* and *Cascade* options.
 - Add / rename / drop **columns**, change types and nullability, manage **foreign keys** and **indexes** — no hand-written DDL.
 
+#### 🔗 ER Diagram & schema visualization
+- Open the **ER Diagram tab** from the menu (or `⌘K` → *ER Diagram*) to get an interactive visual map of every table, column, primary key and foreign-key relationship in your schema.
+- **Hierarchical layout** — parent tables (referenced by FK) appear above their dependent children, organized into clean labelled rows. **Re-layout** button resets everything back to the hierarchy at any time.
+- **Drag** any table card to rearrange freely after the initial layout.
+- **⊞ Fit** scales and scrolls the view so the whole diagram is visible at once.
+- **Zoom in / out** with `⌘ +` / `⌘ −`, `⌘`-scroll the mouse wheel, trackpad pinch, or the toolbar `−` / `＋` buttons. Range: 15 % – 300 %. The zoom percentage is always shown and clicking it resets to 100 %.
+- PK and FK column badges; smooth Bézier edges connect related tables with smart top/bottom routing for vertically stacked cards.
+
 #### 🎨 Comfortable to live in
-- **Dark and light themes** (⌘⇧T or the top-bar toggle), remembered between sessions.
+- **Dark and light themes**, remembered between sessions.
 - Collapsible sidebar and table list to maximize screen for data.
+- **Command palette (⌘K)** — fuzzy-search connections, tables and actions from anywhere in the app. Jump to any table, open a query tab, switch themes, open the ER diagram — all without touching the mouse. Navigate with ↑↓, confirm with ↵, dismiss with Esc.
 
 #### 🧰 Query, your way
 - Multi-**tab** workspace — open a tab per table, plus scratch SQL/Flux tabs.
 - Real SQL editor (CodeMirror) with syntax highlighting and **⌘↵ to run**.
 - **Schema-aware autocomplete** — table and column names from the connected database, right as you type.
 - **Undo / redo** of pending row edits (⌘Z / ⌘⇧Z) and **query history** to re-run past statements.
-- **Saved queries / snippets** — star a query to keep it in a reusable library and reopen it in one click.
+- **Saved queries / snippets** — star a query to keep it in a reusable library.
 
 #### 📦 Import & export
 - Export a result, a table, or a **whole database** to **CSV, Excel, JSON, SQL or zipped SQL**.
@@ -89,7 +99,7 @@ Click your way down — **project → environment → connection** — and you'r
 - Import **`.sql` scripts** and **CSV → table**.
 
 #### 🛠️ Server tools
-- Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill) — right from the Database menu.
+- Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill).
 
 ---
 
@@ -103,7 +113,7 @@ Click your way down — **project → environment → connection** — and you'r
 | ![Structure](docs/screenshots/03-structure.png) | ![Query](docs/screenshots/04-query.png) |
 | **Export** — whole DB, per-table structure/data | **SSH tunnel** — key / password / agent auth |
 | ![Export](docs/screenshots/05-export.png) | ![SSH](docs/screenshots/06-ssh.png) |
-| **Autocomplete** — schema-aware table & column names | |
+| **Autocomplete** — schema-aware table & column names | **ER Diagram** — interactive schema map with zoom |
 | ![Autocomplete](docs/screenshots/07-autocomplete.png) | |
 
 ---
@@ -123,7 +133,7 @@ npm run dev
 npm run build
 ```
 
-> **macOS note:** SQLite uses a native module (`better-sqlite3`) that's compiled for Electron on install. If you hit a build error about missing C++ headers, reinstall the Command Line Tools (`xcode-select --install`).
+> **macOS note:** SQLite uses a native module (`better-sqlite3`) compiled for Electron. If you hit a build error about missing C++ headers, reinstall the Command Line Tools: `xcode-select --install`.
 
 ---
 
@@ -131,17 +141,23 @@ npm run build
 
 | Shortcut | Action |
 |---|---|
+| `⌘K` / `Ctrl+K` | Open command palette |
 | `⌘T` / `Ctrl+T` | New query tab |
 | `⌘↵` / `Ctrl+↵` | Run query |
 | `⌘S` / `Ctrl+S` | Commit pending row edits |
 | `⌘B` / `Ctrl+B` | Toggle sidebar |
 | `⌘W` / `Ctrl+W` | Close tab |
+| `⌘Z` / `Ctrl+Z` | Undo pending row edit |
+| `⌘⇧Z` / `Ctrl+⇧Z` | Redo pending row edit |
+| `⌘+` / `⌘−` *(ER Diagram)* | Zoom in / out |
+| `⌘0` *(ER Diagram)* | Reset zoom to 100 % |
+| `⌘`+scroll *(ER Diagram)* | Zoom around cursor |
 
 ---
 
 ## 🧩 Tech stack
 
-**Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**
+**Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**  
 Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client` · Tunneling: `ssh2`
 
 ---
@@ -161,15 +177,17 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] Read-only "safe mode" to guard production connections
 - [x] Light theme
 - [x] Export/import of connection definitions (shareable, secrets stripped)
+- [x] ER diagram & schema visualization (hierarchical layout, drag, zoom, fit-to-view)
+- [x] Command palette (⌘K) — fuzzy search across connections, tables and actions
+- [x] Duplicate a connection in one click
 
 **Planned**
 
-- [ ] ER diagram & schema visualization
 - [ ] Find & replace within result grids
 - [ ] Result charts (quick visualizations from a query)
-- [ ] Command palette (⌘K) for fast connection / table / action jumping
-- [ ] Pinned / favorite tables at the top of the list
-- [ ] Duplicate a connection (quick clone of an existing config)
+- [ ] Pinned / favourite tables at the top of the list
+- [ ] Multi-query execution (run a full `.sql` script tab-by-tab)
+- [ ] Table row count badges in the sidebar list
 
 ---
 
@@ -189,7 +207,7 @@ MIT — free to use, fork and adapt.
 
 ### Made by **[Devium](https://devium.be/)**
 
-DataDock is built by **Devium** and offered **completely free of charge**.
+DataDock is built by **Devium** and offered **completely free of charge**.  
 We build software we'd want to use — and share it.
 
 [**devium.be**](https://devium.be/)
