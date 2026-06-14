@@ -43,6 +43,16 @@ export class SQLiteAdapter implements DbAdapter {
     this.db = undefined
   }
 
+  async beginTransaction(): Promise<void> {
+    this.db!.exec('begin')
+  }
+  async commitTransaction(): Promise<void> {
+    this.db!.exec('commit')
+  }
+  async rollbackTransaction(): Promise<void> {
+    this.db!.exec('rollback')
+  }
+
   async listTables(): Promise<TableInfo[]> {
     const rows = this.db!
       .prepare(

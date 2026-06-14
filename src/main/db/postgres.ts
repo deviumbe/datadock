@@ -21,7 +21,25 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, (v) => v)
 
 export class PostgresAdapter implements DbAdapter {
   private pool?: pg.Pool
+  private txn?: pg.PoolClient
   constructor(public readonly config: ConnectionConfig) {}
+
+  async beginTransaction(): Promise<void> {
+    this.txn = await this.pool!.connect()
+    await this.txn.query('begin')
+  }
+  async commitTransaction(): Promise<void> {
+    if (!this.txn) return
+    await this.txn.query('commit')
+    this.txn.release()
+    this.txn = undefined
+  }
+  async rollbackTransaction(): Promise<void> {
+    if (!this.txn) return
+    await this.txn.query('rollback')
+    this.txn.release()
+    this.txn = undefined
+  }
 
   private makePool(): pg.Pool {
     return new pg.Pool({
@@ -53,6 +71,15 @@ export class PostgresAdapter implements DbAdapter {
   }
 
   async disconnect(): Promise<void> {
+    if (this.txn) {
+      try {
+        await this.txn.query('rollback')
+      } catch {
+        /* ignore */
+      }
+      this.txn.release()
+      this.txn = undefined
+    }
     await this.pool?.end()
     this.pool = undefined
   }
@@ -239,7 +266,8 @@ export class PostgresAdapter implements DbAdapter {
 
   async query(sql: string): Promise<QueryResult> {
     const start = now()
-    const res = await this.pool!.query({ text: sql, rowMode: 'array' })
+    const runner = this.txn ?? this.pool!
+    const res = await runner.query({ text: sql, rowMode: 'array' })
     const durationMs = now() - start
     const columns = (res.fields ?? []).map((f) => ({ name: f.name }))
     const rows = (res.rows ?? []) as unknown[][]

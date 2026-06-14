@@ -13,9 +13,35 @@ export const useWorkspace = defineStore('workspace', () => {
   const expandedProjects = reactive<Set<string>>(new Set())
   const expandedEnvs = reactive<Set<string>>(new Set())
   const connStates = reactive<Record<string, ConnectionState>>({})
+  const txn = reactive<Record<string, boolean>>({}) // active transaction per connection
 
   const activeConnectionId = ref<string | null>(null)
   const error = ref<string | null>(null)
+
+  async function beginTxn(id: string): Promise<void> {
+    try {
+      await window.api.db.txnBegin(id)
+      txn[id] = true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+  async function commitTxn(id: string): Promise<void> {
+    try {
+      await window.api.db.txnCommit(id)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+    }
+    txn[id] = false
+  }
+  async function rollbackTxn(id: string): Promise<void> {
+    try {
+      await window.api.db.txnRollback(id)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+    }
+    txn[id] = false
+  }
 
   // Per-connection table cache: switching connections is instant (cache hit)
   // and stale async responses never corrupt another connection's list.
@@ -105,6 +131,7 @@ export const useWorkspace = defineStore('workspace', () => {
   async function disconnect(id: string): Promise<void> {
     await window.api.db.disconnect(id)
     connStates[id] = 'disconnected'
+    txn[id] = false
     // Clear the cached table list for this connection.
     delete tablesPerConn[id]
   }
@@ -154,6 +181,10 @@ export const useWorkspace = defineStore('workspace', () => {
     expandedProjects,
     expandedEnvs,
     connStates,
+    txn,
+    beginTxn,
+    commitTxn,
+    rollbackTxn,
     activeConnectionId,
     tables,
     error,

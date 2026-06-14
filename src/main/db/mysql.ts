@@ -52,6 +52,16 @@ export class MySQLAdapter implements DbAdapter {
     this.conn = undefined
   }
 
+  async beginTransaction(): Promise<void> {
+    await this.conn!.beginTransaction()
+  }
+  async commitTransaction(): Promise<void> {
+    await this.conn!.commit()
+  }
+  async rollbackTransaction(): Promise<void> {
+    await this.conn!.rollback()
+  }
+
   async listTables(): Promise<TableInfo[]> {
     const [rows] = await this.conn!.query(
       `select table_name as name, table_type as type

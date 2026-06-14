@@ -62,6 +62,9 @@ const api = {
     tableData: (id: string, table: TableInfo, opts: TableQueryOptions) =>
       invoke<QueryResult>('db:tableData', id, table, opts),
     query: (id: string, sql: string) => invoke<QueryResult>('db:query', id, sql),
+    txnBegin: (id: string) => invoke<void>('db:txnBegin', id),
+    txnCommit: (id: string) => invoke<void>('db:txnCommit', id),
+    txnRollback: (id: string) => invoke<void>('db:txnRollback', id),
     schema: (id: string) => invoke<Record<string, string[]>>('db:schema', id),
     erModel: (id: string) => invoke<ErModel>('db:erModel', id),
     schemaSnapshot: (id: string) => invoke<SchemaSnapshot>('db:schemaSnapshot', id),

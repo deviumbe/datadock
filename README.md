@@ -188,13 +188,13 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] Data diff viewer (compare table rows, matched by primary key)
 - [x] Data generator (seed realistic fake data into tables)
 - [x] Export ER diagram to SVG / PNG
+- [x] Transaction mode (explicit Begin / Commit / Rollback)
 
 ### 🎯 Next up
 
 The features that push DataDock past "another database client" into *organized, safe, fast* database work:
 
 - [ ] **Visual EXPLAIN** — turn the plan into an interactive tree
-- [ ] **Transaction mode** — explicit Begin / Commit / Rollback
 - [ ] **AI SQL assistant** — natural language → SQL, explain & troubleshoot queries
 
 ### 🧭 Backlog

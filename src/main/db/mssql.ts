@@ -18,6 +18,26 @@ const q = (ident: string): string => `[${ident.replace(/]/g, ']]')}]`
 
 export class MSSQLAdapter implements DbAdapter {
   private pool?: sql.ConnectionPool
+  private txn?: sql.Transaction
+
+  async beginTransaction(): Promise<void> {
+    this.txn = new sql.Transaction(this.pool)
+    await this.txn.begin()
+  }
+  async commitTransaction(): Promise<void> {
+    if (!this.txn) return
+    await this.txn.commit()
+    this.txn = undefined
+  }
+  async rollbackTransaction(): Promise<void> {
+    if (!this.txn) return
+    await this.txn.rollback()
+    this.txn = undefined
+  }
+
+  private request(): sql.Request {
+    return this.txn ? new sql.Request(this.txn) : this.pool!.request()
+  }
   constructor(public readonly config: ConnectionConfig) {}
 
   private poolConfig(): sql.config {
@@ -51,6 +71,14 @@ export class MSSQLAdapter implements DbAdapter {
   }
 
   async disconnect(): Promise<void> {
+    if (this.txn) {
+      try {
+        await this.txn.rollback()
+      } catch {
+        /* ignore */
+      }
+      this.txn = undefined
+    }
     await this.pool?.close()
     this.pool = undefined
   }
@@ -249,7 +277,7 @@ export class MSSQLAdapter implements DbAdapter {
 
   async query(sqlText: string): Promise<QueryResult> {
     const start = now()
-    const res = await this.pool!.request().query(sqlText)
+    const res = await this.request().query(sqlText)
     return this.shape(res, now() - start)
   }
 

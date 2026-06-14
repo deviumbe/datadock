@@ -334,6 +334,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         {{ ui.theme === 'dark' ? '☀' : '☾' }}
       </button>
       <template v-if="activeConn">
+        <template v-if="!isInflux && !readOnly">
+          <template v-if="ws.txn[activeConn.id]">
+            <span class="txn-badge" title="Open transaction — uncommitted">● TX</span>
+            <button class="btn btn-ghost txn-commit" @click="ws.commitTxn(activeConn.id)">Commit</button>
+            <button class="btn btn-ghost txn-rollback" @click="ws.rollbackTxn(activeConn.id)">Rollback</button>
+          </template>
+          <button v-else class="btn btn-ghost" title="Begin transaction" @click="ws.beginTxn(activeConn.id)">⇄ Begin Tx</button>
+        </template>
         <button class="btn btn-ghost" @click="newQuery">＋ Query</button>
         <button class="btn" @click="disconnect">Disconnect</button>
       </template>
@@ -816,6 +824,18 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 1px 7px;
   border-radius: 10px;
   -webkit-app-region: no-drag;
+}
+.txn-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--warn);
+  -webkit-app-region: no-drag;
+}
+.txn-commit {
+  color: var(--ok);
+}
+.txn-rollback {
+  color: var(--danger);
 }
 .spacer.drag {
   -webkit-app-region: drag;
