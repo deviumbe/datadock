@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import type {
   ConnectionConfig,
   ConnectionState,
@@ -15,8 +15,15 @@ export const useWorkspace = defineStore('workspace', () => {
   const connStates = reactive<Record<string, ConnectionState>>({})
 
   const activeConnectionId = ref<string | null>(null)
-  const tables = ref<TableInfo[]>([])
   const error = ref<string | null>(null)
+
+  // Per-connection table cache: switching connections is instant (cache hit)
+  // and stale async responses never corrupt another connection's list.
+  const tablesPerConn = reactive<Record<string, TableInfo[]>>({})
+  const tables = computed<TableInfo[]>(() =>
+    activeConnectionId.value ? (tablesPerConn[activeConnectionId.value] ?? []) : []
+  )
+
   // table -> columns, per connection, for SQL editor autocomplete
   const schemas = reactive<Record<string, Record<string, string[]>>>({})
 
@@ -70,6 +77,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const deleteConnection = async (id: string) => {
     if (connStates[id] === 'connected') await disconnect(id)
     if (activeConnectionId.value === id) activeConnectionId.value = null
+    delete tablesPerConn[id]
     applyWorkspace(await window.api.workspace.deleteConnection(id))
   }
   const duplicateConnection = async (id: string) =>
@@ -97,15 +105,23 @@ export const useWorkspace = defineStore('workspace', () => {
   async function disconnect(id: string): Promise<void> {
     await window.api.db.disconnect(id)
     connStates[id] = 'disconnected'
-    if (activeConnectionId.value === id) tables.value = []
+    // Clear the cached table list for this connection.
+    delete tablesPerConn[id]
   }
 
   async function refreshTables(id: string): Promise<void> {
     try {
-      tables.value = await window.api.db.listTables(id)
+      const result = await window.api.db.listTables(id)
+      // Guard: only store if this connection is still open/active.
+      // Prevents a slow response from overwriting a different connection's list.
+      if (connStates[id] === 'connected') {
+        tablesPerConn[id] = result
+      }
     } catch (e) {
-      tables.value = []
-      error.value = e instanceof Error ? e.message : String(e)
+      tablesPerConn[id] = []
+      if (activeConnectionId.value === id) {
+        error.value = e instanceof Error ? e.message : String(e)
+      }
     }
     void loadSchema(id)
   }
