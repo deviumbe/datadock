@@ -77,6 +77,41 @@ function layout(): void {
   for (const arr of layers.values()) arr.sort()
   const sortedDepths = [...layers.keys()].sort((a, b) => a - b)
 
+  // Reduce edge crossings with iterative barycenter ordering: repeatedly reorder
+  // each layer by the average position of its connected tables. This lines up
+  // related tables and keeps relationship lines from criss-crossing.
+  const adj = new Map<string, string[]>()
+  for (const t of tables) adj.set(t.name, [])
+  for (const rel of relations) {
+    if (rel.fromTable === rel.toTable) continue
+    if (!names.has(rel.fromTable) || !names.has(rel.toTable)) continue
+    adj.get(rel.fromTable)!.push(rel.toTable)
+    adj.get(rel.toTable)!.push(rel.fromTable)
+  }
+  const orderIndex = new Map<string, number>()
+  const reindex = (): void => {
+    for (const d of sortedDepths) layers.get(d)!.forEach((n, i) => orderIndex.set(n, i))
+  }
+  reindex()
+  for (let pass = 0; pass < 6; pass++) {
+    const seq = pass % 2 === 0 ? sortedDepths : [...sortedDepths].reverse()
+    for (const d of seq) {
+      const arr = layers.get(d)!
+      const bary = new Map<string, number>()
+      for (const n of arr) {
+        const neigh = adj.get(n)!.filter((m) => orderIndex.has(m))
+        bary.set(
+          n,
+          neigh.length
+            ? neigh.reduce((s, m) => s + orderIndex.get(m)!, 0) / neigh.length
+            : orderIndex.get(n)!
+        )
+      }
+      arr.sort((a, b) => bary.get(a)! - bary.get(b)! || a.localeCompare(b))
+      arr.forEach((n, i) => orderIndex.set(n, i))
+    }
+  }
+
   const layerW    = (d: number) => layers.get(d)!.length * W + (layers.get(d)!.length - 1) * HGAP
   const maxLayerW = sortedDepths.reduce((m, d) => Math.max(m, layerW(d)), 0)
 
@@ -253,6 +288,63 @@ const edges = computed<Edge[]>(() => {
   return out
 })
 
+// ---- export (SVG / PNG) -----------------------------------------------------
+
+const xml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+function buildSvg(): string {
+  const { w, h } = canvasSize.value
+  const parts: string[] = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="-apple-system,Segoe UI,Roboto,sans-serif">`,
+    `<rect width="${w}" height="${h}" fill="#ffffff"/>`,
+    `<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#94a3b8"/></marker></defs>`
+  ]
+  for (const e of edges.value) {
+    parts.push(`<path d="${e.d}" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>`)
+  }
+  for (const t of props.model?.tables ?? []) {
+    const p = positions[t.name]
+    if (!p) continue
+    const th = heightOf(t.name)
+    parts.push(`<g>`)
+    parts.push(`<rect x="${p.x}" y="${p.y}" width="${W}" height="${th}" rx="6" fill="#ffffff" stroke="#cbd5e1"/>`)
+    parts.push(`<rect x="${p.x}" y="${p.y}" width="${W}" height="${HEADER}" rx="6" fill="#e6f4f1"/>`)
+    parts.push(`<rect x="${p.x}" y="${p.y + HEADER - 8}" width="${W}" height="8" fill="#e6f4f1"/>`)
+    parts.push(`<text x="${p.x + 10}" y="${p.y + 20}" font-size="13" font-weight="700" fill="#0f7a6f">${xml(t.name)}</text>`)
+    t.columns.forEach((c, i) => {
+      const y = p.y + HEADER + i * ROW + 14
+      const tag = c.isPrimaryKey ? '  •PK' : c.isForeignKey ? '  •FK' : ''
+      parts.push(`<text x="${p.x + 10}" y="${y}" font-size="11" font-family="monospace" fill="#1b1f27">${xml(c.name)}${tag}</text>`)
+    })
+    parts.push(`</g>`)
+  }
+  parts.push(`</svg>`)
+  return parts.join('\n')
+}
+
+async function exportSvg(): Promise<void> {
+  await window.api.io.saveFile('schema-diagram.svg', buildSvg(), false)
+}
+
+async function exportPng(): Promise<void> {
+  const { w, h } = canvasSize.value
+  const scale = 2
+  const svg = buildSvg()
+  const img = new Image()
+  img.onload = () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = w * scale
+    canvas.height = h * scale
+    const ctx = canvas.getContext('2d')!
+    ctx.scale(scale, scale)
+    ctx.drawImage(img, 0, 0)
+    const dataUrl = canvas.toDataURL('image/png')
+    void window.api.io.saveFile('schema-diagram.png', dataUrl.split(',')[1], true)
+  }
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+}
+
 // ---- drag (zoom-aware coordinates) ------------------------------------------
 
 let dragName: string | null = null
@@ -304,6 +396,8 @@ function endDrag(): void {
       </div>
       <button class="btn btn-ghost" title="Fit diagram to view" @click="fitView">⊞ Fit</button>
       <button class="btn btn-ghost" @click="layout()">Re-layout</button>
+      <button class="btn btn-ghost" title="Export as SVG" @click="exportSvg">SVG</button>
+      <button class="btn btn-ghost" title="Export as PNG" @click="exportPng">PNG</button>
       <button class="btn btn-ghost" @click="emit('reload')">⟳</button>
     </div>
 

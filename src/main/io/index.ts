@@ -245,6 +245,18 @@ export async function importConnections(): Promise<{ canceled?: boolean; workspa
   return { workspace: store.importConnections(data) }
 }
 
+/** Save arbitrary text or base64-binary content via a save dialog. */
+export async function saveFile(defaultName: string, data: string, binary: boolean): Promise<FileResult> {
+  const ext = defaultName.split('.').pop() || 'txt'
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
+  })
+  if (canceled || !filePath) return { canceled: true }
+  await writeFile(filePath, binary ? Buffer.from(data, 'base64') : data)
+  return { canceled: false, path: filePath }
+}
+
 // ---- import -----------------------------------------------------------------
 
 /** Split a SQL script into statements, respecting quotes and comments. */

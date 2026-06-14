@@ -11,8 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now, assertIdent } from './types'
-import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
-import type { ErModel } from '@shared/types'
+import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
+import type { ErModel, SchemaSnapshot } from '@shared/types'
 
 const q = (ident: string): string => `\`${ident.replace(/`/g, '``')}\``
 
@@ -204,6 +204,24 @@ export class MySQLAdapter implements DbAdapter {
         fromColumn: String(r.from_column),
         toTable: String(r.to_table),
         toColumn: String(r.to_column)
+      }))
+    )
+  }
+
+  async schemaSnapshot(): Promise<SchemaSnapshot> {
+    const [rows] = await this.conn!.query(
+      `select table_name as t, column_name as col, column_type as type,
+              is_nullable as nullable, (column_key = 'PRI') as is_pk
+         from information_schema.columns where table_schema = database()
+        order by table_name, ordinal_position`
+    )
+    return buildSnapshot(
+      (rows as Record<string, unknown>[]).map((r) => ({
+        t: String(r.t),
+        col: String(r.col),
+        type: String(r.type),
+        nullable: r.nullable === 'YES',
+        isPk: !!Number(r.is_pk)
       }))
     )
   }

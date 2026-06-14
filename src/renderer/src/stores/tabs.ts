@@ -24,6 +24,8 @@ export type TabKind =
   | 'history'
   | 'snippets'
   | 'diagram'
+  | 'schemaDiff'
+  | 'dataDiff'
 
 export interface Tab {
   id: string
@@ -66,6 +68,23 @@ interface DraftSnapshot {
 // Best-effort detection of write statements, for read-only mode.
 const MUTATING_SQL =
   /(^|;)\s*(insert|update|delete|drop|alter|create|truncate|grant|revoke|replace|merge|call)\b/i
+
+/** Returns a warning if a statement is destructive (UPDATE/DELETE w/o WHERE, TRUNCATE, DROP). */
+function dangerousStatement(sql: string): string | null {
+  for (const raw of sql.split(';')) {
+    const s = raw.replace(/--[^\n]*/g, '').trim()
+    if (!s) continue
+    if (/^update\b/i.test(s) && !/\bwhere\b/i.test(s)) {
+      return '⚠ This UPDATE has no WHERE clause — it will modify EVERY row.'
+    }
+    if (/^delete\s+from\b/i.test(s) && !/\bwhere\b/i.test(s)) {
+      return '⚠ This DELETE has no WHERE clause — it will remove EVERY row.'
+    }
+    if (/^truncate\b/i.test(s)) return '⚠ TRUNCATE empties the entire table.'
+    if (/^drop\s+(table|database|schema)\b/i.test(s)) return `⚠ ${s.slice(0, 60)} — this drops a database object.`
+  }
+  return null
+}
 
 let counter = 0
 const uid = (): string => `tab-${Date.now()}-${counter++}`
@@ -216,6 +235,20 @@ export const useTabs = defineStore('tabs', () => {
     return tab
   }
 
+  function openSchemaDiff(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'schemaDiff')
+    const tab = existing ?? push(base(connId, 'schemaDiff', 'Schema Diff'))
+    if (existing) setActive(connId, existing.id)
+    return tab
+  }
+
+  function openDataDiff(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'dataDiff')
+    const tab = existing ?? push(base(connId, 'dataDiff', 'Data Diff'))
+    if (existing) setActive(connId, existing.id)
+    return tab
+  }
+
   function closeTab(id: string): void {
     const idx = tabs.value.findIndex((t) => t.id === id)
     if (idx < 0) return
@@ -284,6 +317,8 @@ export const useTabs = defineStore('tabs', () => {
           tab.error = 'Read-only mode: this statement modifies data and was blocked.'
           return
         }
+        const danger = dangerousStatement(sql)
+        if (danger && !window.confirm(`${danger}\n\nRun it anyway?`)) return
         try {
           const res = await window.api.db.query(tab.connectionId, sql)
           tab.result = markRaw(res)
@@ -323,6 +358,22 @@ export const useTabs = defineStore('tabs', () => {
     const tab = push(base(connId, 'query', title || 'Query'))
     tab.query = sql
     return tab
+  }
+
+  /** Run the query through the engine's EXPLAIN and show the plan in the grid. */
+  async function explain(tab: Tab): Promise<void> {
+    if (tab.kind !== 'query' || !tab.query.trim()) return
+    const driver = useWorkspace().findConnection(tab.connectionId)?.driver
+    const prefix = driver === 'sqlite' ? 'explain query plan ' : 'explain '
+    tab.running = true
+    tab.error = null
+    try {
+      tab.result = markRaw(await window.api.db.query(tab.connectionId, prefix + tab.query))
+    } catch (e) {
+      tab.error = e instanceof Error ? e.message : String(e)
+    } finally {
+      tab.running = false
+    }
   }
 
   async function clearHistory(tab: Tab): Promise<void> {
@@ -532,11 +583,14 @@ export const useTabs = defineStore('tabs', () => {
     setActive,
     openQuery,
     openQueryWith,
+    explain,
     openTable,
     openServer,
     openHistory,
     openSnippets,
     openDiagram,
+    openSchemaDiff,
+    openDataDiff,
     clearHistory,
     savedSnippets,
     matchingSnippet,

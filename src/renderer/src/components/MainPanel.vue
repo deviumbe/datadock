@@ -16,10 +16,14 @@ import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
+import SchemaDiffPanel from './SchemaDiffPanel.vue'
+import DataDiffPanel from './DataDiffPanel.vue'
+import DataGeneratorModal from './DataGeneratorModal.vue'
 import type { DropTableOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
+import { formatSql } from '../lib/sql'
 import logoUrl from '../assets/logo.png'
 
 const ws = useWorkspace()
@@ -33,6 +37,16 @@ const exportOpen = ref(false)
 const saveSnippetOpen = ref(false)
 const createTableOpen = ref(false)
 const exportTableTarget = ref<TableInfo | null>(null)
+const genTarget = ref<TableInfo | null>(null)
+
+function onGenerated(): void {
+  const name = genTarget.value?.name
+  const id = activeConn.value?.id
+  if (!name || !id) return
+  for (const tab of tabsStore.forConnection(id)) {
+    if (tab.kind === 'table' && tab.table?.name === name) void tabsStore.reloadTable(tab)
+  }
+}
 
 // ---- tables-list selection (click / shift-range / cmd-toggle) --------------
 const selectedTables = ref<string[]>([])
@@ -73,6 +87,10 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
     { label: 'Export table…', action: () => (exportTableTarget.value = { schema: t.schema, name: t.name, type: t.type }) }
   ]
   if (!isInflux.value && !readOnly.value) {
+    items.push({
+      label: 'Generate data…',
+      action: () => (genTarget.value = { schema: t.schema, name: t.name, type: t.type })
+    })
     items.push(
       { sep: true },
       {
@@ -136,12 +154,35 @@ async function submitSaveSnippet(name: string): Promise<void> {
 function useSnippet(s: Snippet): void {
   if (ws.activeConnectionId) tabsStore.openQueryWith(ws.activeConnectionId, s.sql, s.name)
 }
+function formatActive(): void {
+  const a = active.value
+  if (a?.kind === 'query' && a.query.trim() && activeConn.value) {
+    a.query = formatSql(a.query, activeConn.value.driver)
+  }
+}
 
 const activeConn = computed(() =>
   ws.activeConnectionId ? ws.findConnection(ws.activeConnectionId) : undefined
 )
 const isInflux = computed(() => activeConn.value?.driver === 'influxdb')
 const readOnly = computed(() => !!activeConn.value?.readOnly)
+const isProduction = computed(() => !!activeConn.value?.production)
+const explainable = computed(() =>
+  ['postgres', 'mysql', 'sqlite'].includes(activeConn.value?.driver ?? '')
+)
+
+// Other connections (for schema diff target picker), labeled project / env / name.
+const otherConnections = computed(() => {
+  const out: { id: string; label: string }[] = []
+  for (const p of ws.projects) {
+    for (const e of p.environments) {
+      for (const c of e.connections) {
+        if (c.id !== ws.activeConnectionId) out.push({ id: c.id, label: `${p.name} / ${e.name} / ${c.name}` })
+      }
+    }
+  }
+  return out
+})
 
 const connTabs = computed(() =>
   ws.activeConnectionId ? tabsStore.forConnection(ws.activeConnectionId) : []
@@ -172,6 +213,15 @@ function inEditableField(): boolean {
 
 function onKeydown(e: KeyboardEvent): void {
   const a = active.value
+
+  // Format SQL (⌘⇧F) in the active query tab.
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+    if (a?.kind === 'query') {
+      e.preventDefault()
+      formatActive()
+    }
+    return
+  }
 
   // Undo / redo of draft row edits — but let inputs and the SQL editor handle their own.
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -299,6 +349,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
     </div>
 
     <template v-else>
+      <div v-if="isProduction" class="prod-banner">
+        ⚠ PRODUCTION — {{ activeConn.name }}. Changes here affect live data.
+      </div>
       <div v-if="ws.error" class="conn-error">{{ ws.error }}</div>
 
       <div class="work">
@@ -357,6 +410,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 {{ active.running ? 'Running…' : '▶ Run' }}
               </button>
               <span class="hint">{{ isInflux ? 'Flux' : 'SQL' }} · ⌘↵</span>
+              <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Show query plan (EXPLAIN)" @click="tabsStore.explain(active)">◔ Explain</button>
+              <button v-if="!isInflux" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
               <div class="spacer" />
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
@@ -596,6 +651,25 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               @reload="tabsStore.run(active!)"
             />
           </div>
+
+          <!-- Schema diff tab -->
+          <div v-else-if="active.kind === 'schemaDiff'" class="server-pane">
+            <SchemaDiffPanel
+              :conn-id="activeConn.id"
+              :conn-name="activeConn.name"
+              :candidates="otherConnections"
+            />
+          </div>
+
+          <!-- Data diff tab -->
+          <div v-else-if="active.kind === 'dataDiff'" class="server-pane">
+            <DataDiffPanel
+              :conn-id="activeConn.id"
+              :conn-name="activeConn.name"
+              :candidates="otherConnections"
+              :tables="ws.tables"
+            />
+          </div>
         </div>
       </div>
 
@@ -648,6 +722,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :table="exportTableTarget"
         :table-name="exportTableTarget.name"
         @close="exportTableTarget = null"
+      />
+      <DataGeneratorModal
+        v-if="genTarget"
+        :conn-id="activeConn.id"
+        :driver="activeConn.driver"
+        :table="genTarget"
+        @done="onGenerated"
+        @close="genTarget = null"
       />
       <ContextMenu v-if="ctx" :x="ctx.x" :y="ctx.y" :items="ctx.items" @close="ctx = null" />
     </template>
@@ -792,6 +874,16 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .spacer {
   flex: 1;
 }
+.prod-banner {
+  flex-shrink: 0;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-align: center;
+  padding: 5px 12px;
+}
 .conn-error {
   background: rgba(229, 97, 106, 0.13);
   color: var(--danger);
@@ -925,6 +1017,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.query {
   background: #5b8def;
+}
+.tab-kind.schemaDiff {
+  background: #e0a14a;
+}
+.tab-kind.dataDiff {
+  background: #e0a14a;
 }
 .tab-kind.databases {
   background: #e0a14a;

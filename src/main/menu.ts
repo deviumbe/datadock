@@ -79,6 +79,8 @@ export function buildMenu(): void {
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
         { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
+        { label: 'Schema Diff', click: () => send('schemaDiff') },
+        { label: 'Data Diff', click: () => send('dataDiff') },
         { type: 'separator' },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },

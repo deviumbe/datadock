@@ -44,6 +44,8 @@ export interface ConnectionConfig {
   color?: string
   /** Safe mode: block edits, inserts/deletes, DDL, imports and mutating SQL. */
   readOnly?: boolean
+  /** Show a prominent red "PRODUCTION" banner for this connection. */
+  production?: boolean
 
   // Network drivers (postgres, mysql, mssql)
   host?: string
@@ -207,6 +209,20 @@ export interface ErModel {
   tables: ErTable[]
   relations: ErRelation[]
 }
+
+// ---- schema snapshot (for schema diff) --------------------------------------
+
+export interface SchemaColumn {
+  name: string
+  type: string
+  nullable: boolean
+  isPrimaryKey: boolean
+}
+export interface SchemaTable {
+  name: string
+  columns: SchemaColumn[]
+}
+export type SchemaSnapshot = SchemaTable[]
 
 export type AlterOp =
   | { kind: 'addColumn'; name: string; type: string; nullable: boolean; default?: string }

@@ -11,8 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now, assertIdent } from './types'
-import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
-import type { ErModel } from '@shared/types'
+import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
+import type { ErModel, SchemaSnapshot } from '@shared/types'
 
 // Return numeric/bigint columns as strings instead of JS numbers where lossy,
 // and dates as ISO strings so they serialize cleanly over IPC.
@@ -114,6 +114,33 @@ export class PostgresAdapter implements DbAdapter {
         fromColumn: r.from_column as string,
         toTable: r.to_table as string,
         toColumn: r.to_column as string
+      }))
+    )
+  }
+
+  async schemaSnapshot(): Promise<SchemaSnapshot> {
+    const res = await this.pool!.query(
+      `select c.table_name as t, c.column_name as col, c.data_type as dtype,
+              c.character_maximum_length as len, c.is_nullable as nullable,
+              (pk.column_name is not null) as is_pk
+         from information_schema.columns c
+         left join (
+           select kcu.table_name, kcu.column_name
+             from information_schema.table_constraints tc
+             join information_schema.key_column_usage kcu
+               on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
+            where tc.constraint_type = 'PRIMARY KEY'
+         ) pk on pk.table_name = c.table_name and pk.column_name = c.column_name
+        where c.table_schema not in ('pg_catalog', 'information_schema')
+        order by c.table_name, c.ordinal_position`
+    )
+    return buildSnapshot(
+      res.rows.map((r) => ({
+        t: r.t as string,
+        col: r.col as string,
+        type: r.len ? `${r.dtype}(${r.len})` : (r.dtype as string),
+        nullable: r.nullable === 'YES',
+        isPk: !!r.is_pk
       }))
     )
   }

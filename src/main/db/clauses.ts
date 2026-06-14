@@ -1,4 +1,27 @@
-import type { ErModel, ErTable, IndexDef, TableQueryOptions } from '@shared/types'
+import type {
+  ErModel,
+  ErTable,
+  IndexDef,
+  SchemaSnapshot,
+  SchemaTable,
+  TableQueryOptions
+} from '@shared/types'
+
+/** Assemble a SchemaSnapshot from flat column rows (pre-ordered). */
+export function buildSnapshot(
+  rows: { t: string; col: string; type: string; nullable: boolean; isPk: boolean }[]
+): SchemaSnapshot {
+  const map = new Map<string, SchemaTable>()
+  for (const r of rows) {
+    let t = map.get(r.t)
+    if (!t) {
+      t = { name: r.t, columns: [] }
+      map.set(r.t, t)
+    }
+    t.columns.push({ name: r.col, type: r.type, nullable: r.nullable, isPrimaryKey: r.isPk })
+  }
+  return [...map.values()]
+}
 
 /** Assemble an ErModel from flat column rows + relation rows. */
 export function buildErModel(

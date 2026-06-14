@@ -11,8 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now } from './types'
-import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
-import type { ErModel } from '@shared/types'
+import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
+import type { ErModel, SchemaSnapshot } from '@shared/types'
 
 const q = (ident: string): string => `"${ident.replace(/"/g, '""')}"`
 
@@ -176,6 +176,25 @@ export class SQLiteAdapter implements DbAdapter {
         rels.push({ fromTable: name, fromColumn: fk.from, toTable: fk.table, toColumn: fk.to })
     }
     return buildErModel(cols, rels)
+  }
+
+  async schemaSnapshot(): Promise<SchemaSnapshot> {
+    const tables = this.db!
+      .prepare(`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name`)
+      .all() as { name: string }[]
+    const rows: { t: string; col: string; type: string; nullable: boolean; isPk: boolean }[] = []
+    for (const { name } of tables) {
+      const info = this.db!.prepare(`pragma table_info(${q(name)})`).all() as {
+        name: string
+        type: string
+        notnull: number
+        pk: number
+      }[]
+      for (const ci of info) {
+        rows.push({ t: name, col: ci.name, type: ci.type || 'BLOB', nullable: ci.notnull === 0, isPk: ci.pk > 0 })
+      }
+    }
+    return buildSnapshot(rows)
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

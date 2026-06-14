@@ -76,6 +76,12 @@ function handleMenu(action: string): void {
     case 'diagram':
       tabs.openDiagram(id)
       break
+    case 'schemaDiff':
+      tabs.openSchemaDiff(id)
+      break
+    case 'dataDiff':
+      tabs.openDataDiff(id)
+      break
     case 'import':
       if (ws.findConnection(id)?.readOnly) {
         ws.error = 'Read-only connection: import is disabled.'

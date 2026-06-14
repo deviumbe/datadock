@@ -26,10 +26,17 @@ export interface DbAdapter {
   tableData(table: TableInfo, opts: TableQueryOptions): Promise<QueryResult>
   query(sql: string): Promise<QueryResult>
 
+  // Explicit transaction mode (queries run inside it until commit/rollback).
+  beginTransaction?(): Promise<void>
+  commitTransaction?(): Promise<void>
+  rollbackTransaction?(): Promise<void>
+
   /** Map of table name -> column names, for editor autocomplete. */
   schema?(): Promise<Record<string, string[]>>
   /** Full entity-relationship model (tables, PK/FK columns, relations). */
   erModel?(): Promise<import('@shared/types').ErModel>
+  /** Whole-database column snapshot, for schema diff. */
+  schemaSnapshot?(): Promise<import('@shared/types').SchemaSnapshot>
 
   // Optional editing capabilities (SQL engines with primary keys).
   primaryKeys?(table: TableInfo): Promise<string[]>

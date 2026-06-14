@@ -180,14 +180,50 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] ER diagram & schema visualization (hierarchical layout, drag, zoom, fit-to-view)
 - [x] Command palette (⌘K) — fuzzy search across connections, tables and actions
 - [x] Duplicate a connection in one click
+- [x] SQL formatter & beautifier (⌘⇧F)
+- [x] Production connection banners (red header on production connections)
+- [x] Dangerous-query guard (warns on `UPDATE`/`DELETE` without `WHERE`, `TRUNCATE`, `DROP`)
+- [x] Query execution plans (`EXPLAIN` runner)
+- [x] Schema diff viewer (compare two connections' structure)
+- [x] Data diff viewer (compare table rows, matched by primary key)
+- [x] Data generator (seed realistic fake data into tables)
+- [x] Export ER diagram to SVG / PNG
 
-**Planned**
+### 🎯 Next up
 
-- [ ] Find & replace within result grids
-- [ ] Result charts (quick visualizations from a query)
-- [ ] Pinned / favourite tables at the top of the list
-- [ ] Multi-query execution (run a full `.sql` script tab-by-tab)
-- [ ] Table row count badges in the sidebar list
+The features that push DataDock past "another database client" into *organized, safe, fast* database work:
+
+- [ ] **Visual EXPLAIN** — turn the plan into an interactive tree
+- [ ] **Transaction mode** — explicit Begin / Commit / Rollback
+- [ ] **AI SQL assistant** — natural language → SQL, explain & troubleshoot queries
+
+### 🧭 Backlog
+
+**Data management** — generate INSERT/UPDATE from selected rows · copy row as JSON / SQL / CSV · bulk edit selected rows · duplicate row · soft-delete recovery viewer
+
+**Querying** — query bookmarks per connection · query variables (`{{userId}}`) · snippet autocomplete · multiple result tabs per execution · export result directly to a new table · execution-time history
+
+**Production safety** — confirmation workflow for dangerous queries · temporary write-access unlock ("unlock for 15 min") · SQL linting before execution
+
+**Schema tools** — migration script generator · visual index analyzer · dependency explorer ("what references this table?") · column-usage search across schema · database documentation generator
+
+**Performance** — table size analyzer · largest-tables dashboard · slow-query monitor · index recommendations · connection-pool diagnostics · storage-growth tracking
+
+**Team** — shared query library · shared connection bundles · comments/notes per table · workspace sync · connection templates
+
+**Developer / AI** — generate schema docs with AI · explain query in plain English · generate test data with AI · SQL error troubleshooting assistant
+
+**"Wow"** — database snapshots (save state before changes) · time-travel row history · visual data explorer (click through relationships) · universal smart search · one-click clone production schema to local SQLite
+
+### 🗄️ More database engines
+
+Today: **PostgreSQL · MySQL/MariaDB · SQLite · SQL Server · InfluxDB** (≈80–90% of typical use). Planned, in priority order:
+
+- [ ] **MongoDB** — "SQL + NoSQL in one place"
+- [ ] **Redis** — keys, JSON, queues, cache inspection
+- [ ] **Oracle Database** — enterprise reach
+- [ ] **CockroachDB / TimescaleDB** — largely ride on PostgreSQL support
+- [ ] Analytics engines (Snowflake · ClickHouse · BigQuery · Redshift · DuckDB)
 
 ---
 

@@ -26,6 +26,7 @@ function blank(): ConnectionConfig {
     password: '',
     ssl: false,
     readOnly: false,
+    production: false,
     sshEnabled: false,
     sshPort: 22,
     sshAuthMethod: 'key'
@@ -117,6 +118,10 @@ function save(): void {
       <label class="check span2 ro">
         <input type="checkbox" v-model="form.readOnly" />
         <span>🔒 Read-only (safe mode) — block edits, inserts/deletes, DDL, imports & mutating SQL</span>
+      </label>
+      <label class="check span2 ro">
+        <input type="checkbox" v-model="form.production" />
+        <span>⚠️ Production — show a prominent red banner when this connection is active</span>
       </label>
 
       <!-- Network drivers -->

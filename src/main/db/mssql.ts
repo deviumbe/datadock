@@ -11,8 +11,8 @@ import type {
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now, assertIdent } from './types'
-import { buildClauses, buildErModel, groupIndexes, indexName } from './clauses'
-import type { ErModel } from '@shared/types'
+import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
+import type { ErModel, SchemaSnapshot } from '@shared/types'
 
 const q = (ident: string): string => `[${ident.replace(/]/g, ']]')}]`
 
@@ -97,6 +97,37 @@ export class MSSQLAdapter implements DbAdapter {
         toTable: r.to_table as string,
         toColumn: r.to_column as string
       }))
+    )
+  }
+
+  async schemaSnapshot(): Promise<SchemaSnapshot> {
+    const res = await this.pool!.request().query(
+      `select c.table_name as t, c.column_name as col, c.data_type as dtype,
+              c.character_maximum_length as len, c.is_nullable as nullable,
+              case when pk.column_name is not null then 1 else 0 end as is_pk
+         from information_schema.columns c
+         left join (
+           select kcu.table_name, kcu.column_name
+             from information_schema.table_constraints tc
+             join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name
+            where tc.constraint_type = 'PRIMARY KEY'
+         ) pk on pk.table_name = c.table_name and pk.column_name = c.column_name
+        order by c.table_name, c.ordinal_position`
+    )
+    return buildSnapshot(
+      res.recordset.map((r) => {
+        const len = r.len as number | null
+        let type = r.dtype as string
+        if (len && len > 0) type += `(${len})`
+        else if (len === -1) type += '(max)'
+        return {
+          t: r.t as string,
+          col: r.col as string,
+          type,
+          nullable: r.nullable === 'YES',
+          isPk: !!r.is_pk
+        }
+      })
     )
   }
 
