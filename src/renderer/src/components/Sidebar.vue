@@ -87,7 +87,7 @@ const DRIVER_LABEL: Record<string, string> = {
                 :class="{ active: ws.activeConnectionId === conn.id }"
                 @click="open(conn)"
               >
-                <span class="dot" :style="{ background: conn.color || '#888f9c' }" />
+                <span class="dot" :style="{ background: conn.color || 'var(--text-faint)' }" />
                 <span class="label">{{ conn.name }}</span>
                 <span class="badge">{{ DRIVER_LABEL[conn.driver] }}</span>
                 <span
@@ -169,6 +169,20 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .conn-row.active {
   background: var(--accent-soft);
+}
+.conn-row.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2.5px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+.conn-row.active .label {
+  color: var(--text);
+  font-weight: 500;
 }
 .caret {
   width: 12px;

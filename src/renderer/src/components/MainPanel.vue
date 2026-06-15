@@ -349,7 +349,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 
     <div v-if="!activeConn" class="welcome">
       <div class="welcome-card">
-        <img class="welcome-logo" :src="logoUrl" alt="DataDock" />
+        <div class="welcome-icon">
+          <img class="welcome-logo" :src="logoUrl" alt="DataDock" />
+        </div>
         <h1>DataDock</h1>
         <p>Select a connection from the sidebar to get started.</p>
         <p class="sub">Organize connections into projects and environment folders on the left.</p>
@@ -812,17 +814,21 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   font-weight: 600;
 }
 .meta {
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 2px 9px;
+  border-radius: 999px;
 }
 .ro-badge {
   font-size: 10px;
   font-weight: 700;
   color: var(--warn);
-  background: rgba(224, 161, 74, 0.15);
-  border: 1px solid rgba(224, 161, 74, 0.4);
+  background: rgba(240, 180, 41, 0.15);
+  border: 1px solid rgba(240, 180, 41, 0.4);
   padding: 1px 7px;
-  border-radius: 10px;
+  border-radius: 999px;
   -webkit-app-region: no-drag;
 }
 .txn-badge {
@@ -845,30 +851,72 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 55% 45% at 50% 42%, rgba(45, 212, 191, 0.07), transparent 70%),
+    radial-gradient(ellipse 85% 70% at 50% 50%, rgba(44, 70, 119, 0.16), transparent 72%);
 }
 .welcome-card {
   text-align: center;
   color: var(--text-dim);
+  z-index: 1;
+  animation: welcome-rise 0.5s ease both;
+}
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.welcome-icon {
+  width: 110px;
+  height: 110px;
+  margin: 0 auto 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.welcome-icon::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.28), rgba(44, 70, 119, 0.12) 55%, transparent 70%);
+  filter: blur(10px);
 }
 .welcome-logo {
-  width: 84px;
-  height: 84px;
-  margin-bottom: 18px;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
+  width: 92px;
+  height: 92px;
+  position: relative;
+  filter: drop-shadow(0 16px 40px rgba(45, 212, 191, 0.22)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.55));
 }
 .welcome-card h1 {
-  font-size: 30px;
-  letter-spacing: -0.5px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+.welcome-card p {
+  font-size: 13px;
 }
 .welcome-card .sub {
   font-size: 12px;
   color: var(--text-faint);
   margin-top: 6px;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .topbar .btn {
-  padding: 5px 11px;
+  padding: 5px 14px;
+  border-radius: 999px;
+}
+.topbar .state.connected {
+  box-shadow: 0 0 8px var(--accent);
+  background: var(--accent);
 }
 .dot {
   width: 10px;
@@ -905,7 +953,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 5px 12px;
 }
 .conn-error {
-  background: rgba(229, 97, 106, 0.13);
+  background: rgba(248, 113, 113, 0.13);
   color: var(--danger);
   padding: 7px 14px;
   font-size: 12px;
@@ -1012,24 +1060,32 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
+  padding: 7px 13px;
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+  border: 1px solid transparent;
   border-bottom: none;
   color: var(--text-dim);
   white-space: nowrap;
   max-width: 220px;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .tab.on {
-  background: var(--bg-elevated);
+  background: var(--bg-panel);
   color: var(--text);
+  border-color: var(--border);
+  border-top: 2px solid var(--accent);
+  padding-top: 6px;
 }
 .tab-kind {
   width: 7px;
   height: 7px;
-  border-radius: 2px;
+  border-radius: 50%;
   background: var(--text-faint);
 }
 .tab-kind.table {
@@ -1118,6 +1174,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   flex: 1;
   overflow: hidden;
 }
+/* Data view: float the grid as a rounded card on the canvas (Stitch). */
+.table-pane .table-body {
+  padding: 16px;
+  gap: 16px;
+  background: var(--bg-app);
+}
+.table-pane .grid-host {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
 .server-pane {
   flex: 1;
   display: grid;
@@ -1128,39 +1197,48 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 9px 16px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
 }
 .toolbar .hint {
   color: var(--text-faint);
   font-size: 11px;
 }
 .toolbar .btn {
-  padding: 4px 10px;
+  padding: 5px 13px;
+  border-radius: 999px;
+}
+.toolbar .select.sm {
+  border-radius: 999px;
+  padding: 4px 12px;
 }
 .view-toggle {
-  display: flex;
-  gap: 2px;
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
   -webkit-app-region: no-drag;
 }
 .view-toggle button {
-  padding: 4px 12px;
+  padding: 4px 14px;
   font-size: 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
   color: var(--text-dim);
+  transition: background 0.12s, color 0.12s;
 }
-.view-toggle button:first-child {
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-}
-.view-toggle button:last-child {
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  border-left: none;
+.view-toggle button:hover {
+  color: var(--text);
 }
 .view-toggle button.on {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: var(--bg-active);
   color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .tb-sep {
   width: 1px;
@@ -1172,8 +1250,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);
-  min-width: 70px;
+  min-width: 64px;
   text-align: center;
+}
+.status-mini {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
 }
 .select.sm {
   padding: 4px 6px;

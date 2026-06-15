@@ -215,11 +215,13 @@ thead th {
   z-index: 2;
   background: var(--bg-elevated);
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-dim);
-  padding: 6px 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--border-strong);
-  border-right: 1px solid var(--border);
   white-space: nowrap;
   user-select: none;
 }
@@ -235,14 +237,14 @@ thead th.sortable:hover {
   font-size: 9px;
 }
 tbody td {
-  padding: 5px 12px;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
   white-space: nowrap;
   max-width: 480px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--mono);
+  font-size: 12.5px;
 }
 tbody tr:hover td {
   background: var(--bg-hover);
@@ -251,15 +253,15 @@ tbody tr.selected td {
   background: var(--accent-soft);
 }
 tbody tr.deleted td {
-  background: rgba(229, 97, 106, 0.16) !important;
+  background: rgba(248, 113, 113, 0.16) !important;
   color: var(--danger);
   text-decoration: line-through;
 }
 tbody tr.insert-row td {
-  background: rgba(63, 207, 142, 0.1);
+  background: rgba(74, 222, 128, 0.1);
 }
 td.dirty {
-  background: rgba(224, 161, 74, 0.18) !important;
+  background: rgba(240, 180, 41, 0.18) !important;
   color: var(--warn);
 }
 td.editing {
@@ -282,10 +284,11 @@ td.editing {
   z-index: 1;
   background: var(--bg-elevated);
   color: var(--text-faint);
-  text-align: right;
+  text-align: center;
   font-family: var(--mono);
   user-select: none;
-  min-width: 44px;
+  min-width: 48px;
+  border-right: 1px solid var(--border);
 }
 thead .rownum {
   z-index: 3;
@@ -298,7 +301,7 @@ thead .rownum {
   border-radius: 3px;
 }
 .remove-insert:hover {
-  background: rgba(229, 97, 106, 0.18);
+  background: rgba(248, 113, 113, 0.18);
 }
 td.null {
   color: var(--text-faint);
@@ -321,14 +324,14 @@ td.null {
   border: 1px solid transparent;
 }
 .row-act:hover {
-  background: rgba(229, 97, 106, 0.15);
+  background: rgba(248, 113, 113, 0.15);
   border-color: var(--danger);
 }
 td.find-match {
-  background: rgba(224, 161, 74, 0.22) !important;
+  background: rgba(240, 180, 41, 0.22) !important;
 }
 td.find-current {
-  background: rgba(224, 161, 74, 0.50) !important;
+  background: rgba(240, 180, 41, 0.5) !important;
   outline: 2px solid var(--warn);
   outline-offset: -2px;
 }

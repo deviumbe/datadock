@@ -36,14 +36,14 @@ const sqlConf = new Compartment()
 const sqlExt = (): ReturnType<typeof sql> => sql({ schema: props.schema ?? {}, upperCaseKeywords: false })
 
 const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword], color: '#5fc9e8', fontWeight: '600' },
-  { tag: [t.string, t.special(t.string)], color: '#9bd17a' },
-  { tag: [t.number, t.bool, t.null], color: '#e0a14a' },
-  { tag: [t.lineComment, t.blockComment], color: '#6b7280', fontStyle: 'italic' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#9b7ede' },
+  { tag: [t.keyword, t.operatorKeyword], color: '#57f1db', fontWeight: '600' },
+  { tag: [t.string, t.special(t.string)], color: '#a5d6a7' },
+  { tag: [t.number, t.bool, t.null], color: '#f0b429' },
+  { tag: [t.lineComment, t.blockComment], color: '#66728f', fontStyle: 'italic' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#c8b4f6' },
   { tag: t.variableName, color: 'var(--text)' },
-  { tag: [t.typeName, t.className], color: '#1fb6a6' },
-  { tag: t.operator, color: '#9aa1ad' }
+  { tag: [t.typeName, t.className], color: '#2dd4bf' },
+  { tag: t.operator, color: '#9aa6c4' }
 ])
 
 const theme = EditorView.theme(
@@ -59,7 +59,7 @@ const theme = EditorView.theme(
     '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--text-dim)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'rgba(31,182,166,0.22)'
+      backgroundColor: 'rgba(45,212,191,0.20)'
     },
     '&.cm-focused': { outline: 'none' }
   },
