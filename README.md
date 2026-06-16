@@ -92,6 +92,8 @@ Click your way down — **project → environment → connection** — and you'r
 - **Schema-aware autocomplete** — table and column names from the connected database, right as you type.
 - **Undo / redo** of pending row edits (⌘Z / ⌘⇧Z) and **query history** to re-run past statements.
 - **Saved queries / snippets** — star a query to keep it in a reusable library.
+- **AI SQL assistant (✨)** — describe what you want in plain English and get a ready-to-run query for your dialect (schema-aware), **explain** an existing query in plain English, or **fix it with AI** when it errors. Bring your own Anthropic API key — it's encrypted with your OS keychain and never leaves the main process.
+- **Visual EXPLAIN (◧)** — turn a query plan into an interactive, collapsible tree with estimated row counts and cost per node (PostgreSQL & SQLite).
 
 #### 📦 Import & export
 - Export a result, a table, or a **whole database** to **CSV, Excel, JSON, SQL or zipped SQL**.
@@ -189,19 +191,23 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] Data generator (seed realistic fake data into tables)
 - [x] Export ER diagram to SVG / PNG
 - [x] Transaction mode (explicit Begin / Commit / Rollback)
+- [x] **AI SQL assistant** — natural-language → SQL, AI **explain query**, and **fix-with-AI** on errors (Anthropic; key encrypted with the OS keychain, used only in the main process)
+- [x] Copy a result row as **JSON / CSV / SQL INSERT** (right-click the row)
+- [x] **Duplicate row** — right-click a row to add a pre-filled insert (primary keys auto-generate)
+- [x] **Query variables** — `{{name}}` placeholders are collected and substituted at run time
+- [x] **Visual EXPLAIN** — render the query plan as an interactive, collapsible tree (PostgreSQL & SQLite)
 
 ### 🎯 Next up
 
 The features that push DataDock past "another database client" into *organized, safe, fast* database work:
 
-- [ ] **Visual EXPLAIN** — turn the plan into an interactive tree
-- [ ] **AI SQL assistant** — natural language → SQL, explain & troubleshoot queries
+- [ ] **Export result directly to a new table** — turn any result set into a persisted table
 
 ### 🧭 Backlog
 
-**Data management** — generate INSERT/UPDATE from selected rows · copy row as JSON / SQL / CSV · bulk edit selected rows · duplicate row · soft-delete recovery viewer
+**Data management** — generate INSERT/UPDATE from selected rows · bulk edit selected rows · soft-delete recovery viewer
 
-**Querying** — query bookmarks per connection · query variables (`{{userId}}`) · snippet autocomplete · multiple result tabs per execution · export result directly to a new table · execution-time history
+**Querying** — query bookmarks per connection · snippet autocomplete · multiple result tabs per execution · export result directly to a new table · execution-time history
 
 **Production safety** — confirmation workflow for dangerous queries · temporary write-access unlock ("unlock for 15 min") · SQL linting before execution
 

@@ -19,6 +19,7 @@ import * as db from './db'
 import * as io from './io'
 import * as history from './history'
 import * as snippets from './snippets'
+import * as ai from './ai'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
 
@@ -71,6 +72,7 @@ export function registerIpc(): void {
     db.getAdapter(id).tableData(table, opts)
   )
   handle('db:query', (id: string, sql: string) => db.getAdapter(id).query(sql))
+  handle('db:explainPlan', (id: string, sql: string) => db.explainPlan(id, sql))
   handle('db:txnBegin', (id: string) => db.capability(id, 'beginTransaction')())
   handle('db:txnCommit', (id: string) => db.capability(id, 'commitTransaction')())
   handle('db:txnRollback', (id: string) => db.capability(id, 'rollbackTransaction')())
@@ -144,6 +146,14 @@ export function registerIpc(): void {
     snippets.removeSnippet(id)
     return true
   })
+
+  // AI SQL assistant (key held + used only in main; never sent to renderer)
+  handle('ai:hasKey', () => ai.hasAiKey())
+  handle('ai:setKey', (key: string) => ai.setAiKey(key))
+  handle('ai:clearKey', () => ai.clearAiKey())
+  handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
+  handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
+  handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
 
   // File picker (e.g. SSH private key)
   handle('app:pickFile', async (): Promise<string | null> => {

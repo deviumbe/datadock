@@ -1,4 +1,4 @@
-import type { ConnectionConfig } from '@shared/types'
+import type { ConnectionConfig, PlanNode } from '@shared/types'
 import { DbAdapter } from './types'
 import { PostgresAdapter } from './postgres'
 import { MySQLAdapter } from './mysql'
@@ -90,6 +90,81 @@ export function getAdapter(id: string): DbAdapter {
   const conn = live.get(id)
   if (!conn) throw new Error('Connection is not open')
   return conn.adapter
+}
+
+// ---- Visual EXPLAIN ---------------------------------------------------------
+
+interface PgPlan {
+  'Node Type'?: string
+  'Relation Name'?: string
+  'Index Name'?: string
+  'Join Type'?: string
+  'Filter'?: string
+  'Index Cond'?: string
+  'Hash Cond'?: string
+  'Sort Key'?: string[]
+  'Plan Rows'?: number
+  'Total Cost'?: number
+  'Plans'?: PgPlan[]
+}
+
+/** Build a normalized PlanNode tree from a Postgres `FORMAT JSON` plan node. */
+function pgNode(p: PgPlan): PlanNode {
+  const type = p['Node Type'] ?? 'Node'
+  const target = p['Relation Name'] ?? p['Index Name']
+  const label = target ? `${type} on ${target}` : type
+  const detailParts: string[] = []
+  if (p['Join Type']) detailParts.push(`${p['Join Type']} Join`)
+  if (p['Index Cond']) detailParts.push(`Index Cond: ${p['Index Cond']}`)
+  if (p['Hash Cond']) detailParts.push(`Hash Cond: ${p['Hash Cond']}`)
+  if (p['Filter']) detailParts.push(`Filter: ${p['Filter']}`)
+  if (p['Sort Key']?.length) detailParts.push(`Sort Key: ${p['Sort Key'].join(', ')}`)
+  return {
+    label,
+    detail: detailParts.length ? detailParts.join(' · ') : undefined,
+    rows: p['Plan Rows'],
+    cost: p['Total Cost'],
+    children: (p['Plans'] ?? []).map(pgNode)
+  }
+}
+
+/** Build a PlanNode tree from SQLite `EXPLAIN QUERY PLAN` adjacency rows. */
+function sqliteTree(rows: unknown[][]): PlanNode {
+  const root: PlanNode = { label: 'QUERY PLAN', children: [] }
+  const byId = new Map<number, PlanNode>()
+  byId.set(0, root)
+  for (const r of rows) {
+    const id = Number(r[0])
+    const parent = Number(r[1])
+    const detail = String(r[3] ?? '')
+    const node: PlanNode = { label: detail, children: [] }
+    byId.set(id, node)
+    const parentNode = byId.get(parent) ?? root
+    parentNode.children.push(node)
+  }
+  return root
+}
+
+/**
+ * Produce a structured execution plan for engines that expose one (Postgres,
+ * SQLite). Returns null for engines without a structured plan — the caller
+ * falls back to the flat textual EXPLAIN.
+ */
+export async function explainPlan(id: string, sql: string): Promise<PlanNode | null> {
+  const adapter = getAdapter(id)
+  const driver = adapter.config.driver
+  if (driver === 'postgres') {
+    const res = await adapter.query(`EXPLAIN (FORMAT JSON, COSTS true) ${sql}`)
+    const cell = res.rows?.[0]?.[0]
+    const parsed = typeof cell === 'string' ? JSON.parse(cell) : cell
+    const root = Array.isArray(parsed) ? parsed[0]?.Plan : (parsed as { Plan?: PgPlan })?.Plan
+    return root ? pgNode(root as PgPlan) : null
+  }
+  if (driver === 'sqlite') {
+    const res = await adapter.query(`EXPLAIN QUERY PLAN ${sql}`)
+    return sqliteTree(res.rows as unknown[][])
+  }
+  return null
 }
 
 /** Invoke an optional capability, with a clear error when unsupported. */

@@ -305,14 +305,14 @@ export const useTabs = defineStore('tabs', () => {
     }
   }
 
-  async function run(tab: Tab): Promise<void> {
+  async function run(tab: Tab, sqlOverride?: string): Promise<void> {
     if (tab.kind === 'table') return reloadTable(tab)
     if (tab.kind === 'query' && !tab.query.trim()) return
     tab.running = true
     tab.error = null
     try {
       if (tab.kind === 'query') {
-        const sql = tab.query
+        const sql = sqlOverride ?? tab.query
         if (isReadOnly(tab.connectionId) && MUTATING_SQL.test(sql)) {
           tab.error = 'Read-only mode: this statement modifies data and was blocked.'
           return
@@ -520,6 +520,22 @@ export const useTabs = defineStore('tabs', () => {
     tab.inserts = tab.inserts.filter((_, i) => i !== index)
   }
 
+  /** Append a new insert row pre-filled from an existing row (primary keys
+   *  dropped so they auto-generate / don't collide). */
+  function duplicateRow(tab: Tab, rowIndex: number): void {
+    if (!editsAllowed(tab) || tab.kind !== 'table' || !tab.result) return
+    const row = tab.result.rows[rowIndex] as unknown[]
+    if (!row) return
+    record(tab)
+    const insert: Record<string, unknown> = {}
+    tab.result.columns.forEach((c, i) => {
+      if (tab.primaryKeys.includes(c.name)) return
+      const v = row[i]
+      if (v !== null && v !== undefined) insert[c.name] = v
+    })
+    tab.inserts = [...tab.inserts, insert]
+  }
+
   /** Mark / unmark an existing data row for deletion. */
   function toggleDelete(tab: Tab, rowIndex: number): void {
     if (!editsAllowed(tab)) return
@@ -612,6 +628,7 @@ export const useTabs = defineStore('tabs', () => {
     editsAllowed,
     editCell,
     addInsertRow,
+    duplicateRow,
     editInsert,
     removeInsert,
     toggleDelete,

@@ -13,6 +13,7 @@ import type {
   HistoryEntry,
   ImportResult,
   IpcResult,
+  PlanNode,
   Snippet,
   QueryResult,
   RowChangeSet,
@@ -62,6 +63,8 @@ const api = {
     tableData: (id: string, table: TableInfo, opts: TableQueryOptions) =>
       invoke<QueryResult>('db:tableData', id, table, opts),
     query: (id: string, sql: string) => invoke<QueryResult>('db:query', id, sql),
+    explainPlan: (id: string, sql: string) =>
+      invoke<PlanNode | null>('db:explainPlan', id, sql),
     txnBegin: (id: string) => invoke<void>('db:txnBegin', id),
     txnCommit: (id: string) => invoke<void>('db:txnCommit', id),
     txnRollback: (id: string) => invoke<void>('db:txnRollback', id),
@@ -115,6 +118,21 @@ const api = {
     save: (input: Partial<Snippet> & { name: string; sql: string }) =>
       invoke<Snippet>('snippets:save', input),
     remove: (id: string) => invoke<boolean>('snippets:remove', id)
+  },
+  ai: {
+    hasKey: () => invoke<boolean>('ai:hasKey'),
+    setKey: (key: string) => invoke<boolean>('ai:setKey', key),
+    clearKey: () => invoke<boolean>('ai:clearKey'),
+    generateSql: (req: { driver: string; schema: Record<string, string[]>; prompt: string }) =>
+      invoke<{ sql: string; notes: string }>('ai:generateSql', req),
+    explainQuery: (req: { driver: string; schema: Record<string, string[]>; sql: string }) =>
+      invoke<string>('ai:explainQuery', req),
+    fixQuery: (req: {
+      driver: string
+      schema: Record<string, string[]>
+      sql: string
+      error: string
+    }) => invoke<{ sql: string; notes: string }>('ai:fixQuery', req)
   },
   pickFile: () => invoke<string | null>('app:pickFile')
 }

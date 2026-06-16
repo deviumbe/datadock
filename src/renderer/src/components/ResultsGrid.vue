@@ -28,6 +28,7 @@ const emit = defineEmits<{
   selectRow: [rowIndex: number]
   sort: [column: string]
   action: [row: unknown[]]
+  rowContext: [rowIndex: number, e: MouseEvent]
 }>()
 
 const hasRows = computed(() => !!props.result && props.result.columns.length > 0)
@@ -122,6 +123,7 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
           :key="r"
           :class="{ selected: selectedRow === r, deleted: isDeleted(r) }"
           @click="emit('selectRow', r)"
+          @contextmenu.prevent="emit('rowContext', r, $event)"
         >
           <td class="rownum">{{ r + 1 }}</td>
           <td v-if="actionLabel" class="actcol">

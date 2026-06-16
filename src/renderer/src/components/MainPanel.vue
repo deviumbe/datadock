@@ -19,11 +19,15 @@ import ErDiagram from './ErDiagram.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
-import type { DropTableOptions } from '@shared/types'
+import AiAssistantModal from './AiAssistantModal.vue'
+import QueryVarsModal from './QueryVarsModal.vue'
+import PlanTreeModal from './PlanTreeModal.vue'
+import type { DropTableOptions, PlanNode } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
+import { rowToJson, rowToCsv, rowToInsert } from '../lib/rowCopy'
 import logoUrl from '../assets/logo.png'
 
 const ws = useWorkspace()
@@ -38,6 +42,95 @@ const saveSnippetOpen = ref(false)
 const createTableOpen = ref(false)
 const exportTableTarget = ref<TableInfo | null>(null)
 const genTarget = ref<TableInfo | null>(null)
+const aiOpen = ref(false)
+const aiMode = ref<'generate' | 'explain' | 'fix'>('generate')
+
+// Query variables: `{{name}}` placeholders are collected and substituted before
+// the query runs, without altering the saved template.
+const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
+const queryVars = ref<{ names: string[]; tab: Tab } | null>(null)
+
+function runActive(tab: Tab): void {
+  if (tab.kind === 'query') {
+    const names = [...new Set([...tab.query.matchAll(VAR_RE)].map((m) => m[1]))]
+    if (names.length) {
+      queryVars.value = { names, tab }
+      return
+    }
+  }
+  void tabsStore.run(tab)
+}
+function runWithVars(values: Record<string, string>): void {
+  const pending = queryVars.value
+  queryVars.value = null
+  if (!pending) return
+  const sql = pending.tab.query.replace(VAR_RE, (_m, name: string) => values[name] ?? '')
+  void tabsStore.run(pending.tab, sql)
+}
+
+function openAi(mode: 'generate' | 'explain' | 'fix'): void {
+  aiMode.value = mode
+  aiOpen.value = true
+}
+
+// Visual EXPLAIN — fetch the structured plan and show it as an interactive tree.
+const planRoot = ref<PlanNode | null>(null)
+const planLoading = ref(false)
+async function openPlan(tab: Tab): Promise<void> {
+  if (tab.kind !== 'query' || !tab.query.trim() || planLoading.value) return
+  planLoading.value = true
+  try {
+    const root = await window.api.db.explainPlan(tab.connectionId, tab.query)
+    if (root) {
+      planRoot.value = root
+    } else {
+      // Engine has no structured plan — fall back to the flat textual EXPLAIN.
+      void tabsStore.explain(tab)
+    }
+  } catch (err) {
+    tab.error = err instanceof Error ? err.message : String(err)
+  } finally {
+    planLoading.value = false
+  }
+}
+
+// Right-click a result row → copy it as JSON / CSV / SQL INSERT.
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    /* clipboard unavailable */
+  }
+}
+function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent): void {
+  const result = tab.result
+  if (!result || !result.columns.length) return
+  const row = result.rows[rowIndex] as unknown[]
+  if (!row) return
+  const table = tab.kind === 'table' && tab.table ? tab.table.name : 'table'
+  const items: MenuItem[] = []
+  if (tabsStore.editsAllowed(tab)) {
+    items.push(
+      { label: 'Duplicate row', action: () => tabsStore.duplicateRow(tab, rowIndex) },
+      { sep: true }
+    )
+  }
+  items.push(
+    { label: 'Copy row as JSON', action: () => copyText(rowToJson(result.columns, row)) },
+    { label: 'Copy row as CSV', action: () => copyText(rowToCsv(result.columns, row)) },
+    { label: 'Copy row as SQL INSERT', action: () => copyText(rowToInsert(table, result.columns, row)) }
+  )
+  ctx.value = { x: e.clientX, y: e.clientY, items }
+}
+
+// Drop AI-generated SQL into the active query tab (replacing a blank scratch
+// buffer, or appending below existing text so nothing is clobbered).
+function applyAiSql(sql: string): void {
+  const tab = active.value
+  if (!tab || tab.kind !== 'query') return
+  tab.query = tab.query.trim() ? `${tab.query.trim()}\n\n${sql}` : sql
+  aiOpen.value = false
+}
 
 function onGenerated(): void {
   const name = genTarget.value?.name
@@ -169,6 +262,10 @@ const readOnly = computed(() => !!activeConn.value?.readOnly)
 const isProduction = computed(() => !!activeConn.value?.production)
 const explainable = computed(() =>
   ['postgres', 'mysql', 'sqlite'].includes(activeConn.value?.driver ?? '')
+)
+// Visual EXPLAIN — only engines that expose a structured plan.
+const visualExplainable = computed(() =>
+  ['postgres', 'sqlite'].includes(activeConn.value?.driver ?? '')
 )
 
 // Other connections (for schema diff target picker), labeled project / env / name.
@@ -416,12 +513,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Query tab -->
           <div v-else-if="active.kind === 'query'" class="editor-pane">
             <div class="toolbar">
-              <button class="btn btn-primary" :disabled="active.running" @click="tabsStore.run(active)">
+              <button class="btn btn-primary" :disabled="active.running" @click="runActive(active)">
                 {{ active.running ? 'Running…' : '▶ Run' }}
               </button>
               <span class="hint">{{ isInflux ? 'Flux' : 'SQL' }} · ⌘↵</span>
               <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Show query plan (EXPLAIN)" @click="tabsStore.explain(active)">◔ Explain</button>
+              <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)">◧ {{ planLoading ? 'Plan…' : 'Plan' }}</button>
               <button v-if="!isInflux" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
+              <button v-if="!isInflux" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')">✨ AI</button>
               <div class="spacer" />
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
@@ -440,12 +539,17 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 v-model="active.query"
                 :schema="ws.schemas[active.connectionId]"
                 :placeholder="isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
-                @run="tabsStore.run(active)"
+                @run="runActive(active)"
               />
             </div>
             <div class="results">
-              <div v-if="active.error" class="run-error">{{ active.error }}</div>
-              <ResultsGrid v-else :result="active.result" />
+              <div v-if="active.error" class="run-error">
+                <div class="run-error-head">
+                  <span class="run-error-msg">{{ active.error }}</span>
+                  <button v-if="!isInflux" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
+                </div>
+              </div>
+              <ResultsGrid v-else :result="active.result" @row-context="(r, e) => onRowContext(active!, r, e)" />
             </div>
           </div>
 
@@ -530,6 +634,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   @edit-cell="(r, col, v) => tabsStore.editCell(active!, r, col, v)"
                   @edit-insert="(i, col, v) => tabsStore.editInsert(active!, i, col, v)"
                   @remove-insert="(i) => tabsStore.removeInsert(active!, i)"
+                  @row-context="(r, e) => onRowContext(active!, r, e)"
                 />
               </div>
               <RowDetailPanel
@@ -742,6 +847,26 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         @close="genTarget = null"
       />
       <ContextMenu v-if="ctx" :x="ctx.x" :y="ctx.y" :items="ctx.items" @close="ctx = null" />
+
+      <AiAssistantModal
+        v-if="aiOpen"
+        :driver="activeConn.driver"
+        :schema="ws.schemas[activeConn.id] || {}"
+        :sql="active && active.kind === 'query' ? active.query : ''"
+        :error="active && active.kind === 'query' ? active.error || '' : ''"
+        :initial-mode="aiMode"
+        @insert="applyAiSql"
+        @close="aiOpen = false"
+      />
+
+      <QueryVarsModal
+        v-if="queryVars"
+        :names="queryVars.names"
+        @submit="runWithVars"
+        @close="queryVars = null"
+      />
+
+      <PlanTreeModal v-if="planRoot" :root="planRoot" @close="planRoot = null" />
     </template>
   </main>
 </template>
@@ -1277,6 +1402,29 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .btn.is-saved {
   color: var(--accent);
+}
+.ai-btn {
+  color: var(--accent);
+}
+.ai-btn:hover {
+  background: var(--accent-soft);
+}
+.run-error-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.run-error-msg {
+  flex: 1;
+  white-space: pre-wrap;
+}
+.fix-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-family: var(--font);
 }
 .editor-host {
   overflow: hidden;

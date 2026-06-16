@@ -101,6 +101,15 @@ export interface ColumnMeta {
   type?: string
 }
 
+/** A normalized node in a query execution plan (for Visual EXPLAIN). */
+export interface PlanNode {
+  label: string
+  detail?: string
+  rows?: number
+  cost?: number
+  children: PlanNode[]
+}
+
 export interface QueryResult {
   columns: ColumnMeta[]
   rows: unknown[][]
