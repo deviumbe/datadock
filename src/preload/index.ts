@@ -20,6 +20,7 @@ import type {
   TableDumpSpec,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure,
   Workspace
 } from '@shared/types'
@@ -69,6 +70,7 @@ const api = {
     txnCommit: (id: string) => invoke<void>('db:txnCommit', id),
     txnRollback: (id: string) => invoke<void>('db:txnRollback', id),
     schema: (id: string) => invoke<Record<string, string[]>>('db:schema', id),
+    tableSizes: (id: string) => invoke<TableSizeInfo[]>('db:tableSizes', id),
     erModel: (id: string) => invoke<ErModel>('db:erModel', id),
     schemaSnapshot: (id: string) => invoke<SchemaSnapshot>('db:schemaSnapshot', id),
     primaryKeys: (id: string, table: TableInfo) => invoke<string[]>('db:primaryKeys', id, table),

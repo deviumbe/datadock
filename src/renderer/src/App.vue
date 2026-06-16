@@ -67,6 +67,12 @@ function handleMenu(action: string): void {
     case 'processes':
       tabs.openServer(id, 'processes')
       break
+    case 'tableSizes':
+      ui.tableSizesOpen = true
+      break
+    case 'columnSearch':
+      ui.columnSearchOpen = true
+      break
     case 'history':
       tabs.openHistory(id)
       break

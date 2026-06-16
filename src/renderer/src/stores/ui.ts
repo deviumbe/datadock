@@ -9,6 +9,8 @@ export const useUi = defineStore('ui', () => {
   // Menu-triggered modals (rendered by MainPanel).
   const importOpen = ref(false)
   const exportDbOpen = ref(false)
+  const tableSizesOpen = ref(false)
+  const columnSearchOpen = ref(false)
 
   // Command palette
   const paletteOpen = ref(false)
@@ -51,6 +53,8 @@ export const useUi = defineStore('ui', () => {
     tablesCollapsed,
     importOpen,
     exportDbOpen,
+    tableSizesOpen,
+    columnSearchOpen,
     paletteOpen,
     openPalette,
     closePalette,

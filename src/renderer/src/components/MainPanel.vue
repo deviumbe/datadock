@@ -22,12 +22,17 @@ import DataGeneratorModal from './DataGeneratorModal.vue'
 import AiAssistantModal from './AiAssistantModal.vue'
 import QueryVarsModal from './QueryVarsModal.vue'
 import PlanTreeModal from './PlanTreeModal.vue'
+import BulkEditModal from './BulkEditModal.vue'
+import DependenciesModal from './DependenciesModal.vue'
+import TableSizesModal from './TableSizesModal.vue'
+import ColumnSearchModal from './ColumnSearchModal.vue'
 import type { DropTableOptions, PlanNode } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
-import { rowToJson, rowToCsv, rowToInsert } from '../lib/rowCopy'
+import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
+import { canExportToTable, planResultTable } from '../lib/resultTable'
 import logoUrl from '../assets/logo.png'
 
 const ws = useWorkspace()
@@ -91,6 +96,88 @@ async function openPlan(tab: Tab): Promise<void> {
     tab.error = err instanceof Error ? err.message : String(err)
   } finally {
     planLoading.value = false
+  }
+}
+
+// Export the current result set into a brand-new table (SQL engines only).
+const toTableOpen = ref(false)
+const toTableBusy = ref(false)
+const canResultToTable = computed(() => {
+  const a = active.value
+  return (
+    !!a?.result &&
+    a.result.columns.length > 0 &&
+    !!activeConn.value &&
+    !readOnly.value &&
+    canExportToTable(activeConn.value.driver)
+  )
+})
+async function exportResultToTable(name: string): Promise<void> {
+  const a = active.value
+  const conn = activeConn.value
+  if (!a?.result || !conn || !canExportToTable(conn.driver)) return
+  toTableBusy.value = true
+  try {
+    const { spec, inserts } = planResultTable(name, a.result.columns, a.result.rows, conn.driver)
+    await window.api.db.createTable(conn.id, spec)
+    if (inserts.length) {
+      await window.api.db.applyChanges(conn.id, { name: spec.name, type: 'table' }, {
+        updates: [],
+        inserts,
+        deletes: []
+      })
+    }
+    toTableOpen.value = false
+    await ws.refreshTables(conn.id)
+    tabsStore.openTable(conn.id, { name: spec.name, type: 'table' })
+  } catch (e) {
+    a.error = e instanceof Error ? e.message : String(e)
+    toTableOpen.value = false
+  } finally {
+    toTableBusy.value = false
+  }
+}
+
+// Bulk edit — set one column across the ticked rows, staged as pending edits.
+const bulkOpen = ref(false)
+function applyBulkEdit(column: string, value: unknown): void {
+  const a = active.value
+  if (!a) return
+  tabsStore.bulkEdit(a, [...a.selection], column, value)
+  tabsStore.clearSelection(a)
+  bulkOpen.value = false
+}
+
+// Generate INSERT / UPDATE statements from the ticked rows into a new query tab.
+function openGenerateSqlMenu(e: MouseEvent): void {
+  const a = active.value
+  if (!a?.result || a.kind !== 'table' || !a.table) return
+  const cols = a.result.columns
+  const rows = [...a.selection].sort((x, y) => x - y).map((i) => a.result!.rows[i] as unknown[])
+  const table = a.table.name
+  ctx.value = {
+    x: e.clientX,
+    y: e.clientY,
+    items: [
+      {
+        label: `Generate ${rows.length} INSERT${rows.length === 1 ? '' : 's'}`,
+        action: () => {
+          tabsStore.openQueryWith(a.connectionId, rowsToInserts(table, cols, rows), `INSERT ${table}`)
+          tabsStore.clearSelection(a)
+        }
+      },
+      {
+        label: `Generate ${rows.length} UPDATE${rows.length === 1 ? '' : 's'}`,
+        action: () => {
+          tabsStore.openQueryWith(
+            a.connectionId,
+            rowsToUpdates(table, cols, rows, a.primaryKeys),
+            `UPDATE ${table}`
+          )
+          tabsStore.clearSelection(a)
+        }
+      }
+    ]
   }
 }
 
@@ -179,7 +266,10 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
     { label: 'Edit structure', action: () => tabsStore.setViewMode(tabsStore.openTable(id, t), 'structure') },
     { label: 'Export table…', action: () => (exportTableTarget.value = { schema: t.schema, name: t.name, type: t.type }) }
   ]
-  if (!isInflux.value && !readOnly.value) {
+  if (!nonSql.value) {
+    items.push({ label: 'Dependencies…', action: () => (depsTarget.value = t.name) })
+  }
+  if (!nonSql.value && !readOnly.value) {
     items.push({
       label: 'Generate data…',
       action: () => (genTarget.value = { schema: t.schema, name: t.name, type: t.type })
@@ -194,6 +284,16 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
     )
   }
   ctx.value = { x: e.clientX, y: e.clientY, items }
+}
+
+// ---- dependency explorer ---------------------------------------------------
+const depsTarget = ref<string | null>(null)
+function openRelatedTable(name: string): void {
+  const conn = activeConn.value
+  if (!conn) return
+  const known = ws.tables.find((t) => t.name === name)
+  tabsStore.openTable(conn.id, known ?? { name, type: 'table' })
+  depsTarget.value = null
 }
 
 // ---- drop modal ------------------------------------------------------------
@@ -258,6 +358,10 @@ const activeConn = computed(() =>
   ws.activeConnectionId ? ws.findConnection(ws.activeConnectionId) : undefined
 )
 const isInflux = computed(() => activeConn.value?.driver === 'influxdb')
+const isMongo = computed(() => activeConn.value?.driver === 'mongodb')
+// Engines that don't speak SQL — gate SQL-only affordances (Format, AI, the
+// structure editor, EXPLAIN) off these.
+const nonSql = computed(() => isInflux.value || isMongo.value)
 const readOnly = computed(() => !!activeConn.value?.readOnly)
 const isProduction = computed(() => !!activeConn.value?.production)
 const explainable = computed(() =>
@@ -339,7 +443,7 @@ function onKeydown(e: KeyboardEvent): void {
     tabsStore.toggleDelete(a, a.selectedRow)
     return
   }
-  if (selectedTables.value.length && !isInflux.value && !readOnly.value) {
+  if (selectedTables.value.length && !nonSql.value && !readOnly.value) {
     e.preventDefault()
     openDropModal()
   }
@@ -431,7 +535,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         {{ ui.theme === 'dark' ? '☀' : '☾' }}
       </button>
       <template v-if="activeConn">
-        <template v-if="!isInflux && !readOnly">
+        <template v-if="!nonSql && !readOnly">
           <template v-if="ws.txn[activeConn.id]">
             <span class="txn-badge" title="Open transaction — uncommitted">● TX</span>
             <button class="btn btn-ghost txn-commit" @click="ws.commitTxn(activeConn.id)">Commit</button>
@@ -466,7 +570,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <div class="tables" v-show="!ui.tablesCollapsed">
           <div class="tables-head">
             <input class="input filter" v-model="tableFilter" placeholder="Filter tables…" />
-            <button v-if="!isInflux && !readOnly" class="icon-btn sm" title="New table" @click="createTableOpen = true">＋</button>
+            <button v-if="!nonSql && !readOnly" class="icon-btn sm" title="New table" @click="createTableOpen = true">＋</button>
             <button class="icon-btn sm" title="Collapse list" @click="ui.toggleTables()">‹</button>
           </div>
           <div class="table-list">
@@ -516,11 +620,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button class="btn btn-primary" :disabled="active.running" @click="runActive(active)">
                 {{ active.running ? 'Running…' : '▶ Run' }}
               </button>
-              <span class="hint">{{ isInflux ? 'Flux' : 'SQL' }} · ⌘↵</span>
+              <span class="hint">{{ isMongo ? 'MongoDB' : isInflux ? 'Flux' : 'SQL' }} · ⌘↵</span>
               <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Show query plan (EXPLAIN)" @click="tabsStore.explain(active)">◔ Explain</button>
               <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)">◧ {{ planLoading ? 'Plan…' : 'Plan' }}</button>
-              <button v-if="!isInflux" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
-              <button v-if="!isInflux" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')">✨ AI</button>
+              <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
+              <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')">✨ AI</button>
               <div class="spacer" />
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
@@ -532,13 +636,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 @click="openSaveSnippet"
                 :title="activeSaved ? `Saved as “${activeSaved.name}”` : 'Save as snippet'"
               >{{ activeSaved ? '★ Saved' : '☆ Save' }}</button>
+              <button v-if="canResultToTable" class="btn btn-ghost" title="Save this result as a new table" @click="toTableOpen = true">⤒ To table</button>
               <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true">⤓ Export</button>
             </div>
             <div class="editor-host">
               <SqlEditor
                 v-model="active.query"
                 :schema="ws.schemas[active.connectionId]"
-                :placeholder="isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
+                :placeholder="isMongo ? 'db.collection.find({ })' : isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
                 @run="runActive(active)"
               />
             </div>
@@ -546,7 +651,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <div v-if="active.error" class="run-error">
                 <div class="run-error-head">
                   <span class="run-error-msg">{{ active.error }}</span>
-                  <button v-if="!isInflux" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
+                  <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
                 </div>
               </div>
               <ResultsGrid v-else :result="active.result" @row-context="(r, e) => onRowContext(active!, r, e)" />
@@ -581,6 +686,18 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   class="btn btn-ghost"
                   @click="tabsStore.addInsertRow(active)"
                 >＋ Add row</button>
+                <button
+                  v-if="tabsStore.editsAllowed(active) && active.selection.length > 0"
+                  class="btn btn-ghost"
+                  title="Set a column to one value across the selected rows"
+                  @click="bulkOpen = true"
+                >✐ Bulk edit ({{ active.selection.length }})</button>
+                <button
+                  v-if="tabsStore.editsAllowed(active) && active.selection.length > 0"
+                  class="btn btn-ghost"
+                  title="Generate INSERT/UPDATE SQL from the selected rows"
+                  @click="openGenerateSqlMenu"
+                >⌖ Generate SQL</button>
                 <div class="spacer" />
                 <template v-if="tabsStore.dirtyCount(active) > 0">
                   <span class="dirty-info">{{ tabsStore.dirtyCount(active) }} unsaved</span>
@@ -588,6 +705,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <button class="btn btn-primary" :disabled="active.running" @click="tabsStore.commit(active)">Save ⌘S</button>
                 </template>
                 <span v-else-if="active.result" class="status-mini">{{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms</span>
+                <button v-if="canResultToTable" class="btn btn-ghost" title="Save this result as a new table" @click="toTableOpen = true">⤒ To table</button>
                 <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true">⤓ Export</button>
               </template>
               <template v-else>
@@ -629,7 +747,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   :deletes="active.deletes"
                   :sort="active.sort"
                   :selected-row="active.selectedRow"
+                  :selectable="tabsStore.editsAllowed(active)"
+                  :selected-rows="active.selection"
                   @select-row="(r) => (active!.selectedRow = r)"
+                  @toggle-select="(r) => tabsStore.toggleRowSelection(active!, r)"
+                  @toggle-select-all="tabsStore.toggleSelectAll(active!)"
                   @sort="(c) => tabsStore.toggleSort(active!, c)"
                   @edit-cell="(r, col, v) => tabsStore.editCell(active!, r, col, v)"
                   @edit-insert="(i, col, v) => tabsStore.editInsert(active!, i, col, v)"
@@ -817,6 +939,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         @submit="submitSaveSnippet"
         @close="saveSnippetOpen = false"
       />
+      <NamePrompt
+        v-if="toTableOpen"
+        title="Save result as new table"
+        :initial="active && active.kind === 'table' ? `${active.table?.name}_copy` : 'query_result'"
+        :submit-label="toTableBusy ? 'Creating…' : 'Create table'"
+        @submit="exportResultToTable"
+        @close="toTableOpen = false"
+      />
       <CreateTableModal
         v-if="createTableOpen"
         :conn-id="activeConn.id"
@@ -867,6 +997,36 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
       />
 
       <PlanTreeModal v-if="planRoot" :root="planRoot" @close="planRoot = null" />
+
+      <BulkEditModal
+        v-if="bulkOpen && active && active.kind === 'table' && active.result"
+        :columns="active.result.columns"
+        :row-count="active.selection.length"
+        @apply="applyBulkEdit"
+        @close="bulkOpen = false"
+      />
+
+      <DependenciesModal
+        v-if="depsTarget && activeConn"
+        :conn-id="activeConn.id"
+        :table="depsTarget"
+        @open="openRelatedTable"
+        @close="depsTarget = null"
+      />
+
+      <TableSizesModal
+        v-if="ui.tableSizesOpen && activeConn"
+        :conn-id="activeConn.id"
+        @open="(n) => { openRelatedTable(n); ui.tableSizesOpen = false }"
+        @close="ui.tableSizesOpen = false"
+      />
+
+      <ColumnSearchModal
+        v-if="ui.columnSearchOpen && activeConn"
+        :conn-id="activeConn.id"
+        @open="(n) => { openRelatedTable(n); ui.columnSearchOpen = false }"
+        @close="ui.columnSearchOpen = false"
+      />
     </template>
   </main>
 </template>

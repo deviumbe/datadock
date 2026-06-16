@@ -8,9 +8,10 @@ import type {
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure
 } from '@shared/types'
-import { DbAdapter, now, assertIdent } from './types'
+import { DbAdapter, now, toNum, assertIdent } from './types'
 import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
 import type { ErModel, SchemaSnapshot } from '@shared/types'
 
@@ -279,6 +280,26 @@ export class MSSQLAdapter implements DbAdapter {
     const start = now()
     const res = await this.request().query(sqlText)
     return this.shape(res, now() - start)
+  }
+
+  async tableSizes(): Promise<TableSizeInfo[]> {
+    const res = await this.query(
+      `select s.name as [schema], t.name as name,
+              sum(case when p.index_id in (0, 1) then p.rows else 0 end) as [rows],
+              sum(a.total_pages) * 8 * 1024 as bytes
+         from sys.tables t
+         join sys.schemas s on s.schema_id = t.schema_id
+         join sys.partitions p on p.object_id = t.object_id
+         join sys.allocation_units a on a.container_id = p.partition_id
+        group by s.name, t.name
+        order by bytes desc`
+    )
+    return res.rows.map((r) => ({
+      schema: r[0] == null ? undefined : String(r[0]),
+      name: String(r[1]),
+      rows: toNum(r[2]),
+      bytes: toNum(r[3])
+    }))
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

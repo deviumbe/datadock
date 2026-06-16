@@ -77,6 +77,7 @@ export function registerIpc(): void {
   handle('db:txnCommit', (id: string) => db.capability(id, 'commitTransaction')())
   handle('db:txnRollback', (id: string) => db.capability(id, 'rollbackTransaction')())
   handle('db:schema', (id: string) => db.capability(id, 'schema')())
+  handle('db:tableSizes', (id: string) => db.capability(id, 'tableSizes')())
   handle('db:erModel', (id: string) => db.capability(id, 'erModel')())
   handle('db:schemaSnapshot', (id: string) => db.capability(id, 'schemaSnapshot')())
   handle('db:primaryKeys', (id: string, table: TableInfo) =>

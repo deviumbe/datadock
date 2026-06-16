@@ -6,7 +6,7 @@
 
 ### The database client that finally organizes itself the way *you* think.
 
-**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams and a command palette built in.
+**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams and a command palette built in.
 
 <br/>
 
@@ -59,7 +59,8 @@ Click your way down — **project → environment → connection** — and you'r
 - **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
 
 #### 🔌 Multi-engine
-- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · InfluxDB** — all from one app.
+- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · MongoDB · InfluxDB** — all from one app.
+- **MongoDB** — browse collections like tables, run shell-style queries (`db.users.find({ active: true }).sort({ name: 1 }).limit(50)`, `.aggregate([…])`, `.countDocuments(…)`), edit documents inline, and get collection/field autocomplete. Documents are flattened to columns with nested values shown as JSON.
 
 #### 🔐 SSH tunneling
 - Reach databases that only live behind a bastion: **connect via SSH (private key, password, or agent), then to the DB** — exactly how you'd hit a prod/staging box.
@@ -68,6 +69,8 @@ Click your way down — **project → environment → connection** — and you'r
 - Fast result grid with **pagination, sorting and column filters**.
 - **Double-click any cell to edit**, or pop open the **row detail panel** on the side.
 - Stack up changes across many rows and **commit them all at once with ⌘S** — every batch runs in a transaction.
+- **Bulk edit** — tick rows with the checkbox column (or select-all), then set a column to one value (or NULL) across the whole selection in a single staged, undoable change.
+- **Generate SQL from a selection** — turn the ticked rows into `INSERT` or `UPDATE` statements (PK-keyed) dropped straight into a new query tab.
 
 #### 🧱 Visual structure editor
 - **Create new tables** (define columns inline) and **drop tables** — multi-select in the list, with *Ignore foreign-key checks* and *Cascade* options.
@@ -75,6 +78,7 @@ Click your way down — **project → environment → connection** — and you'r
 
 #### 🔗 ER Diagram & schema visualization
 - Open the **ER Diagram tab** from the menu (or `⌘K` → *ER Diagram*) to get an interactive visual map of every table, column, primary key and foreign-key relationship in your schema.
+- **Dependency explorer** — right-click any table → *Dependencies…* to see exactly what it **references** and what **references it** (the foreign keys that block a drop), and click through to any related table.
 - **Hierarchical layout** — parent tables (referenced by FK) appear above their dependent children, organized into clean labelled rows. **Re-layout** button resets everything back to the hierarchy at any time.
 - **Drag** any table card to rearrange freely after the initial layout.
 - **⊞ Fit** scales and scrolls the view so the whole diagram is visible at once.
@@ -97,11 +101,13 @@ Click your way down — **project → environment → connection** — and you'r
 
 #### 📦 Import & export
 - Export a result, a table, or a **whole database** to **CSV, Excel, JSON, SQL or zipped SQL**.
+- **Result → new table (⤒)** — persist any query or table result as a brand-new table in one click; column types are inferred from the data and names sanitized to safe identifiers.
 - Full-database dumps let you choose **per table**: structure, data, both, or skip.
 - Import **`.sql` scripts** and **CSV → table**.
 
 #### 🛠️ Server tools
 - Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill).
+- **Table sizes** (`⌘K` → *Table Sizes*) — row counts and on-disk size per table, largest-first with inline size bars; click any table to open it.
 
 ---
 
@@ -160,7 +166,7 @@ npm run build
 ## 🧩 Tech stack
 
 **Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**  
-Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client` · Tunneling: `ssh2`
+Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `@influxdata/influxdb-client` · Tunneling: `ssh2`
 
 ---
 
@@ -196,24 +202,30 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `@influxdata/influxdb-client
 - [x] **Duplicate row** — right-click a row to add a pre-filled insert (primary keys auto-generate)
 - [x] **Query variables** — `{{name}}` placeholders are collected and substituted at run time
 - [x] **Visual EXPLAIN** — render the query plan as an interactive, collapsible tree (PostgreSQL & SQLite)
+- [x] **Export result directly to a new table** — persist any query/table result as a new table (types inferred, names sanitized)
+- [x] **Bulk edit selected rows** — tick rows in the grid and set a column to one value (or NULL) across all of them at once
+- [x] **Generate INSERT / UPDATE from selected rows** — turn a multi-row selection into ready-to-edit SQL in a new query tab
+- [x] **Dependency explorer** — "what references this table?" — see a table's incoming/outgoing foreign keys and jump to related tables
+- [x] **Table size analyzer** — row counts and on-disk size per table, largest-first, with size bars
+- [x] **Column-usage search** — find every table/column whose name matches a term, across the whole schema
 
 ### 🎯 Next up
 
 The features that push DataDock past "another database client" into *organized, safe, fast* database work:
 
-- [ ] **Export result directly to a new table** — turn any result set into a persisted table
+- [ ] **Database documentation generator** — export a Markdown overview of every table and column
 
 ### 🧭 Backlog
 
-**Data management** — generate INSERT/UPDATE from selected rows · bulk edit selected rows · soft-delete recovery viewer
+**Data management** — soft-delete recovery viewer
 
-**Querying** — query bookmarks per connection · snippet autocomplete · multiple result tabs per execution · export result directly to a new table · execution-time history
+**Querying** — query bookmarks per connection · snippet autocomplete · multiple result tabs per execution · execution-time history
 
 **Production safety** — confirmation workflow for dangerous queries · temporary write-access unlock ("unlock for 15 min") · SQL linting before execution
 
-**Schema tools** — migration script generator · visual index analyzer · dependency explorer ("what references this table?") · column-usage search across schema · database documentation generator
+**Schema tools** — migration script generator · visual index analyzer · column-usage search across schema · database documentation generator
 
-**Performance** — table size analyzer · largest-tables dashboard · slow-query monitor · index recommendations · connection-pool diagnostics · storage-growth tracking
+**Performance** — slow-query monitor · index recommendations · connection-pool diagnostics · storage-growth tracking
 
 **Team** — shared query library · shared connection bundles · comments/notes per table · workspace sync · connection templates
 
@@ -223,9 +235,9 @@ The features that push DataDock past "another database client" into *organized, 
 
 ### 🗄️ More database engines
 
-Today: **PostgreSQL · MySQL/MariaDB · SQLite · SQL Server · InfluxDB** (≈80–90% of typical use). Planned, in priority order:
+Today: **PostgreSQL · MySQL/MariaDB · SQLite · SQL Server · MongoDB · InfluxDB** (≈80–90% of typical use). Planned, in priority order:
 
-- [ ] **MongoDB** — "SQL + NoSQL in one place"
+- [x] **MongoDB** — "SQL + NoSQL in one place" (browse collections, shell-style queries, inline document editing)
 - [ ] **Redis** — keys, JSON, queues, cache inspection
 - [ ] **Oracle Database** — enterprise reach
 - [ ] **CockroachDB / TimescaleDB** — largely ride on PostgreSQL support

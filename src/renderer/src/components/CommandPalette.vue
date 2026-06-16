@@ -87,6 +87,20 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     {
+      label: 'Table Sizes',
+      icon: '📊',
+      handler: () => {
+        if (connId) ui.tableSizesOpen = true
+      }
+    },
+    {
+      label: 'Search Schema',
+      icon: '🔎',
+      handler: () => {
+        if (connId) ui.columnSearchOpen = true
+      }
+    },
+    {
       label: 'Processes',
       icon: '⚙',
       handler: () => {

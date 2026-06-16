@@ -7,6 +7,7 @@ import type {
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure
 } from '@shared/types'
 
@@ -33,6 +34,8 @@ export interface DbAdapter {
 
   /** Map of table name -> column names, for editor autocomplete. */
   schema?(): Promise<Record<string, string[]>>
+  /** Per-table row counts and on-disk sizes (largest first), for the size analyzer. */
+  tableSizes?(): Promise<TableSizeInfo[]>
   /** Full entity-relationship model (tables, PK/FK columns, relations). */
   erModel?(): Promise<import('@shared/types').ErModel>
   /** Whole-database column snapshot, for schema diff. */
@@ -73,4 +76,11 @@ export function assertIdent(name: string): string {
 
 export function now(): number {
   return performance.now()
+}
+
+/** Parse a possibly-string/bigint catalog value into a number (or null). */
+export function toNum(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  const n = typeof v === 'bigint' ? Number(v) : Number(v)
+  return Number.isFinite(n) ? n : null
 }

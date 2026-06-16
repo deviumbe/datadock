@@ -16,6 +16,8 @@ const props = defineProps<{
   deletes?: number[]
   sort?: SortSpec
   selectedRow?: number | null
+  selectable?: boolean
+  selectedRows?: number[]
   actionLabel?: string
   highlightedCell?: CellPos | null
   highlightedCells?: CellPos[]
@@ -26,12 +28,23 @@ const emit = defineEmits<{
   editInsert: [index: number, column: string, value: unknown]
   removeInsert: [index: number]
   selectRow: [rowIndex: number]
+  toggleSelect: [rowIndex: number]
+  toggleSelectAll: []
   sort: [column: string]
   action: [row: unknown[]]
   rowContext: [rowIndex: number, e: MouseEvent]
 }>()
 
 const hasRows = computed(() => !!props.result && props.result.columns.length > 0)
+const allSelected = computed(
+  () =>
+    !!props.result &&
+    props.result.rows.length > 0 &&
+    (props.selectedRows?.length ?? 0) === props.result.rows.length
+)
+function isSelected(r: number): boolean {
+  return !!props.selectedRows?.includes(r)
+}
 
 const editing = ref<{ kind: 'data' | 'insert'; row: number; col: number } | null>(null)
 const editValue = ref('')
@@ -100,9 +113,12 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
 
 <template>
   <div class="grid-wrap">
-    <table v-if="hasRows" class="grid">
+    <table v-if="hasRows" class="grid" :class="{ selectable }">
       <thead>
         <tr>
+          <th v-if="selectable" class="selcol">
+            <input type="checkbox" :checked="allSelected" title="Select all rows" @change="emit('toggleSelectAll')" />
+          </th>
           <th class="rownum">#</th>
           <th v-if="actionLabel" class="actcol"></th>
           <th
@@ -121,10 +137,13 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
         <tr
           v-for="(row, r) in result!.rows"
           :key="r"
-          :class="{ selected: selectedRow === r, deleted: isDeleted(r) }"
+          :class="{ selected: selectedRow === r, 'multi-selected': isSelected(r), deleted: isDeleted(r) }"
           @click="emit('selectRow', r)"
           @contextmenu.prevent="emit('rowContext', r, $event)"
         >
+          <td v-if="selectable" class="selcol" @click.stop>
+            <input type="checkbox" :checked="isSelected(r)" @change="emit('toggleSelect', r)" />
+          </td>
           <td class="rownum">{{ r + 1 }}</td>
           <td v-if="actionLabel" class="actcol">
             <button class="row-act" @click.stop="emit('action', row as unknown[])">{{ actionLabel }}</button>
@@ -152,6 +171,7 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
 
         <!-- pending new rows -->
         <tr v-for="(ins, i) in inserts" :key="'ins-' + i" class="insert-row">
+          <td v-if="selectable" class="selcol"></td>
           <td class="rownum">
             <button class="remove-insert" title="Remove" @click.stop="emit('removeInsert', i)">✕</button>
           </td>
@@ -177,6 +197,7 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
         </tr>
 
         <tr v-if="result!.rows.length === 0 && (!inserts || inserts.length === 0)">
+          <td v-if="selectable" class="selcol"></td>
           <td class="rownum"></td>
           <td :colspan="result!.columns.length + (actionLabel ? 1 : 0)" class="empty-cell">No rows</td>
         </tr>
@@ -253,6 +274,33 @@ tbody tr:hover td {
 }
 tbody tr.selected td {
   background: var(--accent-soft);
+}
+tbody tr.multi-selected td {
+  background: var(--accent-soft);
+}
+.selcol {
+  position: sticky;
+  left: 0;
+  width: 36px;
+  min-width: 36px;
+  text-align: center;
+  padding: 7px 8px;
+  background: var(--bg-elevated);
+}
+thead .selcol {
+  z-index: 3;
+}
+tbody .selcol {
+  z-index: 1;
+}
+.selcol input {
+  cursor: pointer;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+/* When the checkbox column is present, the row-number column sits next to it. */
+.grid.selectable .rownum {
+  left: 36px;
 }
 tbody tr.deleted td {
   background: rgba(248, 113, 113, 0.16) !important;

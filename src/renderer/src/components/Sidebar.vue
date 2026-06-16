@@ -30,6 +30,7 @@ const DRIVER_LABEL: Record<string, string> = {
   mysql: 'SQL',
   sqlite: 'LITE',
   mssql: 'MS',
+  mongodb: 'MDB',
   influxdb: 'IFX'
 }
 </script>

@@ -76,6 +76,8 @@ export function buildMenu(): void {
         { label: 'Databases', click: () => send('databases') },
         { label: 'Users & Roles', click: () => send('users') },
         { label: 'Process List', click: () => send('processes') },
+        { label: 'Table Sizes', click: () => send('tableSizes') },
+        { label: 'Search Schema', click: () => send('columnSearch') },
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
         { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },

@@ -52,6 +52,8 @@ export interface Tab {
   inserts: Record<string, unknown>[]
   deletes: number[]
   selectedRow: number | null
+  /** Row indices ticked for multi-row (bulk) operations. */
+  selection: number[]
   viewMode: 'data' | 'structure'
   structure: TableStructure | null
   history: DraftSnapshot[]
@@ -137,6 +139,7 @@ export const useTabs = defineStore('tabs', () => {
       inserts: [],
       deletes: [],
       selectedRow: null,
+      selection: [],
       viewMode: 'data',
       structure: null,
       history: [],
@@ -298,6 +301,7 @@ export const useTabs = defineStore('tabs', () => {
       tab.history = []
       tab.future = []
       tab.selectedRow = null
+      tab.selection = []
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
     } finally {
@@ -493,6 +497,42 @@ export const useTabs = defineStore('tabs', () => {
     }
   }
 
+  /** Stage the same value for one column across many rows, as a single undo step. */
+  function bulkEdit(tab: Tab, rowIndices: number[], column: string, value: unknown): void {
+    if (!editsAllowed(tab) || !tab.result || rowIndices.length === 0) return
+    const colIdx = tab.result.columns.findIndex((c) => c.name === column)
+    if (colIdx < 0) return
+    record(tab)
+    const edits = { ...tab.edits }
+    for (const rowIndex of rowIndices) {
+      const original = tab.result.rows[rowIndex]
+      if (!original) continue
+      const current = { ...(edits[rowIndex] ?? {}) }
+      if (String(original[colIdx] ?? '') === String(value ?? '')) {
+        delete current[column] // back to original -> not dirty
+      } else {
+        current[column] = value
+      }
+      if (Object.keys(current).length) edits[rowIndex] = current
+      else delete edits[rowIndex]
+    }
+    tab.edits = edits
+  }
+
+  // ---- multi-row selection (for bulk operations) ----------------------------
+  function toggleRowSelection(tab: Tab, rowIndex: number): void {
+    tab.selection = tab.selection.includes(rowIndex)
+      ? tab.selection.filter((r) => r !== rowIndex)
+      : [...tab.selection, rowIndex]
+  }
+  function toggleSelectAll(tab: Tab): void {
+    const total = tab.result?.rows.length ?? 0
+    tab.selection = tab.selection.length === total ? [] : Array.from({ length: total }, (_, i) => i)
+  }
+  function clearSelection(tab: Tab): void {
+    tab.selection = []
+  }
+
   function discardEdits(tab: Tab): void {
     record(tab)
     tab.edits = {}
@@ -627,6 +667,10 @@ export const useTabs = defineStore('tabs', () => {
     dirtyCount,
     editsAllowed,
     editCell,
+    bulkEdit,
+    toggleRowSelection,
+    toggleSelectAll,
+    clearSelection,
     addInsertRow,
     duplicateRow,
     editInsert,

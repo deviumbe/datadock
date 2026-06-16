@@ -38,3 +38,35 @@ export function rowToInsert(table: string, columns: ColumnMeta[], row: unknown[]
   const vals = columns.map((_, i) => sqlValue(row[i])).join(', ')
   return `INSERT INTO ${table} (${cols}) VALUES (${vals});`
 }
+
+/** One INSERT statement per row (e.g. for a multi-row selection). */
+export function rowsToInserts(table: string, columns: ColumnMeta[], rows: unknown[][]): string {
+  return rows.map((r) => rowToInsert(table, columns, r)).join('\n')
+}
+
+/**
+ * One UPDATE per row, keyed by `pkColumns` in the WHERE clause. Primary-key
+ * columns are excluded from the SET list. Rows with a missing PK value are
+ * skipped (can't be addressed safely).
+ */
+export function rowsToUpdates(
+  table: string,
+  columns: ColumnMeta[],
+  rows: unknown[][],
+  pkColumns: string[]
+): string {
+  const pkSet = new Set(pkColumns)
+  const setCols = columns.filter((c) => !pkSet.has(c.name))
+  const out: string[] = []
+  for (const row of rows) {
+    const set = setCols
+      .map((c) => `${c.name} = ${sqlValue(row[columns.findIndex((x) => x.name === c.name)])}`)
+      .join(', ')
+    const where = pkColumns
+      .map((k) => `${k} = ${sqlValue(row[columns.findIndex((x) => x.name === k)])}`)
+      .join(' AND ')
+    if (!where) continue
+    out.push(`UPDATE ${table} SET ${set} WHERE ${where};`)
+  }
+  return out.join('\n')
+}

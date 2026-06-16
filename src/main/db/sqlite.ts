@@ -8,6 +8,7 @@ import type {
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure
 } from '@shared/types'
 import { DbAdapter, now } from './types'
@@ -138,6 +139,30 @@ export class SQLiteAdapter implements DbAdapter {
     const map: Record<string, string[]> = {}
     for (const r of rows) (map[r.t] ??= []).push(r.c)
     return map
+  }
+
+  async tableSizes(): Promise<TableSizeInfo[]> {
+    const tables = this.db!
+      .prepare(
+        `select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name`
+      )
+      .all() as { name: string }[]
+    // Per-table byte size needs the dbstat vtab (not always compiled in), so we
+    // try it once and fall back to row counts only.
+    let sizeByName: Record<string, number> = {}
+    try {
+      const stats = this.db!
+        .prepare(`select name, sum(pgsize) as bytes from dbstat group by name`)
+        .all() as { name: string; bytes: number }[]
+      sizeByName = Object.fromEntries(stats.map((s) => [s.name, s.bytes]))
+    } catch {
+      sizeByName = {}
+    }
+    const out: TableSizeInfo[] = tables.map(({ name }) => {
+      const row = this.db!.prepare(`select count(*) as n from ${q(name)}`).get() as { n: number }
+      return { name, rows: row?.n ?? null, bytes: sizeByName[name] ?? null }
+    })
+    return out.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0) || (b.rows ?? 0) - (a.rows ?? 0))
   }
 
   async createTable(spec: CreateTableSpec): Promise<void> {

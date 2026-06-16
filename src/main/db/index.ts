@@ -4,6 +4,7 @@ import { PostgresAdapter } from './postgres'
 import { MySQLAdapter } from './mysql'
 import { SQLiteAdapter } from './sqlite'
 import { MSSQLAdapter } from './mssql'
+import { MongoAdapter } from './mongodb'
 import { InfluxAdapter } from './influxdb'
 import { openTunnel, type Tunnel } from './tunnel'
 
@@ -25,6 +26,8 @@ export function createAdapter(config: ConnectionConfig): DbAdapter {
       return new SQLiteAdapter(config)
     case 'mssql':
       return new MSSQLAdapter(config)
+    case 'mongodb':
+      return new MongoAdapter(config)
     case 'influxdb':
       return new InfluxAdapter(config)
     default:

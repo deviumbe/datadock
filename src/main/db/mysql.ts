@@ -8,9 +8,10 @@ import type {
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure
 } from '@shared/types'
-import { DbAdapter, now, assertIdent } from './types'
+import { DbAdapter, now, toNum, assertIdent } from './types'
 import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
 import type { ErModel, SchemaSnapshot } from '@shared/types'
 
@@ -234,6 +235,23 @@ export class MySQLAdapter implements DbAdapter {
         isPk: !!Number(r.is_pk)
       }))
     )
+  }
+
+  async tableSizes(): Promise<TableSizeInfo[]> {
+    const res = await this.query(
+      `select table_schema as \`schema\`, table_name as name,
+              table_rows as \`rows\`,
+              (data_length + index_length) as bytes
+         from information_schema.tables
+        where table_schema = database() and table_type = 'BASE TABLE'
+        order by bytes desc`
+    )
+    return res.rows.map((r) => ({
+      schema: r[0] == null ? undefined : String(r[0]),
+      name: String(r[1]),
+      rows: toNum(r[2]),
+      bytes: toNum(r[3])
+    }))
   }
 
   async tableDDL(table: TableInfo): Promise<string> {

@@ -42,7 +42,7 @@ const hadSshPassword = ref(!!props.config?.hasSshPassword)
 const hadSshPassphrase = ref(!!props.config?.hasSshPassphrase)
 
 const isNetwork = computed(() => ['postgres', 'mysql', 'mssql'].includes(form.driver))
-const canTunnel = computed(() => form.driver !== 'sqlite')
+const canTunnel = computed(() => !['sqlite', 'mongodb'].includes(form.driver))
 
 async function pickKey(): Promise<void> {
   const path = await window.api.pickFile()
@@ -78,6 +78,7 @@ const canSave = computed(() => {
   if (!form.name.trim()) return false
   if (form.driver === 'sqlite') return !!form.filePath
   if (form.driver === 'influxdb') return !!form.url && !!form.org
+  if (form.driver === 'mongodb') return !!form.url
   return !!form.host
 })
 
@@ -164,6 +165,23 @@ function save(): void {
           <label>Database file path</label>
           <input class="input" v-model="form.filePath" placeholder="/path/to/database.sqlite" />
           <small class="hint">Absolute path to the .sqlite / .db file. It will be created if missing.</small>
+        </div>
+      </template>
+
+      <!-- MongoDB -->
+      <template v-else-if="form.driver === 'mongodb'">
+        <div class="field span2">
+          <label>Connection URI</label>
+          <input
+            class="input"
+            v-model="form.url"
+            placeholder="mongodb://localhost:27017 or mongodb+srv://user:pass@cluster.mongodb.net"
+          />
+          <small class="hint">A standard MongoDB URI. Atlas <code>mongodb+srv://</code> strings work too.</small>
+        </div>
+        <div class="field span2">
+          <label>Database</label>
+          <input class="input" v-model="form.database" placeholder="defaults to the URI's database" />
         </div>
       </template>
 

@@ -1,12 +1,13 @@
 // Shared type definitions used by the main process, preload, and renderer.
 
-export type DriverType = 'postgres' | 'mysql' | 'sqlite' | 'mssql' | 'influxdb'
+export type DriverType = 'postgres' | 'mysql' | 'sqlite' | 'mssql' | 'influxdb' | 'mongodb'
 
 export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[] = [
   { type: 'postgres', label: 'PostgreSQL', defaultPort: 5432 },
   { type: 'mysql', label: 'MySQL / MariaDB', defaultPort: 3306 },
   { type: 'sqlite', label: 'SQLite' },
   { type: 'mssql', label: 'SQL Server', defaultPort: 1433 },
+  { type: 'mongodb', label: 'MongoDB', defaultPort: 27017 },
   { type: 'influxdb', label: 'InfluxDB' }
 ]
 
@@ -23,6 +24,7 @@ export const COLUMN_TYPES: Record<DriverType, string[]> = {
     'time', 'json', 'blob'
   ],
   sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB'],
+  mongodb: [],
   mssql: [
     'int', 'bigint', 'smallint', 'tinyint', 'decimal(18,2)', 'float', 'bit',
     'varchar(255)', 'nvarchar(255)', 'char(1)', 'text', 'date', 'datetime',
@@ -123,6 +125,14 @@ export interface TableInfo {
   schema?: string
   name: string
   type: 'table' | 'view'
+}
+
+/** Row count + on-disk size for one table (Table Size analyzer). */
+export interface TableSizeInfo {
+  schema?: string
+  name: string
+  rows: number | null
+  bytes: number | null
 }
 
 export interface SortSpec {
@@ -284,6 +294,7 @@ export const DRIVER_CAPS: Record<DriverType, DriverCapabilities> = {
   mysql: { databases: true, users: true, processes: true },
   mssql: { databases: true, users: true, processes: true },
   sqlite: { databases: false, users: false, processes: false },
+  mongodb: { databases: false, users: false, processes: false },
   influxdb: { databases: false, users: false, processes: false }
 }
 

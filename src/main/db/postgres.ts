@@ -8,9 +8,10 @@ import type {
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
+  TableSizeInfo,
   TableStructure
 } from '@shared/types'
-import { DbAdapter, now, assertIdent } from './types'
+import { DbAdapter, now, toNum, assertIdent } from './types'
 import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
 import type { ErModel, SchemaSnapshot } from '@shared/types'
 
@@ -278,6 +279,28 @@ export class PostgresAdapter implements DbAdapter {
       durationMs,
       command: res.command
     }
+  }
+
+  async tableSizes(): Promise<TableSizeInfo[]> {
+    const res = await this.query(
+      `select n.nspname as schema, c.relname as name,
+              c.reltuples::bigint as rows,
+              pg_total_relation_size(c.oid) as bytes
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where c.relkind in ('r', 'p')
+          and n.nspname not in ('pg_catalog', 'information_schema')
+        order by bytes desc`
+    )
+    return res.rows.map((r) => {
+      const rows = toNum(r[2])
+      return {
+        schema: r[0] == null ? undefined : String(r[0]),
+        name: String(r[1]),
+        rows: rows != null && rows < 0 ? null : rows, // -1 == never analyzed
+        bytes: toNum(r[3])
+      }
+    })
   }
 
   async tableDDL(table: TableInfo): Promise<string> {
