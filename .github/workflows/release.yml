@@ -38,10 +38,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      # Rebuild the native module (better-sqlite3) against Electron's ABI
-      # for the current runner's platform/arch.
+      # Rebuild the native module (better-sqlite3) against Electron's ABI for the
+      # current runner's platform/arch. Use --only so the rebuild is restricted
+      # to better-sqlite3: -w/--which-module is additive and would also try to
+      # build ssh2's optional `cpu-features` dep, which fails to compile.
       - name: Rebuild native modules for Electron
-        run: npx electron-rebuild -f -w better-sqlite3
+        run: npx electron-rebuild -f --only better-sqlite3
 
       - name: Build app
         run: npm run build
