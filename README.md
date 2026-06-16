@@ -85,6 +85,11 @@ Click your way down — **project → environment → connection** — and you'r
 - **Zoom in / out** with `⌘ +` / `⌘ −`, `⌘`-scroll the mouse wheel, trackpad pinch, or the toolbar `−` / `＋` buttons. Range: 15 % – 300 %. The zoom percentage is always shown and clicking it resets to 100 %.
 - PK and FK column badges; smooth Bézier edges connect related tables with smart top/bottom routing for vertically stacked cards.
 
+#### ⚙️ Settings (⌘,)
+- **AI Providers** — add keys for Anthropic, Google, Mistral or xAI (Grok), or point at a local **Ollama** server (no key needed); pick the active provider and model, and **Test** the connection.
+- **Appearance** — interface scale (zoom), light/dark theme, comfortable/compact row density, and the default page size.
+- **About** — a little love from [Devium](https://devium.be/): built with a smile for everybody. 🙂
+
 #### 🎨 Comfortable to live in
 - **Dark and light themes**, remembered between sessions.
 - Collapsible sidebar and table list to maximize screen for data.
@@ -96,7 +101,9 @@ Click your way down — **project → environment → connection** — and you'r
 - **Schema-aware autocomplete** — table and column names from the connected database, right as you type.
 - **Undo / redo** of pending row edits (⌘Z / ⌘⇧Z) and **query history** to re-run past statements.
 - **Saved queries / snippets** — star a query to keep it in a reusable library.
-- **AI SQL assistant (✨)** — describe what you want in plain English and get a ready-to-run query for your dialect (schema-aware), **explain** an existing query in plain English, or **fix it with AI** when it errors. Bring your own Anthropic API key — it's encrypted with your OS keychain and never leaves the main process.
+- **AI SQL assistant (✨)** — describe what you want in plain English and get a ready-to-run query for your dialect (schema-aware), **explain** an existing query in plain English, or **fix it with AI** when it errors.
+- **Chat with your data (✨ Chat)** — ask questions in plain English; the assistant runs **read-only** queries against the live database and answers from the real results, showing exactly which queries it ran. Available per connection (`⌘⇧A` or ⌘K → *Chat with Data*).
+- **Bring your own AI** — choose between **Anthropic (Claude), Google (Gemini), Mistral, xAI (Grok)** or a local **Ollama** server, each with your own model. Keys are encrypted with your OS keychain and never leave the main process.
 - **Visual EXPLAIN (◧)** — turn a query plan into an interactive, collapsible tree with estimated row counts and cost per node (PostgreSQL & SQLite).
 
 #### 📦 Import & export
@@ -150,6 +157,8 @@ npm run build
 | Shortcut | Action |
 |---|---|
 | `⌘K` / `Ctrl+K` | Open command palette |
+| `⌘,` / `Ctrl+,` | Open settings |
+| `⌘⇧A` / `Ctrl+⇧A` | Chat with your data |
 | `⌘T` / `Ctrl+T` | New query tab |
 | `⌘↵` / `Ctrl+↵` | Run query |
 | `⌘S` / `Ctrl+S` | Commit pending row edits |
@@ -166,7 +175,8 @@ npm run build
 ## 🧩 Tech stack
 
 **Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**  
-Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `@influxdata/influxdb-client` · Tunneling: `ssh2`
+Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `@influxdata/influxdb-client` · Tunneling: `ssh2`  
+AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mistral, Grok & Ollama)
 
 ---
 
@@ -208,6 +218,9 @@ Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `@influxdata/infl
 - [x] **Dependency explorer** — "what references this table?" — see a table's incoming/outgoing foreign keys and jump to related tables
 - [x] **Table size analyzer** — row counts and on-disk size per table, largest-first, with size bars
 - [x] **Column-usage search** — find every table/column whose name matches a term, across the whole schema
+- [x] **Settings screen** — AI providers, appearance (scale / theme / density / page size) and an About page
+- [x] **Multi-provider AI** — Anthropic, Google (Gemini), Mistral, xAI (Grok) and local Ollama, each with a chosen model
+- [x] **Chat with your data** — agentic, read-only conversation that queries the live database to answer questions
 
 ### 🎯 Next up
 
@@ -229,7 +242,7 @@ The features that push DataDock past "another database client" into *organized, 
 
 **Team** — shared query library · shared connection bundles · comments/notes per table · workspace sync · connection templates
 
-**Developer / AI** — generate schema docs with AI · explain query in plain English · generate test data with AI · SQL error troubleshooting assistant
+**Developer / AI** — generate schema docs with AI · generate test data with AI · streaming chat responses
 
 **"Wow"** — database snapshots (save state before changes) · time-travel row history · visual data explorer (click through relationships) · universal smart search · one-click clone production schema to local SQLite
 

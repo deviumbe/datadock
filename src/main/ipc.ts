@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog } from 'electron'
 import type {
   AlterOp,
   ConnectionConfig,
@@ -20,8 +20,45 @@ import * as io from './io'
 import * as history from './history'
 import * as snippets from './snippets'
 import * as ai from './ai'
+import * as settings from './settings'
+import { testProvider } from './aiProviders'
+import type { RunSql } from './aiProviders'
+import type { AiProvider, AppearanceSettings, QueryResult } from '@shared/types'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
+
+/** Format a result set as compact JSON for the AI (capped to keep tokens sane). */
+function formatRowsForAi(res: QueryResult): { text: string; rowCount: number } {
+  const cols = res.columns.map((c) => c.name)
+  const cap = 50
+  const rows = res.rows
+    .slice(0, cap)
+    .map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])))
+  let text = JSON.stringify(rows)
+  text +=
+    res.rows.length > cap
+      ? `\n(${res.rows.length} rows total; first ${cap} shown)`
+      : `\n(${res.rows.length} rows)`
+  return { text, rowCount: res.rowCount }
+}
+
+/** A read-only query runner for the data-chat, bound to one connection. */
+function makeRunSql(connId: string, driver: string): RunSql {
+  return async (sql: string) => {
+    const trimmed = sql.trim().replace(/;\s*$/, '')
+    if (!trimmed) throw new Error('Empty query.')
+    if (/;/.test(trimmed)) throw new Error('Only a single statement is allowed.')
+    if (driver === 'mongodb') {
+      // The Mongo adapter only exposes read methods, so it's read-only already.
+    } else if (driver === 'influxdb') {
+      if (/\bto\s*\(/i.test(trimmed)) throw new Error('Only read-only Flux is allowed.')
+    } else if (!/^(select|with|explain|show|pragma)\b/i.test(trimmed)) {
+      throw new Error('Only read-only queries (SELECT / WITH / EXPLAIN / SHOW) are allowed.')
+    }
+    const res = await db.getAdapter(connId).query(trimmed)
+    return formatRowsForAi(res)
+  }
+}
 
 /** Register a handler that always resolves to an IpcResult envelope. */
 function handle<T>(channel: string, fn: Handler<T>): void {
@@ -155,6 +192,25 @@ export function registerIpc(): void {
   handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
   handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
   handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
+  handle('ai:chat', (connId: string, req: ai.AiChatRequest) =>
+    ai.chat(req, makeRunSql(connId, req.driver))
+  )
+
+  // Settings (AI providers + appearance; keys encrypted, never returned raw)
+  handle('settings:get', () => settings.getSettings())
+  handle('settings:setActiveProvider', (p: AiProvider) => settings.setActiveProvider(p))
+  handle('settings:setProviderKey', (p: AiProvider, key: string) => settings.setProviderKey(p, key))
+  handle('settings:clearProviderKey', (p: AiProvider) => settings.clearProviderKey(p))
+  handle('settings:setProviderConfig', (p: AiProvider, cfg: { model?: string; baseUrl?: string }) =>
+    settings.setProviderConfig(p, cfg)
+  )
+  handle('settings:setAppearance', (a: Partial<AppearanceSettings>) => settings.setAppearance(a))
+  handle('settings:testProvider', async (p: AiProvider) => {
+    await testProvider(p)
+    return true
+  })
+
+  handle('app:version', () => app.getVersion())
 
   // File picker (e.g. SSH private key)
   handle('app:pickFile', async (): Promise<string | null> => {

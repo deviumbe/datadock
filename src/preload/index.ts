@@ -1,5 +1,10 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type {
+  AiProvider,
+  AppearanceSettings,
+  AppSettings,
+  ChatMessage,
+  ChatStep,
   AlterOp,
   ConnectionConfig,
   CreateTableSpec,
@@ -134,8 +139,26 @@ const api = {
       schema: Record<string, string[]>
       sql: string
       error: string
-    }) => invoke<{ sql: string; notes: string }>('ai:fixQuery', req)
+    }) => invoke<{ sql: string; notes: string }>('ai:fixQuery', req),
+    chat: (
+      connId: string,
+      req: { driver: string; schema: Record<string, string[]>; history: ChatMessage[] }
+    ) => invoke<{ answer: string; steps: ChatStep[] }>('ai:chat', connId, req)
   },
+  settings: {
+    get: () => invoke<AppSettings>('settings:get'),
+    setActiveProvider: (p: AiProvider) => invoke<AppSettings>('settings:setActiveProvider', p),
+    setProviderKey: (p: AiProvider, key: string) =>
+      invoke<AppSettings>('settings:setProviderKey', p, key),
+    clearProviderKey: (p: AiProvider) => invoke<AppSettings>('settings:clearProviderKey', p),
+    setProviderConfig: (p: AiProvider, cfg: { model?: string; baseUrl?: string }) =>
+      invoke<AppSettings>('settings:setProviderConfig', p, cfg),
+    setAppearance: (a: Partial<AppearanceSettings>) =>
+      invoke<AppSettings>('settings:setAppearance', a),
+    testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p)
+  },
+  setZoom: (factor: number) => webFrame.setZoomFactor(factor),
+  getVersion: () => invoke<string>('app:version'),
   pickFile: () => invoke<string | null>('app:pickFile')
 }
 

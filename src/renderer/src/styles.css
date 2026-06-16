@@ -205,3 +205,13 @@ textarea {
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* Compact row density (Settings → Appearance) tightens result-grid rows. */
+[data-density='compact'] table.grid tbody td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+[data-density='compact'] table.grid thead th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}

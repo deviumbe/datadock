@@ -118,14 +118,15 @@ const canRun = computed(() => {
 
     <!-- Key setup -->
     <div v-else-if="ready === false" class="key-setup">
-      <p class="lead">Connect your Anthropic API key to use AI in DataDock.</p>
+      <p class="lead">No AI provider is configured yet.</p>
       <div class="field">
-        <label>Anthropic API key</label>
-        <input class="input" v-model="keyInput" type="password" placeholder="sk-ant-…" @keydown.enter="saveKey" />
+        <label>API key for the active provider</label>
+        <input class="input" v-model="keyInput" type="password" placeholder="paste key…" @keydown.enter="saveKey" />
       </div>
       <p class="hint">
-        The key is encrypted with your OS keychain and stays on this machine — only the app's main
-        process uses it to call the Anthropic API.
+        Pasting a key here sets it for your active provider. To choose between Anthropic, Google,
+        Mistral, Grok or a local Ollama server — and pick models — open <b>Settings (⌘,) → AI</b>.
+        Keys are encrypted with your OS keychain and used only by the app's main process.
       </p>
       <p v-if="error" class="err">{{ error }}</p>
     </div>

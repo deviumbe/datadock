@@ -70,6 +70,14 @@ const allItems = computed<PaletteItem[]>(() => {
         if (connId) tabsStore.openQuery(connId)
       }
     },
+    {
+      label: 'Chat with Data',
+      icon: '✨',
+      handler: () => {
+        if (connId) tabsStore.openChat(connId)
+      }
+    },
+    { label: 'Settings', icon: '⚙', handler: () => (ui.settingsOpen = true) },
     { label: 'Toggle Theme', icon: '☀', handler: () => ui.toggleTheme() },
     { label: 'Toggle Sidebar', icon: '☰', handler: () => ui.toggleSidebar() },
     {

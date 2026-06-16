@@ -17,6 +17,8 @@ export function buildMenu(): void {
             submenu: [
               { role: 'about' },
               { type: 'separator' },
+              { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('openSettings') },
+              { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
               { role: 'hide' },
@@ -39,7 +41,14 @@ export function buildMenu(): void {
         { type: 'separator' },
         { label: 'Export Connections…', click: () => send('exportConnections') },
         { label: 'Import Connections…', click: () => send('importConnections') },
-        ...(isMac ? [] : [{ type: 'separator' } as const, { role: 'quit' } as const])
+        ...(isMac
+          ? []
+          : [
+              { type: 'separator' } as const,
+              { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('openSettings') } as const,
+              { type: 'separator' } as const,
+              { role: 'quit' } as const
+            ])
       ]
     },
     {
@@ -81,6 +90,7 @@ export function buildMenu(): void {
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
         { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
+        { label: 'Chat with Data', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('chat') },
         { label: 'Schema Diff', click: () => send('schemaDiff') },
         { label: 'Data Diff', click: () => send('dataDiff') },
         { type: 'separator' },

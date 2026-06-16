@@ -3,6 +3,7 @@ import { ref, markRaw } from 'vue'
 import { useWorkspace } from './workspace'
 import type {
   AlterOp,
+  ChatMessage,
   ErModel,
   FilterSpec,
   HistoryEntry,
@@ -14,6 +15,7 @@ import type {
   TableInfo,
   TableStructure
 } from '@shared/types'
+import { useSettings } from './settings'
 
 export type TabKind =
   | 'query'
@@ -26,6 +28,7 @@ export type TabKind =
   | 'diagram'
   | 'schemaDiff'
   | 'dataDiff'
+  | 'chat'
 
 export interface Tab {
   id: string
@@ -41,6 +44,8 @@ export interface Tab {
   entries?: HistoryEntry[]
   snippets?: Snippet[]
   erModel?: ErModel | null
+  chatMessages?: ChatMessage[]
+  chatBusy?: boolean
 
   // table-tab state
   primaryKeys: string[]
@@ -132,7 +137,7 @@ export const useTabs = defineStore('tabs', () => {
       error: null,
       running: false,
       primaryKeys: [],
-      pageSize: 200,
+      pageSize: useSettings().pageSize || 200,
       offset: 0,
       filters: [],
       edits: {},
@@ -236,6 +241,51 @@ export const useTabs = defineStore('tabs', () => {
     if (existing) setActive(connId, existing.id)
     void run(tab)
     return tab
+  }
+
+  function openChat(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'chat')
+    if (existing) {
+      setActive(connId, existing.id)
+      return existing
+    }
+    const tab = push(base(connId, 'chat', 'Chat with data'))
+    tab.chatMessages = []
+    return tab
+  }
+
+  /** Send a user message to the data-chat and append the assistant's reply. */
+  async function sendChat(tab: Tab, text: string): Promise<void> {
+    const msg = text.trim()
+    if (!msg || tab.chatBusy) return
+    const conn = useWorkspace().findConnection(tab.connectionId)
+    if (!conn) return
+    tab.chatMessages = [...(tab.chatMessages ?? []), { role: 'user', content: msg }]
+    tab.chatBusy = true
+    tab.error = null
+    try {
+      const history = (tab.chatMessages ?? []).map((m) => ({ role: m.role, content: m.content }))
+      const res = await window.api.ai.chat(tab.connectionId, {
+        driver: conn.driver,
+        schema: useWorkspace().schemas[tab.connectionId] ?? {},
+        history
+      })
+      tab.chatMessages = [
+        ...(tab.chatMessages ?? []),
+        { role: 'assistant', content: res.answer, steps: res.steps }
+      ]
+    } catch (e) {
+      tab.chatMessages = [
+        ...(tab.chatMessages ?? []),
+        { role: 'assistant', content: `⚠ ${e instanceof Error ? e.message : String(e)}` }
+      ]
+    } finally {
+      tab.chatBusy = false
+    }
+  }
+
+  function clearChat(tab: Tab): void {
+    tab.chatMessages = []
   }
 
   function openSchemaDiff(connId: string): Tab {
@@ -645,6 +695,9 @@ export const useTabs = defineStore('tabs', () => {
     openHistory,
     openSnippets,
     openDiagram,
+    openChat,
+    sendChat,
+    clearChat,
     openSchemaDiff,
     openDataDiff,
     clearHistory,

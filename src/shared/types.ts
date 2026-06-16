@@ -347,5 +347,53 @@ export interface Snippet {
   updatedAt: string
 }
 
+// ---- settings / AI providers ------------------------------------------------
+
+export type AiProvider = 'anthropic' | 'google' | 'mistral' | 'xai' | 'ollama'
+
+/** Provider config as exposed to the renderer — never includes the raw key. */
+export interface ProviderInfo {
+  provider: AiProvider
+  label: string
+  /** False for local providers like Ollama that need no API key. */
+  needsKey: boolean
+  hasKey: boolean
+  model: string
+  defaultModel: string
+  /** Server URL — only user-editable for Ollama. */
+  baseUrl?: string
+}
+
+export type Density = 'comfortable' | 'compact'
+
+export interface AppearanceSettings {
+  /** UI zoom factor (1 = 100%). */
+  fontScale: number
+  density: Density
+  pageSize: number
+  theme: 'dark' | 'light'
+}
+
+export interface AppSettings {
+  ai: {
+    activeProvider: AiProvider
+    providers: ProviderInfo[]
+  }
+  appearance: AppearanceSettings
+}
+
+/** A single message in a data-chat conversation. */
+export interface ChatStep {
+  sql: string
+  rowCount?: number
+  error?: string
+}
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  /** Read-only queries the assistant ran to answer (assistant messages only). */
+  steps?: ChatStep[]
+}
+
 /** Standard envelope returned by every IPC handler. */
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string }

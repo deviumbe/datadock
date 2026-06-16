@@ -16,6 +16,7 @@ import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
+import ChatPanel from './ChatPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
@@ -625,6 +626,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)">◧ {{ planLoading ? 'Plan…' : 'Plan' }}</button>
               <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
               <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')">✨ AI</button>
+              <button class="btn btn-ghost ai-btn" title="Chat with your data" @click="tabsStore.openChat(active.connectionId)">✨ Chat</button>
               <div class="spacer" />
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
@@ -887,6 +889,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               :running="active.running"
               @reload="tabsStore.run(active!)"
             />
+          </div>
+
+          <!-- Chat with data tab -->
+          <div v-else-if="active.kind === 'chat'" class="server-pane">
+            <ChatPanel :tab="active" />
           </div>
 
           <!-- Schema diff tab -->
@@ -1378,6 +1385,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.query {
   background: #5b8def;
+}
+.tab-kind.chat {
+  background: var(--accent);
 }
 .tab-kind.schemaDiff {
   background: #e0a14a;

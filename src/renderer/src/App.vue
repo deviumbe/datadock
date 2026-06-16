@@ -3,20 +3,26 @@ import { onMounted, onBeforeUnmount, ref, shallowRef, computed, watch } from 'vu
 import { useWorkspace } from './stores/workspace'
 import { useTabs } from './stores/tabs'
 import { useUi } from './stores/ui'
+import { useSettings } from './stores/settings'
 import Sidebar from './components/Sidebar.vue'
 import MainPanel from './components/MainPanel.vue'
 import ConnectionModal from './components/ConnectionModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import type { ConnectionConfig, Environment, Project } from '@shared/types'
 
 const ws = useWorkspace()
 const tabs = useTabs()
 const ui = useUi()
+const settings = useSettings()
 
 const sidebarWidth = computed(() => (ui.sidebarCollapsed ? '0px' : '264px'))
 
-onMounted(() => ws.load())
+onMounted(() => {
+  ws.load()
+  settings.load()
+})
 
 // ---- native menu actions ----------------------------------------------------
 function handleMenu(action: string): void {
@@ -34,6 +40,10 @@ function handleMenu(action: string): void {
   }
   if (action === 'importConnections') {
     void ws.importConnections()
+    return
+  }
+  if (action === 'openSettings') {
+    ui.settingsOpen = true
     return
   }
   const id = ws.activeConnectionId
@@ -81,6 +91,9 @@ function handleMenu(action: string): void {
       break
     case 'diagram':
       tabs.openDiagram(id)
+      break
+    case 'chat':
+      tabs.openChat(id)
       break
     case 'schemaDiff':
       tabs.openSchemaDiff(id)
@@ -161,6 +174,10 @@ function onGlobalKeydown(e: KeyboardEvent): void {
     e.preventDefault()
     ui.togglePalette()
   }
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+    e.preventDefault()
+    ui.settingsOpen = true
+  }
 }
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
@@ -224,6 +241,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
       @close="prompt = false"
     />
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
+    <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
   </div>
 </template>
 

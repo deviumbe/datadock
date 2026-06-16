@@ -11,6 +11,7 @@ export const useUi = defineStore('ui', () => {
   const exportDbOpen = ref(false)
   const tableSizesOpen = ref(false)
   const columnSearchOpen = ref(false)
+  const settingsOpen = ref(false)
 
   // Command palette
   const paletteOpen = ref(false)
@@ -55,6 +56,7 @@ export const useUi = defineStore('ui', () => {
     exportDbOpen,
     tableSizesOpen,
     columnSearchOpen,
+    settingsOpen,
     paletteOpen,
     openPalette,
     closePalette,
