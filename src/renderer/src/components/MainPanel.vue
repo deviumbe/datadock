@@ -36,6 +36,7 @@ import type { DropTableOptions, PlanNode } from '@shared/types'
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
+import { lintSql } from '../lib/sqlLint'
 import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
 import { canExportToTable, planResultTable } from '../lib/resultTable'
 import logoUrl from '../assets/logo.png'
@@ -389,6 +390,16 @@ const dockChat = computed(() =>
   activeConn.value ? tabsStore.dockChatFor(activeConn.value.id) : null
 )
 
+// Inline SQL lint hints for the active query tab (non-blocking, collapsible).
+const lintsOpen = ref(false)
+const activeLints = computed(() => {
+  const a = active.value
+  if (!a || a.kind !== 'query' || nonSql.value || !a.query.trim()) return []
+  return lintSql(a.query)
+})
+const lintWarnCount = computed(() => activeLints.value.filter((l) => l.severity === 'warn').length)
+
+
 // Foreign-key map for the active table tab (column -> {toTable,toColumn}), so
 // the grid can show inline "jump to related row" arrows on FK cells.
 const activeFkColumns = computed<Record<string, { toTable: string; toColumn: string }>>(() => {
@@ -721,6 +732,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 :placeholder="isMongo ? 'db.collection.find({ })' : isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
                 @run="runActive(active)"
               />
+            </div>
+            <div v-if="activeLints.length" class="lints" :class="{ open: lintsOpen }">
+              <button class="lint-bar" @click="lintsOpen = !lintsOpen">
+                <span class="lint-ic" :class="lintWarnCount ? 'warn' : 'info'">{{ lintWarnCount ? '⚠' : 'ℹ' }}</span>
+                <span class="lint-sum">{{ activeLints.length }} SQL suggestion{{ activeLints.length === 1 ? '' : 's' }}</span>
+                <span class="lint-caret">{{ lintsOpen ? '▴' : '▾' }}</span>
+              </button>
+              <div v-if="lintsOpen" class="lint-list">
+                <div v-for="l in activeLints" :key="l.rule" class="lint" :class="l.severity">
+                  <span class="ldot" :class="l.severity" />
+                  {{ l.message }}
+                </div>
+              </div>
             </div>
             <div class="results">
               <div v-if="active.error" class="run-error">
@@ -1786,6 +1810,64 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   overflow: hidden;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
+}
+.lints {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.lint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lint-bar:hover {
+  background: var(--bg-hover);
+}
+.lint-ic.warn {
+  color: var(--warn);
+}
+.lint-ic.info {
+  color: var(--text-faint);
+}
+.lint-sum {
+  font-weight: 600;
+  color: var(--text);
+}
+.lint-caret {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.lint-list {
+  padding: 2px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lint {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ldot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  transform: translateY(-1px);
+}
+.ldot.warn {
+  background: var(--warn);
+}
+.ldot.info {
+  background: var(--text-faint);
 }
 .results {
   overflow: hidden;

@@ -144,7 +144,20 @@ function openTable(table: string): void {
 .sinput {
   flex: 1;
   font-size: 14px;
-  padding: 8px 12px;
+  padding: 9px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.sinput::placeholder {
+  color: var(--text-faint);
+}
+.sinput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .status {
   margin-top: 8px;
