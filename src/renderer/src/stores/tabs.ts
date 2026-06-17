@@ -265,9 +265,14 @@ export const useTabs = defineStore('tabs', () => {
     tab.error = null
     try {
       const history = (tab.chatMessages ?? []).map((m) => ({ role: m.role, content: m.content }))
+      // Deep-clone to strip Vue reactivity — reactive Proxies can't be
+      // structured-cloned across the IPC boundary ("object could not be cloned").
+      const schema = JSON.parse(
+        JSON.stringify(useWorkspace().schemas[tab.connectionId] ?? {})
+      ) as Record<string, string[]>
       const res = await window.api.ai.chat(tab.connectionId, {
         driver: conn.driver,
-        schema: useWorkspace().schemas[tab.connectionId] ?? {},
+        schema,
         history
       })
       tab.chatMessages = [

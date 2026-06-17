@@ -892,7 +892,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           </div>
 
           <!-- Chat with data tab -->
-          <div v-else-if="active.kind === 'chat'" class="server-pane">
+          <div v-else-if="active.kind === 'chat'" class="chat-pane">
             <ChatPanel :tab="active" />
           </div>
 
@@ -1487,6 +1487,16 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
+}
+.chat-pane {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-pane > * {
+  flex: 1;
+  min-width: 0;
 }
 .toolbar {
   display: flex;
