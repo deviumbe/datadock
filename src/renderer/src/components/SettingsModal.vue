@@ -447,7 +447,11 @@ h2 {
 }
 .about {
   text-align: center;
-  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
 }
 .dev-logo {
   height: 56px;

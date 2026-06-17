@@ -13,6 +13,11 @@ export const useUi = defineStore('ui', () => {
   const columnSearchOpen = ref(false)
   const settingsOpen = ref(false)
 
+  // AI chat dock (slide-out panel on the right; works without a query tab)
+  const chatDockOpen = ref(false)
+  function openChatDock(): void { chatDockOpen.value = true }
+  function toggleChatDock(): void { chatDockOpen.value = !chatDockOpen.value }
+
   // Command palette
   const paletteOpen = ref(false)
   function openPalette(): void { paletteOpen.value = true }
@@ -57,6 +62,9 @@ export const useUi = defineStore('ui', () => {
     tableSizesOpen,
     columnSearchOpen,
     settingsOpen,
+    chatDockOpen,
+    openChatDock,
+    toggleChatDock,
     paletteOpen,
     openPalette,
     closePalette,

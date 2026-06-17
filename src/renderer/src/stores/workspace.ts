@@ -3,6 +3,7 @@ import { reactive, ref, computed } from 'vue'
 import type {
   ConnectionConfig,
   ConnectionState,
+  ErModel,
   Project,
   TableInfo,
   Workspace
@@ -52,6 +53,18 @@ export const useWorkspace = defineStore('workspace', () => {
 
   // table -> columns, per connection, for SQL editor autocomplete
   const schemas = reactive<Record<string, Record<string, string[]>>>({})
+
+  // Entity-relationship model (PK/FK graph) per connection — cached for the
+  // record explorer and the grid's inline FK-navigation arrows. Stored in a ref
+  // and replaced immutably so dependent computeds always re-run when it lands.
+  const erModels = ref<Record<string, ErModel>>({})
+  async function loadErModel(id: string): Promise<ErModel | undefined> {
+    if (!erModels.value[id]) {
+      const model = await window.api.db.erModel(id)
+      erModels.value = { ...erModels.value, [id]: model }
+    }
+    return erModels.value[id]
+  }
 
   function applyWorkspace(ws: Workspace): void {
     projects.value = ws.projects
@@ -151,6 +164,9 @@ export const useWorkspace = defineStore('workspace', () => {
       }
     }
     void loadSchema(id)
+    // Eagerly cache the FK graph so the grid's inline navigation arrows are
+    // ready as soon as a table opens (best-effort; absent on non-SQL drivers).
+    void loadErModel(id).catch(() => {})
   }
 
   async function exportConnections(): Promise<void> {
@@ -186,6 +202,8 @@ export const useWorkspace = defineStore('workspace', () => {
     commitTxn,
     rollbackTxn,
     activeConnectionId,
+    erModels,
+    loadErModel,
     tables,
     error,
     schemas,

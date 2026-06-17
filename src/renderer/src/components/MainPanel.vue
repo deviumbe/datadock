@@ -17,6 +17,7 @@ import DropTablesModal from './DropTablesModal.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
 import ChatPanel from './ChatPanel.vue'
+import RecordExplorer from './RecordExplorer.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
@@ -197,6 +198,28 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent): void {
   if (!row) return
   const table = tab.kind === 'table' && tab.table ? tab.table.name : 'table'
   const items: MenuItem[] = []
+  // Explore record — drill through FK relationships (SQL tables with a PK).
+  if (!nonSql.value && tab.kind === 'table' && tab.table && tab.primaryKeys.length) {
+    const pkCol = tab.primaryKeys[0]
+    const pkIdx = result.columns.findIndex((c) => c.name === pkCol)
+    if (pkIdx >= 0) {
+      const value = row[pkIdx]
+      const tableName = tab.table.name
+      items.push(
+        {
+          label: '🔎 Explore record',
+          action: () =>
+            tabsStore.openExplorer(tab.connectionId, {
+              table: tableName,
+              column: pkCol,
+              value,
+              label: `${tableName} #${String(value)}`
+            })
+        },
+        { sep: true }
+      )
+    }
+  }
   if (tabsStore.editsAllowed(tab)) {
     items.push(
       { label: 'Duplicate row', action: () => tabsStore.duplicateRow(tab, rowIndex) },
@@ -358,6 +381,50 @@ function formatActive(): void {
 const activeConn = computed(() =>
   ws.activeConnectionId ? ws.findConnection(ws.activeConnectionId) : undefined
 )
+// Standalone chat session for the slide-out dock, tied to the active connection.
+const dockChat = computed(() =>
+  activeConn.value ? tabsStore.dockChatFor(activeConn.value.id) : null
+)
+
+// Foreign-key map for the active table tab (column -> {toTable,toColumn}), so
+// the grid can show inline "jump to related row" arrows on FK cells.
+const activeFkColumns = computed<Record<string, { toTable: string; toColumn: string }>>(() => {
+  const a = active.value
+  if (!a || a.kind !== 'table' || !a.table) return {}
+  const er = ws.erModels[a.connectionId]
+  const map: Record<string, { toTable: string; toColumn: string }> = {}
+  if (er) {
+    for (const rel of er.relations) {
+      if (rel.fromTable === a.table.name) {
+        map[rel.fromColumn] = { toTable: rel.toTable, toColumn: rel.toColumn }
+      }
+    }
+  }
+  // TEMP diagnostic — remove once FK arrows are confirmed working.
+  console.debug('[fk] table=%s erLoaded=%s relations=%d fkCols=%o',
+    a.table.name, !!er, er?.relations.length ?? 0, Object.keys(map))
+  return map
+})
+
+// Lazily load the FK graph whenever a table tab on this connection is shown.
+watch(
+  () => (active.value?.kind === 'table' ? active.value.connectionId : null),
+  (cid) => {
+    if (cid && !ws.erModels[cid]) void ws.loadErModel(cid).catch(() => {})
+  },
+  { immediate: true }
+)
+
+// Open the related row when a foreign-key arrow is clicked in the grid.
+function onFkNavigate(column: string, value: unknown): void {
+  const a = active.value
+  if (!a || a.kind !== 'table') return
+  const fk = activeFkColumns.value[column]
+  if (!fk) return
+  const target: TableInfo =
+    ws.tables.find((t) => t.name === fk.toTable) ?? { name: fk.toTable, type: 'table' }
+  tabsStore.openTableFiltered(a.connectionId, target, fk.toColumn, value)
+}
 const isInflux = computed(() => activeConn.value?.driver === 'influxdb')
 const isMongo = computed(() => activeConn.value?.driver === 'mongodb')
 // Engines that don't speak SQL — gate SQL-only affordances (Format, AI, the
@@ -544,6 +611,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           </template>
           <button v-else class="btn btn-ghost" title="Begin transaction" @click="ws.beginTxn(activeConn.id)">⇄ Begin Tx</button>
         </template>
+        <button
+          class="btn btn-ghost ai-btn"
+          :class="{ on: ui.chatDockOpen }"
+          title="Chat with your data"
+          @click="ui.toggleChatDock()"
+        >✨ Chat</button>
         <button class="btn btn-ghost" @click="newQuery">＋ Query</button>
         <button class="btn" @click="disconnect">Disconnect</button>
       </template>
@@ -626,7 +699,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)">◧ {{ planLoading ? 'Plan…' : 'Plan' }}</button>
               <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
               <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')">✨ AI</button>
-              <button class="btn btn-ghost ai-btn" title="Chat with your data" @click="tabsStore.openChat(active.connectionId)">✨ Chat</button>
+              <button class="btn btn-ghost ai-btn" title="Chat with your data" @click="ui.openChatDock()">✨ Chat</button>
               <div class="spacer" />
               <span v-if="active.result && !active.error" class="status-mini">
                 {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
@@ -751,6 +824,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   :selected-row="active.selectedRow"
                   :selectable="tabsStore.editsAllowed(active)"
                   :selected-rows="active.selection"
+                  :fk-columns="activeFkColumns"
+                  @fk-navigate="onFkNavigate"
                   @select-row="(r) => (active!.selectedRow = r)"
                   @toggle-select="(r) => tabsStore.toggleRowSelection(active!, r)"
                   @toggle-select-all="tabsStore.toggleSelectAll(active!)"
@@ -896,6 +971,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <ChatPanel :tab="active" />
           </div>
 
+          <!-- Record explorer tab (click-through relationships) -->
+          <div v-else-if="active.kind === 'explorer'" class="explorer-pane">
+            <RecordExplorer :tab="active" />
+          </div>
+
           <!-- Schema diff tab -->
           <div v-else-if="active.kind === 'schemaDiff'" class="server-pane">
             <SchemaDiffPanel
@@ -1034,17 +1114,72 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         @open="(n) => { openRelatedTable(n); ui.columnSearchOpen = false }"
         @close="ui.columnSearchOpen = false"
       />
+
+      <!-- Slide-out AI chat dock — usable without a query tab open. -->
+      <transition name="dock">
+        <aside v-if="ui.chatDockOpen && dockChat" class="chat-dock">
+          <div class="chat-dock-head">
+            <span class="chat-dock-title">✨ Chat with your data</span>
+            <button class="icon-btn" title="Close chat" @click="ui.chatDockOpen = false">✕</button>
+          </div>
+          <ChatPanel :tab="dockChat" />
+        </aside>
+      </transition>
     </template>
   </main>
 </template>
 
 <style scoped>
 .main {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--bg-app);
   overflow: hidden;
+}
+/* Slide-out AI chat dock */
+.chat-dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.28);
+  z-index: 40;
+}
+.chat-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  flex: none;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-dock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.chat-dock :deep(.chat) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.dock-enter-active,
+.dock-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.dock-enter-from,
+.dock-leave-to {
+  transform: translateX(100%);
+  opacity: 0.4;
 }
 .topbar {
   display: flex;
@@ -1389,6 +1524,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .tab-kind.chat {
   background: var(--accent);
 }
+.tab-kind.explorer {
+  background: #b07ad6;
+}
 .tab-kind.schemaDiff {
   background: #e0a14a;
 }
@@ -1494,6 +1632,16 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   min-height: 0;
   overflow: hidden;
 }
+.explorer-pane {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.explorer-pane > * {
+  flex: 1;
+  min-width: 0;
+}
 .chat-pane > * {
   flex: 1;
   min-width: 0;
@@ -1587,6 +1735,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   color: var(--accent);
 }
 .ai-btn:hover {
+  background: var(--accent-soft);
+}
+.ai-btn.on {
   background: var(--accent-soft);
 }
 .run-error-head {

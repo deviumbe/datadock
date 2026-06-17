@@ -21,6 +21,8 @@ const props = defineProps<{
   actionLabel?: string
   highlightedCell?: CellPos | null
   highlightedCells?: CellPos[]
+  /** column name -> FK target, enables inline "jump to related row" arrows. */
+  fkColumns?: Record<string, { toTable: string; toColumn: string }>
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +35,7 @@ const emit = defineEmits<{
   sort: [column: string]
   action: [row: unknown[]]
   rowContext: [rowIndex: number, e: MouseEvent]
+  fkNavigate: [column: string, value: unknown]
 }>()
 
 const hasRows = computed(() => !!props.result && props.result.columns.length > 0)
@@ -58,6 +61,9 @@ const vAutofocus = {
 
 function colName(c: number): string {
   return props.result!.columns[c].name
+}
+function fkOf(c: number): { toTable: string; toColumn: string } | undefined {
+  return props.fkColumns?.[colName(c)]
 }
 function cellValue(r: number, c: number): unknown {
   const name = colName(c)
@@ -151,8 +157,8 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
           <td
             v-for="(_, c) in row"
             :key="c"
-            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c) }"
-            :title="display(cellValue(r, c))"
+            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c) }"
+            :title="fkOf(c) && !isNull(cellValue(r, c)) ? `Go to ${fkOf(c)!.toTable} where ${fkOf(c)!.toColumn} = ${display(cellValue(r, c))}` : display(cellValue(r, c))"
             @dblclick="startEdit('data', r, c)"
           >
             <input
@@ -165,7 +171,15 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
               @blur="commitEdit"
               @click.stop
             />
-            <template v-else>{{ display(cellValue(r, c)) }}</template>
+            <template v-else>
+              <span class="cell-text">{{ display(cellValue(r, c)) }}</span>
+              <button
+                v-if="fkOf(c) && !isNull(cellValue(r, c))"
+                class="fk-jump"
+                title="Go to related row"
+                @click.stop="emit('fkNavigate', colName(c), cellValue(r, c))"
+              >→</button>
+            </template>
           </td>
         </tr>
 
@@ -313,6 +327,34 @@ tbody tr.insert-row td {
 td.dirty {
   background: rgba(240, 180, 41, 0.18) !important;
   color: var(--warn);
+}
+/* Foreign-key cells: value reads as a link, arrow jumps to the related row. */
+td.fk {
+  position: relative;
+}
+td.fk:not(.null) .cell-text {
+  color: var(--accent);
+}
+.fk-jump {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  opacity: 0;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+}
+td.fk:hover .fk-jump {
+  opacity: 1;
+}
+.fk-jump:hover {
+  background: var(--accent-soft);
 }
 td.editing {
   padding: 0;

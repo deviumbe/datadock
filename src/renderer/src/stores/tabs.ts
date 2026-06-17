@@ -29,6 +29,16 @@ export type TabKind =
   | 'schemaDiff'
   | 'dataDiff'
   | 'chat'
+  | 'explorer'
+
+/** One stop in the record explorer: a single row identified by column = value. */
+export interface ExplorerFocus {
+  table: string
+  column: string
+  value: unknown
+  /** Optional human label for the breadcrumb (defaults to `table #value`). */
+  label?: string
+}
 
 export interface Tab {
   id: string
@@ -46,6 +56,10 @@ export interface Tab {
   erModel?: ErModel | null
   chatMessages?: ChatMessage[]
   chatBusy?: boolean
+
+  // record-explorer state: a navigation trail + the current position in it
+  explorerStack?: ExplorerFocus[]
+  explorerIndex?: number
 
   // table-tab state
   primaryKeys: string[]
@@ -210,6 +224,37 @@ export const useTabs = defineStore('tabs', () => {
     return tab
   }
 
+  /**
+   * Open (or reuse) a table tab pre-filtered to a single column = value — used
+   * by the grid's inline foreign-key navigation to jump to the referenced row.
+   */
+  function openTableFiltered(
+    connId: string,
+    table: TableInfo,
+    column: string,
+    value: unknown
+  ): Tab {
+    const t = plainTable(table)
+    const filters = [{ column, op: '=' as const, value: value == null ? '' : String(value) }]
+    const existing = tabs.value.find(
+      (x) =>
+        x.connectionId === connId &&
+        x.kind === 'table' &&
+        x.table?.name === t.name &&
+        x.table?.schema === t.schema
+    )
+    if (existing) {
+      existing.filters = filters
+      existing.offset = 0
+      setActive(connId, existing.id)
+      void reloadTable(existing)
+      return existing
+    }
+    const tab = push({ ...base(connId, 'table', t.name), table: t, filters })
+    void initTable(tab)
+    return tab
+  }
+
   function openServer(connId: string, kind: 'databases' | 'users' | 'processes'): Tab {
     const titles = { databases: 'Databases', users: 'Users', processes: 'Processes' }
     const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === kind)
@@ -291,6 +336,54 @@ export const useTabs = defineStore('tabs', () => {
 
   function clearChat(tab: Tab): void {
     tab.chatMessages = []
+  }
+
+  // Standalone chat sessions for the slide-out chat dock, keyed by connection.
+  // These reuse the Tab shape (and sendChat/clearChat) but live outside the
+  // tab strip, so the assistant can be used without a query tab open.
+  const dockChats = ref<Record<string, Tab>>({})
+  function dockChatFor(connId: string): Tab {
+    let session = dockChats.value[connId]
+    if (!session) {
+      session = base(connId, 'chat', 'Chat with data')
+      session.chatMessages = []
+      dockChats.value[connId] = session
+    }
+    return session
+  }
+
+  // ---- record explorer (click-through relationships) -----------------------
+  function explorerTitle(f: ExplorerFocus): string {
+    return f.label ?? `${f.table} #${String(f.value)}`
+  }
+
+  /** Open (or reuse) the explorer tab, starting a fresh trail at `focus`. */
+  function openExplorer(connId: string, focus: ExplorerFocus): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'explorer')
+    const tab = existing ?? push(base(connId, 'explorer', 'Explorer'))
+    tab.explorerStack = [focus]
+    tab.explorerIndex = 0
+    tab.title = explorerTitle(focus)
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  /** Drill into a related record — truncates any forward history, then pushes. */
+  function navigateExplorer(tab: Tab, focus: ExplorerFocus): void {
+    const idx = tab.explorerIndex ?? 0
+    const stack = (tab.explorerStack ?? []).slice(0, idx + 1)
+    stack.push(focus)
+    tab.explorerStack = stack
+    tab.explorerIndex = stack.length - 1
+    tab.title = explorerTitle(focus)
+  }
+
+  /** Jump to an existing breadcrumb position. */
+  function explorerGoTo(tab: Tab, index: number): void {
+    const stack = tab.explorerStack ?? []
+    if (index < 0 || index >= stack.length) return
+    tab.explorerIndex = index
+    tab.title = explorerTitle(stack[index])
   }
 
   function openSchemaDiff(connId: string): Tab {
@@ -703,6 +796,11 @@ export const useTabs = defineStore('tabs', () => {
     openChat,
     sendChat,
     clearChat,
+    dockChatFor,
+    openExplorer,
+    navigateExplorer,
+    explorerGoTo,
+    openTableFiltered,
     openSchemaDiff,
     openDataDiff,
     clearHistory,
