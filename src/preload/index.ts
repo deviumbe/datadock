@@ -19,6 +19,7 @@ import type {
   ImportResult,
   IpcResult,
   PlanNode,
+  PoolStats,
   Snippet,
   QueryResult,
   RowChangeSet,
@@ -77,6 +78,7 @@ const api = {
     schema: (id: string) => invoke<Record<string, string[]>>('db:schema', id),
     tableSizes: (id: string) => invoke<TableSizeInfo[]>('db:tableSizes', id),
     erModel: (id: string) => invoke<ErModel>('db:erModel', id),
+    poolStats: (id: string) => invoke<PoolStats>('db:poolStats', id),
     schemaSnapshot: (id: string) => invoke<SchemaSnapshot>('db:schemaSnapshot', id),
     primaryKeys: (id: string, table: TableInfo) => invoke<string[]>('db:primaryKeys', id, table),
     applyChanges: (id: string, table: TableInfo, changes: RowChangeSet) =>

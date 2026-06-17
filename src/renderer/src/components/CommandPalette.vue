@@ -162,6 +162,13 @@ const allItems = computed<PaletteItem[]>(() => {
       handler: () => {
         if (connId) tabsStore.openDiagram(connId)
       }
+    },
+    {
+      label: 'Performance',
+      icon: '📊',
+      handler: () => {
+        if (connId) tabsStore.openPerformance(connId)
+      }
     }
   ]
 

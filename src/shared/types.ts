@@ -135,6 +135,20 @@ export interface TableSizeInfo {
   bytes: number | null
 }
 
+/** Live connection-pool diagnostics (best-effort; not all drivers report all). */
+export interface PoolStats {
+  /** Configured maximum pool size, if known. */
+  max?: number
+  /** Total connections currently in the pool (idle + in-use). */
+  total?: number
+  /** Connections currently idle/available. */
+  idle?: number
+  /** Connections currently checked out / in use. */
+  active?: number
+  /** Requests waiting for a free connection. */
+  waiting?: number
+}
+
 export interface SortSpec {
   column: string
   dir: 'asc' | 'desc'

@@ -50,6 +50,27 @@ Click your way down — **project → environment → connection** — and you'r
 
 ## ✨ Features
 
+Everything here ships **today**. Scan the table for the lay of the land, then expand the section below for the full detail.
+
+| | Area | What you get |
+|:--:|---|---|
+| 🗄️ | **Organized connections** | Projects → environment folders → connections — color-coded, encrypted at rest, shareable, with a read-only safe mode |
+| 🔌 | **Six engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · InfluxDB |
+| 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
+| 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
+| 🔗 | **Visual exploration** | Click-through foreign keys, a record Explorer, an interactive ER diagram and a dependency map |
+| 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
+| ⌨️ | **Query, your way** | Multi-tab editor, schema-aware autocomplete, history, snippets, variables, formatter & EXPLAIN |
+| ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
+| 📈 | **Performance & insights** | Slow-query dashboard, index hints, pool diagnostics, table sizes & column search |
+| 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
+| 🛠️ | **Server tools** | Databases, users & roles and a process list (with kill) |
+| 🎨 | **Comfortable to live in** | Dark / light themes, a ⌘K command palette and collapsible panels |
+
+<details>
+<summary><b>📖 Expand for the full feature tour</b></summary>
+<br>
+
 #### 🗄️ Organized connections
 - **Projects → Environment folders → Connections** — a real hierarchy, not a flat list.
 - Color-coded connections with live status dots (connecting / connected / error).
@@ -112,9 +133,18 @@ Click your way down — **project → environment → connection** — and you'r
 - Full-database dumps let you choose **per table**: structure, data, both, or skip.
 - Import **`.sql` scripts** and **CSV → table**.
 
+#### 🔍 Visual data explorer
+- **Click-through foreign keys** — FK cells in the grid render as links; click the `→` to jump straight to the related row (filtered), then keep chaining through relationships.
+- **Record Explorer** — right-click any row → *Explore record* for a focused, one-record-at-a-time view that walks both directions (parent records and "referenced by" children) with a **breadcrumb trail**.
+
+#### 📈 Performance dashboard
+- Open **Database → Performance** (`⌘⇧P`) for a themed dashboard built from your query history: **query-volume chart**, **slow-query monitor** (grouped by query shape, with a configurable threshold), **heuristic index recommendations**, **connection-pool diagnostics** and a **storage-by-table** breakdown.
+
 #### 🛠️ Server tools
 - Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill).
 - **Table sizes** (`⌘K` → *Table Sizes*) — row counts and on-disk size per table, largest-first with inline size bars; click any table to open it.
+
+</details>
 
 ---
 
@@ -182,85 +212,53 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 ## 🗺️ Roadmap
 
-**Shipped**
+### ✅ Shipped
 
-- [x] Insert & delete rows (with transactional commit)
-- [x] Undo / redo of draft edits (⌘Z / ⌘⇧Z)
-- [x] Index management in the structure editor
-- [x] Query history
-- [x] Streaming exports for very large tables
-- [x] Packaged installers (macOS `.dmg`, Windows `.exe`, Linux `AppImage`)
-- [x] SQL autocomplete for table & column names
-- [x] Saved queries / snippets library
-- [x] Read-only "safe mode" to guard production connections
-- [x] Light theme
-- [x] Export/import of connection definitions (shareable, secrets stripped)
-- [x] ER diagram & schema visualization (hierarchical layout, drag, zoom, fit-to-view)
-- [x] Command palette (⌘K) — fuzzy search across connections, tables and actions
-- [x] Duplicate a connection in one click
-- [x] SQL formatter & beautifier (⌘⇧F)
-- [x] Production connection banners (red header on production connections)
-- [x] Dangerous-query guard (warns on `UPDATE`/`DELETE` without `WHERE`, `TRUNCATE`, `DROP`)
-- [x] Query execution plans (`EXPLAIN` runner)
-- [x] Schema diff viewer (compare two connections' structure)
-- [x] Data diff viewer (compare table rows, matched by primary key)
-- [x] Data generator (seed realistic fake data into tables)
-- [x] Export ER diagram to SVG / PNG
-- [x] Transaction mode (explicit Begin / Commit / Rollback)
-- [x] **AI SQL assistant** — natural-language → SQL, AI **explain query**, and **fix-with-AI** on errors (Anthropic; key encrypted with the OS keychain, used only in the main process)
-- [x] Copy a result row as **JSON / CSV / SQL INSERT** (right-click the row)
-- [x] **Duplicate row** — right-click a row to add a pre-filled insert (primary keys auto-generate)
-- [x] **Query variables** — `{{name}}` placeholders are collected and substituted at run time
-- [x] **Visual EXPLAIN** — render the query plan as an interactive, collapsible tree (PostgreSQL & SQLite)
-- [x] **Export result directly to a new table** — persist any query/table result as a new table (types inferred, names sanitized)
-- [x] **Bulk edit selected rows** — tick rows in the grid and set a column to one value (or NULL) across all of them at once
-- [x] **Generate INSERT / UPDATE from selected rows** — turn a multi-row selection into ready-to-edit SQL in a new query tab
-- [x] **Dependency explorer** — "what references this table?" — see a table's incoming/outgoing foreign keys and jump to related tables
-- [x] **Table size analyzer** — row counts and on-disk size per table, largest-first, with size bars
-- [x] **Column-usage search** — find every table/column whose name matches a term, across the whole schema
-- [x] **Settings screen** — AI providers, appearance (scale / theme / density / page size) and an About page
-- [x] **Multi-provider AI** — Anthropic, Google (Gemini), Mistral, xAI (Grok) and local Ollama, each with a chosen model
-- [x] **Chat with your data** — agentic, read-only conversation that queries the live database to answer questions
+| Area | Highlights |
+|---|---|
+| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode · production banners · export / import (secrets stripped) |
+| 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo |
+| 🔗 **Explore** | Click-through FK navigation · record Explorer · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer |
+| 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · schema diff · data diff · data generator |
+| ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
+| ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |
+| 📈 **Insights** | Performance dashboard (slow queries · index hints · pool stats · storage) · table-size analyzer · column-usage search |
+| 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
+| 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) |
 
-### 🎯 Next up
+### 🚧 On the roadmap
 
-The features that push DataDock past "another database client" into *organized, safe, fast* database work:
+| Area | Planned |
+|---|---|
+| 🎯 **Next up** | Database documentation generator — Markdown overview of every table & column |
+| 🛡️ **Production safety** | Dangerous-query confirmation flow · temporary write-unlock ("unlock for 15 min") · SQL linting before run |
+| ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
+| 🧰 **Schema tools** | Migration script generator · visual index analyzer |
+| 📈 **Performance** | Query-plan regression alerts · storage-growth tracking over time |
+| 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |
+| 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |
+| 🪄 **Wow** | Database snapshots · time-travel row history · universal smart search · clone prod schema → local SQLite |
+| 🗃️ **Data management** | Soft-delete recovery viewer |
 
-- [ ] **Database documentation generator** — export a Markdown overview of every table and column
+### 🗄️ Database engines
 
-### 🧭 Backlog
+Already covers **≈80–90%** of typical use; more on the way.
 
-**Data management** — soft-delete recovery viewer
-
-**Querying** — query bookmarks per connection · snippet autocomplete · multiple result tabs per execution · execution-time history
-
-**Production safety** — confirmation workflow for dangerous queries · temporary write-access unlock ("unlock for 15 min") · SQL linting before execution
-
-**Schema tools** — migration script generator · visual index analyzer · column-usage search across schema · database documentation generator
-
-**Performance** — slow-query monitor · index recommendations · connection-pool diagnostics · storage-growth tracking
-
-**Team** — shared query library · shared connection bundles · comments/notes per table · workspace sync · connection templates
-
-**Developer / AI** — generate schema docs with AI · generate test data with AI · streaming chat responses
-
-**"Wow"** — database snapshots (save state before changes) · time-travel row history · visual data explorer (click through relationships) · universal smart search · one-click clone production schema to local SQLite
-
-### 🗄️ More database engines
-
-Today: **PostgreSQL · MySQL/MariaDB · SQLite · SQL Server · MongoDB · InfluxDB** (≈80–90% of typical use). Planned, in priority order:
-
-- [x] **MongoDB** — "SQL + NoSQL in one place" (browse collections, shell-style queries, inline document editing)
-- [ ] **Redis** — keys, JSON, queues, cache inspection
-- [ ] **Oracle Database** — enterprise reach
-- [ ] **CockroachDB / TimescaleDB** — largely ride on PostgreSQL support
-- [ ] Analytics engines (Snowflake · ClickHouse · BigQuery · Redshift · DuckDB)
+| Engine | Status |
+|---|:--:|
+| PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · InfluxDB | ✅ Supported |
+| **Redis** — keys, JSON, queues, cache inspection | ⏳ Planned |
+| **Oracle Database** — enterprise reach | ⏳ Planned |
+| **CockroachDB · TimescaleDB** — ride on PostgreSQL support | ⏳ Planned |
+| Snowflake · ClickHouse · BigQuery · Redshift · DuckDB | 💡 Exploring |
 
 ---
 
 ## 📄 License
 
-MIT — free to use, fork and adapt.
+**MIT** — free to use, fork and adapt. The only condition is that the copyright
+notice crediting **Devium** stays in copies and derivative works, so we get
+credit wherever DataDock is used. See [`LICENSE`](LICENSE).
 
 ---
 

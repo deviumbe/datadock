@@ -3,6 +3,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  PoolStats,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -40,6 +41,8 @@ export interface DbAdapter {
   erModel?(): Promise<import('@shared/types').ErModel>
   /** Whole-database column snapshot, for schema diff. */
   schemaSnapshot?(): Promise<import('@shared/types').SchemaSnapshot>
+  /** Live connection-pool diagnostics (best-effort). */
+  poolStats?(): Promise<PoolStats>
 
   // Optional editing capabilities (SQL engines with primary keys).
   primaryKeys?(table: TableInfo): Promise<string[]>

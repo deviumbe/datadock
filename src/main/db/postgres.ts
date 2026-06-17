@@ -85,6 +85,14 @@ export class PostgresAdapter implements DbAdapter {
     this.pool = undefined
   }
 
+  async poolStats(): Promise<import('@shared/types').PoolStats> {
+    const p = this.pool
+    if (!p) return {}
+    const total = p.totalCount
+    const idle = p.idleCount
+    return { max: 4, total, idle, active: Math.max(0, total - idle), waiting: p.waitingCount }
+  }
+
   async listTables(): Promise<TableInfo[]> {
     const res = await this.pool!.query(
       `select table_schema as schema, table_name as name, table_type

@@ -116,6 +116,7 @@ export function registerIpc(): void {
   handle('db:schema', (id: string) => db.capability(id, 'schema')())
   handle('db:tableSizes', (id: string) => db.capability(id, 'tableSizes')())
   handle('db:erModel', (id: string) => db.capability(id, 'erModel')())
+  handle('db:poolStats', (id: string) => db.capability(id, 'poolStats')())
   handle('db:schemaSnapshot', (id: string) => db.capability(id, 'schemaSnapshot')())
   handle('db:primaryKeys', (id: string, table: TableInfo) =>
     db.capability(id, 'primaryKeys')(table)

@@ -83,6 +83,9 @@ function handleMenu(action: string): void {
     case 'columnSearch':
       ui.columnSearchOpen = true
       break
+    case 'performance':
+      tabs.openPerformance(id)
+      break
     case 'history':
       tabs.openHistory(id)
       break

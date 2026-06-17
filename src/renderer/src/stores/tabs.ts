@@ -30,6 +30,7 @@ export type TabKind =
   | 'dataDiff'
   | 'chat'
   | 'explorer'
+  | 'performance'
 
 /** One stop in the record explorer: a single row identified by column = value. */
 export interface ExplorerFocus {
@@ -252,6 +253,13 @@ export const useTabs = defineStore('tabs', () => {
     }
     const tab = push({ ...base(connId, 'table', t.name), table: t, filters })
     void initTable(tab)
+    return tab
+  }
+
+  function openPerformance(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'performance')
+    const tab = existing ?? push(base(connId, 'performance', 'Performance'))
+    setActive(connId, tab.id)
     return tab
   }
 
@@ -801,6 +809,7 @@ export const useTabs = defineStore('tabs', () => {
     navigateExplorer,
     explorerGoTo,
     openTableFiltered,
+    openPerformance,
     openSchemaDiff,
     openDataDiff,
     clearHistory,
