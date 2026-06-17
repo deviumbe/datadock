@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { diffSchemas, type TableDiff } from '../lib/schemaDiff'
+import { buildMigration } from '../lib/migration'
+import { useTabs } from '../stores/tabs'
 
 const props = defineProps<{
   connId: string
   connName: string
+  driver: string
   candidates: { id: string; label: string }[]
 }>()
+
+const tabsStore = useTabs()
 
 const targetId = ref('')
 const targetLabel = ref('')
@@ -15,6 +20,22 @@ const error = ref('')
 const diff = ref<TableDiff[] | null>(null)
 const onlyChanges = ref(true)
 const expanded = ref<Set<string>>(new Set())
+
+// Migration script generation
+const showMigration = ref(false)
+const toTarget = ref(true)
+const copied = ref(false)
+const migration = computed(() =>
+  diff.value ? buildMigration(diff.value, props.driver, toTarget.value) : ''
+)
+async function copyMigration(): Promise<void> {
+  await navigator.clipboard.writeText(migration.value)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 1500)
+}
+function openMigrationAsQuery(): void {
+  tabsStore.openQueryWith(props.connId, migration.value, 'Migration')
+}
 
 const counts = computed(() => {
   const c = { onlyA: 0, onlyB: 0, changed: 0, same: 0 }
@@ -66,6 +87,12 @@ const badge = (s: TableDiff['status']): string =>
       </button>
       <div class="spacer" />
       <label v-if="diff" class="chk"><input type="checkbox" v-model="onlyChanges" /> Only differences</label>
+      <button
+        v-if="diff"
+        class="btn btn-ghost"
+        :class="{ on: showMigration }"
+        @click="showMigration = !showMigration"
+      >⤓ Migration script</button>
     </div>
 
     <div v-if="error" class="err">{{ error }}</div>
@@ -79,6 +106,20 @@ const badge = (s: TableDiff['status']): string =>
       <span class="s changed">{{ counts.changed }} changed</span>
       <span class="s onlyA">{{ counts.onlyA }} only in {{ connName }}</span>
       <span class="s onlyB">{{ counts.onlyB }} only in target</span>
+    </div>
+
+    <div v-if="diff && showMigration" class="migration">
+      <div class="mig-bar">
+        <div class="dir">
+          <button :class="{ on: toTarget }" @click="toTarget = true">{{ connName }} → target</button>
+          <button :class="{ on: !toTarget }" @click="toTarget = false">target → {{ connName }}</button>
+        </div>
+        <div class="spacer" />
+        <button class="btn btn-ghost" @click="copyMigration">{{ copied ? '✓ Copied' : '⧉ Copy' }}</button>
+        <button class="btn btn-primary" @click="openMigrationAsQuery">Open as query →</button>
+      </div>
+      <pre class="mig-sql">{{ migration }}</pre>
+      <p class="mig-note">⚠ Heuristic — covers tables, columns, types, nullability & PKs (not defaults, FKs, indexes or data). Review before running.</p>
     </div>
 
     <div v-if="diff" class="list">
@@ -126,6 +167,56 @@ const badge = (s: TableDiff['status']): string =>
   font-size: 12px;
 }
 .arrow {
+  color: var(--text-faint);
+}
+.btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.migration {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  padding: 10px 12px 12px;
+}
+.mig-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dir {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.dir button {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  color: var(--text-dim);
+  background: var(--bg-app);
+}
+.dir button.on {
+  background: var(--accent);
+  color: #fff;
+}
+.mig-sql {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre;
+}
+.mig-note {
+  margin-top: 8px;
+  font-size: 11px;
   color: var(--text-faint);
 }
 .select {

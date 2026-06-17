@@ -18,6 +18,7 @@ import * as store from './storage'
 import * as db from './db'
 import * as io from './io'
 import * as history from './history'
+import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
 import * as ai from './ai'
 import * as settings from './settings'
@@ -175,6 +176,12 @@ export function registerIpc(): void {
     history.clearHistory()
     return true
   })
+
+  // Storage-size history (growth tracking)
+  handle('sizeHistory:record', (connId: string, totalBytes: number, tableCount: number) =>
+    sizeHistory.recordSize(connId, totalBytes, tableCount)
+  )
+  handle('sizeHistory:list', (connId: string) => sizeHistory.listSizes(connId))
 
   // Saved queries / snippets
   handle('snippets:list', () => snippets.listSnippets())

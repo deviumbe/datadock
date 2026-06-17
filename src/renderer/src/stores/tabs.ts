@@ -32,6 +32,7 @@ export type TabKind =
   | 'explorer'
   | 'performance'
   | 'docs'
+  | 'search'
 
 /** One stop in the record explorer: a single row identified by column = value. */
 export interface ExplorerFocus {
@@ -267,6 +268,13 @@ export const useTabs = defineStore('tabs', () => {
   function openDocs(connId: string): Tab {
     const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'docs')
     const tab = existing ?? push(base(connId, 'docs', 'Documentation'))
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  function openSearch(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'search')
+    const tab = existing ?? push(base(connId, 'search', 'Search'))
     setActive(connId, tab.id)
     return tab
   }
@@ -819,6 +827,7 @@ export const useTabs = defineStore('tabs', () => {
     openTableFiltered,
     openPerformance,
     openDocs,
+    openSearch,
     openSchemaDiff,
     openDataDiff,
     clearHistory,

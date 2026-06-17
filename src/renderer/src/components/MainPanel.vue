@@ -20,6 +20,7 @@ import ChatPanel from './ChatPanel.vue'
 import RecordExplorer from './RecordExplorer.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
 import DocsPanel from './DocsPanel.vue'
+import SmartSearchPanel from './SmartSearchPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
@@ -985,11 +986,17 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <DocsPanel :conn-id="activeConn.id" :conn-name="activeConn.name" :driver="activeConn.driver" />
           </div>
 
+          <!-- Universal smart search tab -->
+          <div v-else-if="active.kind === 'search'" class="explorer-pane">
+            <SmartSearchPanel :conn-id="activeConn.id" :driver="activeConn.driver" />
+          </div>
+
           <!-- Schema diff tab -->
           <div v-else-if="active.kind === 'schemaDiff'" class="server-pane">
             <SchemaDiffPanel
               :conn-id="activeConn.id"
               :conn-name="activeConn.name"
+              :driver="activeConn.driver"
               :candidates="otherConnections"
             />
           </div>
@@ -1541,6 +1548,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.docs {
   background: #7c8aa0;
+}
+.tab-kind.search {
+  background: #e0915a;
 }
 .tab-kind.schemaDiff {
   background: #e0a14a;

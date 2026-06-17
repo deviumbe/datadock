@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { HistoryEntry, TableSizeInfo, PoolStats } from '@shared/types'
+import type { HistoryEntry, TableSizeInfo, PoolStats, SizeSnapshot } from '@shared/types'
 import { useTabs } from '../stores/tabs'
 import {
   aggregateQueries,
@@ -12,6 +12,7 @@ import {
   type IndexRec
 } from '../lib/perf'
 import BarChart from './BarChart.vue'
+import { analyzeIndexes, type AnalyzedTable, type IndexFinding } from '../lib/indexAnalysis'
 
 const props = defineProps<{ connId: string; driver: string }>()
 const tabsStore = useTabs()
@@ -25,6 +26,37 @@ const pool = ref<PoolStats | null>(null)
 const poolSupported = ref(true)
 const recs = ref<IndexRec[]>([])
 const thresholdMs = ref(100)
+const sizeHistory = ref<SizeSnapshot[]>([])
+
+// Index health (lazily scanned — introspects every table, so it's on demand)
+const idxScanning = ref(false)
+const idxScanned = ref(false)
+const idxProgress = ref(0)
+const idxTotal = ref(0)
+const findings = ref<IndexFinding[]>([])
+async function scanIndexes(): Promise<void> {
+  if (!isSql.value || idxScanning.value) return
+  idxScanning.value = true
+  idxProgress.value = 0
+  try {
+    const tables = (await window.api.db.listTables(props.connId)).filter((t) => t.type === 'table')
+    idxTotal.value = tables.length
+    const analyzed: AnalyzedTable[] = []
+    for (const t of tables) {
+      try {
+        const st = await window.api.db.tableStructure(props.connId, t)
+        analyzed.push({ name: t.name, columns: st.columns, foreignKeys: st.foreignKeys, indexes: st.indexes })
+      } catch {
+        /* skip */
+      }
+      idxProgress.value++
+    }
+    findings.value = analyzeIndexes(analyzed, props.driver)
+    idxScanned.value = true
+  } finally {
+    idxScanning.value = false
+  }
+}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -32,6 +64,12 @@ async function load(): Promise<void> {
     const all = await window.api.history.list()
     history.value = all.filter((h) => h.connectionId === props.connId)
     sizes.value = await window.api.db.tableSizes(props.connId).catch(() => [])
+    // Record today's storage measurement and load the growth history.
+    const tBytes = sizes.value.reduce((a, s) => a + (s.bytes ?? 0), 0)
+    if (tBytes > 0) {
+      await window.api.sizeHistory.record(props.connId, tBytes, sizes.value.length).catch(() => {})
+    }
+    sizeHistory.value = await window.api.sizeHistory.list(props.connId).catch(() => [])
     try {
       pool.value = await window.api.db.poolStats(props.connId)
       poolSupported.value = true
@@ -82,6 +120,24 @@ const topSizes = computed(() => {
   return arr.slice(0, 10)
 })
 const sizeMax = computed(() => Math.max(1, ...topSizes.value.map((s) => s.bytes ?? s.rows ?? 0)))
+
+const growthBars = computed(() =>
+  sizeHistory.value.map((s) => ({
+    label: new Date(s.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    value: s.totalBytes,
+    title: `${new Date(s.at).toLocaleDateString()} · ${fmtBytes(s.totalBytes)} · ${s.tableCount} tables`
+  }))
+)
+const growthDelta = computed(() => {
+  const h = sizeHistory.value
+  if (h.length < 2) return null
+  const diff = h[h.length - 1].totalBytes - h[0].totalBytes
+  const days = Math.max(
+    1,
+    Math.round((new Date(h[h.length - 1].at).getTime() - new Date(h[0].at).getTime()) / 86_400_000)
+  )
+  return { diff, days }
+})
 
 async function computeRecs(): Promise<void> {
   if (!isSql.value) {
@@ -185,6 +241,20 @@ function poolPct(): number {
         <p v-else class="muted">Not enough data.</p>
       </section>
 
+      <!-- storage growth over time -->
+      <section class="panel">
+        <h3>
+          Storage growth
+          <span v-if="growthDelta" class="grow-delta" :class="{ up: growthDelta.diff > 0, down: growthDelta.diff < 0 }">
+            {{ growthDelta.diff >= 0 ? '+' : '−' }}{{ fmtBytes(Math.abs(growthDelta.diff)) }} over {{ growthDelta.days }} day{{ growthDelta.days === 1 ? '' : 's' }}
+          </span>
+        </h3>
+        <BarChart v-if="growthBars.length >= 2" :bars="growthBars" :height="140" />
+        <p v-else class="muted">
+          Tracking started — a measurement is saved each day you open this dashboard, and the growth trend appears here as snapshots accrue.
+        </p>
+      </section>
+
       <div class="two-col">
         <!-- slow queries -->
         <section class="panel">
@@ -256,6 +326,35 @@ function poolPct(): number {
           <p v-else class="muted">Pool diagnostics aren't available for {{ driver }}.</p>
         </section>
       </div>
+
+      <!-- index health (structural analysis, scanned on demand) -->
+      <section class="panel">
+        <h3>
+          Index health
+          <span v-if="idxScanned" class="count">{{ findings.length }}</span>
+          <div class="spacer" />
+          <button v-if="isSql" class="btn btn-ghost sm" :disabled="idxScanning" @click="scanIndexes">
+            {{ idxScanning ? `Scanning… ${idxProgress}/${idxTotal}` : idxScanned ? '⟳ Rescan' : '⌕ Scan schema' }}
+          </button>
+        </h3>
+        <p v-if="!isSql" class="muted">Not available for {{ driver }}.</p>
+        <p v-else-if="!idxScanned && !idxScanning" class="muted">
+          Scan the schema for redundant indexes, foreign keys missing an index, and tables without a primary key.
+        </p>
+        <p v-else-if="idxScanned && !findings.length" class="muted">No index issues found. 👍</p>
+        <div v-else-if="findings.length" class="findings">
+          <div v-for="(f, i) in findings" :key="i" class="finding" :class="f.kind">
+            <span class="fdot" :class="f.severity" />
+            <div class="finfo">
+              <strong>{{ f.table }}</strong> — {{ f.title }}
+              <span class="fdetail">{{ f.detail }}</span>
+            </div>
+            <button v-if="f.ddl" class="btn btn-ghost sm" title="Open the fix as a query" @click="runSql(f.ddl)">
+              {{ f.kind === 'redundant' ? 'Drop →' : 'Create →' }}
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -377,6 +476,19 @@ function poolPct(): number {
   font-size: 10px;
   color: var(--text-dim);
 }
+.grow-delta {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+.grow-delta.up {
+  color: var(--warn);
+}
+.grow-delta.down {
+  color: var(--ok);
+}
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -464,6 +576,46 @@ function poolPct(): number {
   padding: 4px 9px;
   font-size: 11.5px;
   flex: none;
+}
+.panel h3 .btn {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.finding {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.fdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.fdot.warn {
+  background: var(--warn);
+}
+.fdot.info {
+  background: var(--text-faint);
+}
+.finfo {
+  flex: 1;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.fdetail {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-faint);
 }
 .bars {
   display: flex;

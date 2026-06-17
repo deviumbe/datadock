@@ -135,6 +135,15 @@ export interface TableSizeInfo {
   bytes: number | null
 }
 
+/** A point-in-time storage measurement for a connection (growth tracking). */
+export interface SizeSnapshot {
+  id: string
+  connectionId: string
+  at: string // ISO timestamp
+  totalBytes: number
+  tableCount: number
+}
+
 /** Live connection-pool diagnostics (best-effort; not all drivers report all). */
 export interface PoolStats {
   /** Configured maximum pool size, if known. */

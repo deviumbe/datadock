@@ -20,6 +20,7 @@ import type {
   IpcResult,
   PlanNode,
   PoolStats,
+  SizeSnapshot,
   Snippet,
   QueryResult,
   RowChangeSet,
@@ -121,6 +122,11 @@ const api = {
     add: (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => invoke<HistoryEntry>('history:add', entry),
     list: () => invoke<HistoryEntry[]>('history:list'),
     clear: () => invoke<boolean>('history:clear')
+  },
+  sizeHistory: {
+    record: (connId: string, totalBytes: number, tableCount: number) =>
+      invoke<SizeSnapshot>('sizeHistory:record', connId, totalBytes, tableCount),
+    list: (connId: string) => invoke<SizeSnapshot[]>('sizeHistory:list', connId)
   },
   snippets: {
     list: () => invoke<Snippet[]>('snippets:list'),

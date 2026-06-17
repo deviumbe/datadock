@@ -176,6 +176,13 @@ const allItems = computed<PaletteItem[]>(() => {
       handler: () => {
         if (connId) tabsStore.openDocs(connId)
       }
+    },
+    {
+      label: 'Search Everywhere',
+      icon: '⌕',
+      handler: () => {
+        if (connId) tabsStore.openSearch(connId)
+      }
     }
   ]
 
