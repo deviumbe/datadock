@@ -48,10 +48,26 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Package and publish installer
-        run: npx electron-builder --${{ matrix.platform }} --publish always
+      # Build the installer only (no publish). electron-builder's GitHub
+      # publisher tends to upload to its own separate *draft* release, leaving
+      # the release you actually published empty. We upload explicitly below.
+      - name: Package installer
+        run: npx electron-builder --${{ matrix.platform }} --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No Apple signing certs configured — build an unsigned .dmg
           # instead of failing on a missing identity.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # Attach the built installers to the release that triggered this run.
+      # On a `release: published` event this targets exactly that release.
+      - name: Attach installers to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*.exe
+            release/*.AppImage
+            release/*.yml
+            release/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
