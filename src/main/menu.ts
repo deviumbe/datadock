@@ -87,6 +87,7 @@ export function buildMenu(): void {
         { label: 'Process List', click: () => send('processes') },
         { label: 'Table Sizes', click: () => send('tableSizes') },
         { label: 'Performance', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('performance') },
+        { label: 'Documentation', accelerator: 'CmdOrCtrl+Shift+D', click: () => send('docs') },
         { label: 'Search Schema', click: () => send('columnSearch') },
         { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },

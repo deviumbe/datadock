@@ -86,6 +86,9 @@ function handleMenu(action: string): void {
     case 'performance':
       tabs.openPerformance(id)
       break
+    case 'docs':
+      tabs.openDocs(id)
+      break
     case 'history':
       tabs.openHistory(id)
       break

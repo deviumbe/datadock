@@ -223,6 +223,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
 | ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · pool stats · storage) · table-size analyzer · column-usage search |
+| 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
 | 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) |
 
@@ -230,10 +231,10 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 | Area | Planned |
 |---|---|
-| 🎯 **Next up** | Database documentation generator — Markdown overview of every table & column |
+| 🎯 **Next up** | Migration script generator — turn a schema diff into ready-to-run `ALTER` statements |
 | 🛡️ **Production safety** | Dangerous-query confirmation flow · temporary write-unlock ("unlock for 15 min") · SQL linting before run |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
-| 🧰 **Schema tools** | Migration script generator · visual index analyzer |
+| 🧰 **Schema tools** | Visual index analyzer |
 | 📈 **Performance** | Query-plan regression alerts · storage-growth tracking over time |
 | 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |
 | 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |

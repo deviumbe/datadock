@@ -19,6 +19,7 @@ import ErDiagram from './ErDiagram.vue'
 import ChatPanel from './ChatPanel.vue'
 import RecordExplorer from './RecordExplorer.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
+import DocsPanel from './DocsPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
@@ -979,6 +980,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <PerformanceDashboard :conn-id="activeConn.id" :driver="activeConn.driver" />
           </div>
 
+          <!-- Database documentation tab -->
+          <div v-else-if="active.kind === 'docs'" class="explorer-pane">
+            <DocsPanel :conn-id="activeConn.id" :conn-name="activeConn.name" :driver="activeConn.driver" />
+          </div>
+
           <!-- Schema diff tab -->
           <div v-else-if="active.kind === 'schemaDiff'" class="server-pane">
             <SchemaDiffPanel
@@ -1532,6 +1538,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.performance {
   background: #4ac6e0;
+}
+.tab-kind.docs {
+  background: #7c8aa0;
 }
 .tab-kind.schemaDiff {
   background: #e0a14a;
