@@ -94,6 +94,7 @@ export function buildMenu(): void {
         { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
         { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
         { label: 'Chat with Data', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('chat') },
+        { label: 'Environment Diff', click: () => send('envDiff') },
         { label: 'Schema Diff', click: () => send('schemaDiff') },
         { label: 'Data Diff', click: () => send('dataDiff') },
         { type: 'separator' },

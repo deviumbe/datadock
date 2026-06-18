@@ -183,6 +183,13 @@ const allItems = computed<PaletteItem[]>(() => {
       handler: () => {
         if (connId) tabsStore.openSearch(connId)
       }
+    },
+    {
+      label: 'Environment Diff',
+      icon: '⇄',
+      handler: () => {
+        if (connId) tabsStore.openEnvDiff(connId)
+      }
     }
   ]
 

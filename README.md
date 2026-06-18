@@ -134,6 +134,11 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - Full-database dumps let you choose **per table**: structure, data, both, or skip.
 - Import **`.sql` scripts** and **CSV → table**.
 
+#### ⇄ Environment diff
+- Compare two connections (e.g. **Production vs Staging**) side by side and see exactly what drifted: **missing tables**, **different columns**, **different indexes**, and **different data** (row counts).
+- Each check is **optional** — tick Columns / Indexes / Data independently. Because production data normally differs everywhere, **data comparison is off by default and opt-in per table**, so you only flag the reference/config tables you actually care about.
+- Per-table drill-down with column- and index-level detail, an "only differences" filter, and a jump to the full row-level **Data Diff**.
+
 #### 🎭 Data masking / anonymization
 - The whole-database export is a **two-step wizard**: pick what to dump, then **anonymize** any column of any table.
 - Choose a **faker-backed generator per column** — fake email, full/first/last name, phone, address, city, country, company, IBAN, credit-card, UUID, and more — with **smart guesses pre-filled** from column names (`email → fake email`, `firstname → fake name`, …).
@@ -225,7 +230,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
 | 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo |
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table) |
-| 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
+| 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
 | ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |

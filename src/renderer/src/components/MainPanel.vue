@@ -21,6 +21,7 @@ import RecordExplorer from './RecordExplorer.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
 import DocsPanel from './DocsPanel.vue'
 import SmartSearchPanel from './SmartSearchPanel.vue'
+import EnvDiffPanel from './EnvDiffPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
@@ -1065,6 +1066,15 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               :tables="ws.tables"
             />
           </div>
+
+          <!-- Environment diff tab -->
+          <div v-else-if="active.kind === 'envDiff'" class="server-pane">
+            <EnvDiffPanel
+              :conn-id="activeConn.id"
+              :conn-name="activeConn.name"
+              :candidates="otherConnections"
+            />
+          </div>
         </div>
       </div>
 
@@ -1618,6 +1628,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.search {
   background: #e0915a;
+}
+.tab-kind.envDiff {
+  background: #e0a14a;
 }
 .tab-kind.schemaDiff {
   background: #e0a14a;

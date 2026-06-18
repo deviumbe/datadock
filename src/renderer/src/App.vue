@@ -104,6 +104,9 @@ function handleMenu(action: string): void {
     case 'chat':
       tabs.openChat(id)
       break
+    case 'envDiff':
+      tabs.openEnvDiff(id)
+      break
     case 'schemaDiff':
       tabs.openSchemaDiff(id)
       break
