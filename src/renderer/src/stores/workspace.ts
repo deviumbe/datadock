@@ -54,6 +54,47 @@ export const useWorkspace = defineStore('workspace', () => {
   // table -> columns, per connection, for SQL editor autocomplete
   const schemas = reactive<Record<string, Record<string, string[]>>>({})
 
+  // Temporary write-unlock for read-only connections: connId -> expiry epoch ms.
+  // A ticking `now` ref drives countdowns and auto-relock reactively.
+  const writeUnlocks = reactive<Record<string, number>>({})
+  const now = ref(Date.now())
+  let unlockTimer: ReturnType<typeof setInterval> | undefined
+  function ensureUnlockTimer(): void {
+    if (unlockTimer) return
+    unlockTimer = setInterval(() => {
+      now.value = Date.now()
+      let any = false
+      for (const [id, exp] of Object.entries(writeUnlocks)) {
+        if (exp <= now.value) delete writeUnlocks[id]
+        else any = true
+      }
+      if (!any && unlockTimer) {
+        clearInterval(unlockTimer)
+        unlockTimer = undefined
+      }
+    }, 1000)
+  }
+  function unlockWrites(connId: string, minutes = 15): void {
+    writeUnlocks[connId] = Date.now() + minutes * 60_000
+    now.value = Date.now()
+    ensureUnlockTimer()
+  }
+  function relockWrites(connId: string): void {
+    delete writeUnlocks[connId]
+  }
+  function isWriteUnlocked(connId: string): boolean {
+    const exp = writeUnlocks[connId]
+    return !!exp && exp > now.value
+  }
+  function unlockSecondsLeft(connId: string): number {
+    const exp = writeUnlocks[connId]
+    return exp ? Math.max(0, Math.round((exp - now.value) / 1000)) : 0
+  }
+  /** Effective read-only state: the connection flag, unless temporarily unlocked. */
+  function isReadOnly(connId: string): boolean {
+    return !!findConnection(connId)?.readOnly && !isWriteUnlocked(connId)
+  }
+
   // Entity-relationship model (PK/FK graph) per connection — cached for the
   // record explorer and the grid's inline FK-navigation arrows. Stored in a ref
   // and replaced immutably so dependent computeds always re-run when it lands.
@@ -204,6 +245,11 @@ export const useWorkspace = defineStore('workspace', () => {
     activeConnectionId,
     erModels,
     loadErModel,
+    unlockWrites,
+    relockWrites,
+    isWriteUnlocked,
+    unlockSecondsLeft,
+    isReadOnly,
     tables,
     error,
     schemas,

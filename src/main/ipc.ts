@@ -14,6 +14,7 @@ import type {
   TableQueryOptions
 } from '@shared/types'
 import type { HistoryEntry, Snippet } from '@shared/types'
+import type { MaskConfig } from '@shared/mask'
 import * as store from './storage'
 import * as db from './db'
 import * as io from './io'
@@ -158,8 +159,10 @@ export function registerIpc(): void {
   handle('io:exportTable', (id: string, table: TableInfo, format: ExportFormat) =>
     io.exportTable(id, table, format)
   )
-  handle('io:exportDatabase', (id: string, specs: TableDumpSpec[], format: DumpFormat) =>
-    io.exportDatabase(id, specs, format)
+  handle(
+    'io:exportDatabase',
+    (id: string, specs: TableDumpSpec[], format: DumpFormat, maskConfig?: MaskConfig) =>
+      io.exportDatabase(id, specs, format, maskConfig)
   )
   handle('io:importSql', (id: string) => io.importSql(id))
   handle('io:importCsv', (id: string, table: TableInfo) => io.importCsv(id, table))

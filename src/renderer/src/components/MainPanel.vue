@@ -441,7 +441,27 @@ const isMongo = computed(() => activeConn.value?.driver === 'mongodb')
 // Engines that don't speak SQL — gate SQL-only affordances (Format, AI, the
 // structure editor, EXPLAIN) off these.
 const nonSql = computed(() => isInflux.value || isMongo.value)
-const readOnly = computed(() => !!activeConn.value?.readOnly)
+const readOnly = computed(() => !!activeConn.value && ws.isReadOnly(activeConn.value.id))
+// A read-only connection currently unlocked for writes (shows a countdown).
+const writeUnlocked = computed(
+  () => !!activeConn.value?.readOnly && !readOnly.value
+)
+const unlockCountdown = computed(() => {
+  if (!activeConn.value) return ''
+  const s = ws.unlockSecondsLeft(activeConn.value.id)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+})
+function unlockWrites(): void {
+  const c = activeConn.value
+  if (!c) return
+  const msg = c.production
+    ? `⚠ ${c.name} is a PRODUCTION connection. Allow writes for 15 minutes?`
+    : `Allow writes to “${c.name}” for 15 minutes?`
+  if (confirm(msg)) ws.unlockWrites(c.id, 15)
+}
+function relockWrites(): void {
+  if (activeConn.value) ws.relockWrites(activeConn.value.id)
+}
 const isProduction = computed(() => !!activeConn.value?.production)
 const explainable = computed(() =>
   ['postgres', 'mysql', 'sqlite'].includes(activeConn.value?.driver ?? '')
@@ -605,7 +625,18 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <strong class="conn-name">{{ activeConn.name }}</strong>
         <span class="meta">{{ activeConn.driver }}<template v-if="activeConn.database"> · {{ activeConn.database }}</template></span>
         <span class="state" :class="ws.connStates[activeConn.id] || 'disconnected'" />
-        <span v-if="readOnly" class="ro-badge" title="Read-only (safe mode)">🔒 Read-only</span>
+        <button
+          v-if="readOnly"
+          class="ro-badge locked"
+          title="Read-only (safe mode) — click to temporarily allow writes"
+          @click="unlockWrites"
+        >🔒 Read-only</button>
+        <button
+          v-else-if="writeUnlocked"
+          class="ro-badge unlocked"
+          title="Writes temporarily unlocked — click to re-lock now"
+          @click="relockWrites"
+        >🔓 Writable {{ unlockCountdown }}</button>
       </template>
       <strong v-else class="brand-title">DataDock</strong>
       <div class="spacer drag" />
@@ -1297,6 +1328,18 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 1px 7px;
   border-radius: 999px;
   -webkit-app-region: no-drag;
+}
+.ro-badge.locked:hover {
+  background: rgba(240, 180, 41, 0.28);
+}
+.ro-badge.unlocked {
+  color: var(--ok);
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+.ro-badge.unlocked:hover {
+  background: rgba(74, 222, 128, 0.26);
 }
 .txn-badge {
   font-size: 10px;

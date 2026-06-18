@@ -644,8 +644,7 @@ export const useTabs = defineStore('tabs', () => {
     tab.inserts.length +
     tab.deletes.length
 
-  const isReadOnly = (connId: string): boolean =>
-    !!useWorkspace().findConnection(connId)?.readOnly
+  const isReadOnly = (connId: string): boolean => useWorkspace().isReadOnly(connId)
 
   const editsAllowed = (tab: Tab): boolean =>
     tab.kind === 'table' && tab.primaryKeys.length > 0 && !isReadOnly(tab.connectionId)

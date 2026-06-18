@@ -111,7 +111,7 @@ function handleMenu(action: string): void {
       tabs.openDataDiff(id)
       break
     case 'import':
-      if (ws.findConnection(id)?.readOnly) {
+      if (ws.isReadOnly(id)) {
         ws.error = 'Read-only connection: import is disabled.'
       } else {
         ui.importOpen = true

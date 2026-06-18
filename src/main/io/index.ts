@@ -16,6 +16,8 @@ import type {
   TableDumpSpec,
   TableInfo
 } from '@shared/types'
+import type { MaskConfig } from '@shared/mask'
+import { applyMasks, tableMasks } from './mask'
 import { getAdapter } from '../db'
 import type { DbAdapter } from '../db/types'
 import * as store from '../storage'
@@ -164,12 +166,20 @@ export async function exportTable(
 
 // ---- streaming whole-database dump ------------------------------------------
 
-async function streamDump(adapter: DbAdapter, specs: TableDumpSpec[], filePath: string): Promise<void> {
+async function streamDump(
+  adapter: DbAdapter,
+  specs: TableDumpSpec[],
+  filePath: string,
+  maskConfig?: MaskConfig
+): Promise<void> {
   const dialect = adapter.config.driver
   const out = createWriteStream(filePath, { encoding: 'utf-8' })
   const write = writer(out)
+  const masked = !!maskConfig && Object.keys(maskConfig).length > 0
   try {
-    await write(`-- DataDock dump\n-- generated ${new Date().toISOString()}\n\n`)
+    await write(`-- DataDock dump\n-- generated ${new Date().toISOString()}\n`)
+    if (masked) await write('-- ⚠ anonymized: selected columns replaced with fake data\n')
+    await write('\n')
     for (const spec of specs) {
       if (spec.mode === 'skip') continue
       const table: TableInfo = { schema: spec.schema, name: spec.name, type: 'table' }
@@ -178,8 +188,10 @@ async function streamDump(adapter: DbAdapter, specs: TableDumpSpec[], filePath: 
         await write((await adapter.tableDDL(table)) + '\n\n')
       }
       if (spec.mode === 'data' || spec.mode === 'both') {
+        const masks = tableMasks(maskConfig, spec.name)
         await pageThrough(adapter, table, async (columns, rows) => {
-          const ins = buildInserts(spec.name, columns, rows, dialect)
+          const out = masks ? applyMasks(columns, rows, masks) : rows
+          const ins = buildInserts(spec.name, columns, out, dialect)
           if (ins) await write(ins + '\n')
         })
         await write('\n')
@@ -193,7 +205,8 @@ async function streamDump(adapter: DbAdapter, specs: TableDumpSpec[], filePath: 
 export async function exportDatabase(
   connId: string,
   specs: TableDumpSpec[],
-  format: DumpFormat
+  format: DumpFormat,
+  maskConfig?: MaskConfig
 ): Promise<FileResult> {
   const adapter = getAdapter(connId)
   const dbName = adapter.config.database || adapter.config.name || 'database'
@@ -206,7 +219,7 @@ export async function exportDatabase(
 
   if (format === 'sql-zip') {
     const tmp = join(tmpdir(), `datadock-${Date.now()}.sql`)
-    await streamDump(adapter, specs, tmp)
+    await streamDump(adapter, specs, tmp, maskConfig)
     const zip = new JSZip()
     zip.file(`${dbName}.sql`, createReadStream(tmp))
     await new Promise<void>((resolve, reject) => {
@@ -218,7 +231,7 @@ export async function exportDatabase(
     })
     await unlink(tmp).catch(() => undefined)
   } else {
-    await streamDump(adapter, specs, filePath)
+    await streamDump(adapter, specs, filePath, maskConfig)
   }
   return { canceled: false, path: filePath }
 }

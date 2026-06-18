@@ -141,7 +141,7 @@ const allItems = computed<PaletteItem[]>(() => {
       icon: '📥',
       handler: () => {
         if (connId) {
-          if (ws.findConnection(connId)?.readOnly) {
+          if (ws.isReadOnly(connId)) {
             ws.error = 'Read-only connection: import is disabled.'
           } else {
             ui.importOpen = true

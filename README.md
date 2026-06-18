@@ -64,6 +64,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
 | 📈 | **Performance & insights** | Slow-query dashboard, index hints, pool diagnostics, table sizes & column search |
 | 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
+| 🎭 | **Data masking** | Anonymize chosen columns with realistic fake data on export — safely copy production into a local database |
 | 🛠️ | **Server tools** | Databases, users & roles and a process list (with kill) |
 | 🎨 | **Comfortable to live in** | Dark / light themes, a ⌘K command palette and collapsible panels |
 
@@ -132,6 +133,11 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Result → new table (⤒)** — persist any query or table result as a brand-new table in one click; column types are inferred from the data and names sanitized to safe identifiers.
 - Full-database dumps let you choose **per table**: structure, data, both, or skip.
 - Import **`.sql` scripts** and **CSV → table**.
+
+#### 🎭 Data masking / anonymization
+- The whole-database export is a **two-step wizard**: pick what to dump, then **anonymize** any column of any table.
+- Choose a **faker-backed generator per column** — fake email, full/first/last name, phone, address, city, country, company, IBAN, credit-card, UUID, and more — with **smart guesses pre-filled** from column names (`email → fake email`, `firstname → fake name`, …).
+- Masking is **deterministic**: the same source value always maps to the same fake value, so duplicated values stay consistent and IDs/keys are left untouched by default — letting you **safely copy production data into a local database** for development.
 
 #### 🔍 Visual data explorer
 - **Click-through foreign keys** — FK cells in the grid render as links; click the `→` to jump straight to the related row (filtered), then keep chaining through relationships.
@@ -216,7 +222,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 | Area | Highlights |
 |---|---|
-| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode · production banners · export / import (secrets stripped) |
+| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
 | 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo |
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
@@ -225,6 +231,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
+| 🎭 **Data masking** | Anonymize columns with faker on export (deterministic) — safely copy production into local databases |
 | 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) |
 
 ### 🚧 On the roadmap
@@ -232,7 +239,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | Area | Planned |
 |---|---|
 | 🎯 **Next up** | Database snapshots — save a restore point before risky changes |
-| 🛡️ **Production safety** | Dangerous-query confirmation flow · temporary write-unlock ("unlock for 15 min") |
+| 🛡️ **Production safety** | Dangerous-query confirmation flow |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
 | 📈 **Performance** | Query-plan regression alerts |
 | 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |

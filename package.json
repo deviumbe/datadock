@@ -94,6 +94,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
+    "@faker-js/faker": "^10.5.0",
     "@influxdata/influxdb-client": "^1.35.0",
     "@influxdata/influxdb-client-apis": "^1.35.0",
     "better-sqlite3": "^11.8.1",

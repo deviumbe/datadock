@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import type { MaskConfig } from '@shared/mask'
 import type {
   AiProvider,
   AppearanceSettings,
@@ -107,8 +108,8 @@ const api = {
       invoke<FileResult>('io:exportData', id, format, payload),
     exportTable: (id: string, table: TableInfo, format: ExportFormat) =>
       invoke<FileResult>('io:exportTable', id, table, format),
-    exportDatabase: (id: string, specs: TableDumpSpec[], format: DumpFormat) =>
-      invoke<FileResult>('io:exportDatabase', id, specs, format),
+    exportDatabase: (id: string, specs: TableDumpSpec[], format: DumpFormat, maskConfig?: MaskConfig) =>
+      invoke<FileResult>('io:exportDatabase', id, specs, format, maskConfig),
     importSql: (id: string) => invoke<ImportResult & { canceled?: boolean }>('io:importSql', id),
     importCsv: (id: string, table: TableInfo) =>
       invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table),
