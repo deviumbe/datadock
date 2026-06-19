@@ -51,7 +51,8 @@
     ],
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns"
@@ -101,6 +102,7 @@
     "@influxdata/influxdb-client": "^1.35.0",
     "@influxdata/influxdb-client-apis": "^1.35.0",
     "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
     "ioredis": "^5.11.1",
     "jszip": "^3.10.1",

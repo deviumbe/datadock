@@ -10,18 +10,22 @@ import ConnectionModal from './components/ConnectionModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import UpdateNotice from './components/UpdateNotice.vue'
+import { useUpdates } from './stores/updates'
 import type { ConnectionConfig, Environment, Project } from '@shared/types'
 
 const ws = useWorkspace()
 const tabs = useTabs()
 const ui = useUi()
 const settings = useSettings()
+const updates = useUpdates()
 
 const sidebarWidth = computed(() => (ui.sidebarCollapsed ? '0px' : '264px'))
 
 onMounted(() => {
   ws.load()
   settings.load()
+  updates.init()
 })
 
 // ---- native menu actions ----------------------------------------------------
@@ -44,6 +48,10 @@ function handleMenu(action: string): void {
   }
   if (action === 'openSettings') {
     ui.settingsOpen = true
+    return
+  }
+  if (action === 'checkForUpdates') {
+    updates.checkManually()
     return
   }
   const id = ws.activeConnectionId
@@ -257,6 +265,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     />
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
     <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+    <UpdateNotice />
   </div>
 </template>
 

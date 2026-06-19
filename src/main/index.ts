@@ -4,6 +4,7 @@ import { registerIpc } from './ipc'
 import { loadWorkspace } from './storage'
 import { disconnectAll } from './db'
 import { buildMenu } from './menu'
+import { setupUpdater } from './updater'
 
 // NOTE: we deliberately do NOT call app.setName('DataDock') here. On macOS,
 // safeStorage derives its keychain encryption key from the app name, so renaming
@@ -15,7 +16,7 @@ import { buildMenu } from './menu'
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 const iconPath = join(__dirname, '../../resources/icon.png')
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -45,6 +46,8 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return win
 }
 
 app.whenReady().then(() => {
@@ -64,10 +67,11 @@ app.whenReady().then(() => {
   loadWorkspace()
   registerIpc()
   buildMenu()
-  createWindow()
+  const win = createWindow()
+  setupUpdater(win)
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) setupUpdater(createWindow())
   })
 })
 

@@ -16,6 +16,7 @@ export function buildMenu(): void {
             label: app.name,
             submenu: [
               { role: 'about' },
+              { label: 'Check for Updates…', click: () => send('checkForUpdates') },
               { type: 'separator' },
               { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('openSettings') },
               { type: 'separator' },
@@ -45,6 +46,7 @@ export function buildMenu(): void {
           ? []
           : [
               { type: 'separator' } as const,
+              { label: 'Check for Updates…', click: () => send('checkForUpdates') } as const,
               { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('openSettings') } as const,
               { type: 'separator' } as const,
               { role: 'quit' } as const

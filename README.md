@@ -117,6 +117,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 #### 🎨 Comfortable to live in
 - **Dark and light themes**, remembered between sessions.
+- **Automatic updates** — DataDock checks GitHub Releases on launch; when a newer version is out you get a *"New version — Update now"* prompt that downloads and installs it in place (or *Check for Updates…* from the app menu anytime).
 - Collapsible sidebar and table list to maximize screen for data.
 - **Command palette (⌘K)** — fuzzy-search connections, tables and actions from anywhere in the app. Jump to any table, open a query tab, switch themes, open the ER diagram — all without touching the mouse. Navigate with ↑↓, confirm with ↵, dismiss with Esc.
 
@@ -248,7 +249,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
 | 🎭 **Data masking** | Anonymize columns with faker on export (deterministic) — safely copy production into local databases |
-| 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) |
+| 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) · in-app auto-update from GitHub Releases |
 
 ### 🚧 On the roadmap
 

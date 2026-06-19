@@ -186,6 +186,39 @@ const api = {
       invoke<AppSettings>('settings:setAppearance', a),
     testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p)
   },
+  updates: {
+    // main → renderer events (each returns an unsubscribe fn)
+    onAvailable: (cb: (version: string) => void): (() => void) => {
+      const l = (_e: unknown, p: { version: string }): void => cb(p.version)
+      ipcRenderer.on('update:available', l)
+      return () => ipcRenderer.removeListener('update:available', l)
+    },
+    onNone: (cb: () => void): (() => void) => {
+      const l = (): void => cb()
+      ipcRenderer.on('update:none', l)
+      return () => ipcRenderer.removeListener('update:none', l)
+    },
+    onProgress: (cb: (percent: number) => void): (() => void) => {
+      const l = (_e: unknown, p: number): void => cb(p)
+      ipcRenderer.on('update:progress', l)
+      return () => ipcRenderer.removeListener('update:progress', l)
+    },
+    onDownloaded: (cb: (version: string) => void): (() => void) => {
+      const l = (_e: unknown, p: { version: string }): void => cb(p.version)
+      ipcRenderer.on('update:downloaded', l)
+      return () => ipcRenderer.removeListener('update:downloaded', l)
+    },
+    onError: (cb: (message: string) => void): (() => void) => {
+      const l = (_e: unknown, p: string): void => cb(p)
+      ipcRenderer.on('update:error', l)
+      return () => ipcRenderer.removeListener('update:error', l)
+    },
+    // renderer → main actions
+    check: (): void => ipcRenderer.send('update:check'),
+    download: (): void => ipcRenderer.send('update:download'),
+    install: (): void => ipcRenderer.send('update:install'),
+    openReleases: (): void => ipcRenderer.send('update:openReleases')
+  },
   setZoom: (factor: number) => webFrame.setZoomFactor(factor),
   getVersion: () => invoke<string>('app:version'),
   pickFile: () => invoke<string | null>('app:pickFile')
