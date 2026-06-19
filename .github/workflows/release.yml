@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # --ignore-scripts skips the macOS-specific `postinstall` rebuild
@@ -63,6 +63,9 @@ jobs:
       - name: Attach installers to the release
         uses: softprops/action-gh-release@v2
         with:
+          # On a `release: published` event GITHUB_REF isn't a tag ref, so the
+          # action can't infer the tag — pass it explicitly from the payload.
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             release/*.dmg
             release/*.exe

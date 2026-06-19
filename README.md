@@ -186,7 +186,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 ## 🚀 Getting started
 
-> Requires **Node.js 20+**.
+> Requires **Node.js 24+**.
 
 ```bash
 # 1. Install dependencies
