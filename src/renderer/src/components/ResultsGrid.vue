@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import type { QueryResult, SortSpec } from '@shared/types'
 
 interface CellPos {
@@ -34,7 +34,7 @@ const emit = defineEmits<{
   toggleSelectAll: []
   sort: [column: string]
   action: [row: unknown[]]
-  rowContext: [rowIndex: number, e: MouseEvent]
+  rowContext: [rowIndex: number, e: MouseEvent, colIndex?: number]
   fkNavigate: [column: string, value: unknown]
 }>()
 
@@ -115,10 +115,24 @@ function cancelEdit(): void {
 function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
   return editing.value?.kind === kind && editing.value?.row === r && editing.value?.col === c
 }
+
+// When a new insert row is appended (it renders at the bottom), scroll it into
+// view so it's obvious something happened.
+const wrap = ref<HTMLElement>()
+watch(
+  () => props.inserts?.length ?? 0,
+  (n, old) => {
+    if (n > (old ?? 0) && wrap.value) {
+      nextTick(() => {
+        if (wrap.value) wrap.value.scrollTop = wrap.value.scrollHeight
+      })
+    }
+  }
+)
 </script>
 
 <template>
-  <div class="grid-wrap">
+  <div ref="wrap" class="grid-wrap">
     <table v-if="hasRows" class="grid" :class="{ selectable }">
       <thead>
         <tr>
@@ -160,6 +174,7 @@ function isEditing(kind: 'data' | 'insert', r: number, c: number): boolean {
             :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c) }"
             :title="fkOf(c) && !isNull(cellValue(r, c)) ? `Go to ${fkOf(c)!.toTable} where ${fkOf(c)!.toColumn} = ${display(cellValue(r, c))}` : display(cellValue(r, c))"
             @dblclick="startEdit('data', r, c)"
+            @contextmenu.prevent.stop="emit('rowContext', r, $event, c)"
           >
             <input
               v-if="isEditing('data', r, c)"
@@ -253,14 +268,17 @@ thead th {
   background: var(--bg-elevated);
   text-align: left;
   font-weight: 700;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 11.5px;
   color: var(--text-dim);
   padding: 11px 14px;
   border-bottom: 1px solid var(--border-strong);
   white-space: nowrap;
   user-select: none;
+}
+/* Keep data columns wide enough that short values never clip the header name. */
+thead th:not(.selcol):not(.rownum):not(.actcol),
+tbody td:not(.selcol):not(.rownum):not(.actcol) {
+  min-width: 90px;
 }
 thead th.sortable {
   cursor: pointer;
@@ -300,6 +318,14 @@ tbody tr.multi-selected td {
   text-align: center;
   padding: 7px 8px;
   background: var(--bg-elevated);
+}
+/* The sticky checkbox/# columns must stay opaque — otherwise data cells (e.g.
+   an italic NULL) show through them while scrolling horizontally. Win over the
+   semi-transparent hover/selected/insert row backgrounds. */
+.grid tbody td.selcol,
+.grid tbody td.rownum {
+  background: var(--bg-elevated);
+  z-index: 1;
 }
 thead .selcol {
   z-index: 3;

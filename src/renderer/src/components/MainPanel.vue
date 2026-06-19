@@ -34,7 +34,7 @@ import TableSizesModal from './TableSizesModal.vue'
 import ColumnSearchModal from './ColumnSearchModal.vue'
 import type { DropTableOptions, PlanNode } from '@shared/types'
 
-type MenuItem = { label?: string; danger?: boolean; sep?: boolean; action?: () => void }
+type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
 import { lintSql } from '../lib/sqlLint'
@@ -196,13 +196,21 @@ async function copyText(text: string): Promise<void> {
     /* clipboard unavailable */
   }
 }
-function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent): void {
+function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: number): void {
   const result = tab.result
   if (!result || !result.columns.length) return
   const row = result.rows[rowIndex] as unknown[]
   if (!row) return
   const table = tab.kind === 'table' && tab.table ? tab.table.name : 'table'
   const items: MenuItem[] = []
+  // Copy the raw value of the specific cell that was right-clicked.
+  if (colIndex != null && colIndex >= 0 && colIndex < row.length) {
+    const cell = row[colIndex]
+    items.push(
+      { label: 'Copy cell value', action: () => copyText(cell == null ? '' : String(cell)) },
+      { sep: true }
+    )
+  }
   // Explore record — drill through FK relationships (SQL tables with a PK).
   if (!nonSql.value && tab.kind === 'table' && tab.table && tab.primaryKeys.length) {
     const pkCol = tab.primaryKeys[0]
@@ -228,6 +236,7 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent): void {
   if (tabsStore.editsAllowed(tab)) {
     items.push(
       { label: 'Duplicate row', action: () => tabsStore.duplicateRow(tab, rowIndex) },
+      { label: 'Delete row', danger: true, shortcut: '⌫', action: () => tabsStore.toggleDelete(tab, rowIndex) },
       { sep: true }
     )
   }
@@ -785,7 +794,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
                 </div>
               </div>
-              <ResultsGrid v-else :result="active.result" @row-context="(r, e) => onRowContext(active!, r, e)" />
+              <ResultsGrid v-else :result="active.result" @row-context="(r, e, c) => onRowContext(active!, r, e, c)" />
             </div>
           </div>
 
@@ -889,7 +898,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   @edit-cell="(r, col, v) => tabsStore.editCell(active!, r, col, v)"
                   @edit-insert="(i, col, v) => tabsStore.editInsert(active!, i, col, v)"
                   @remove-insert="(i) => tabsStore.removeInsert(active!, i)"
-                  @row-context="(r, e) => onRowContext(active!, r, e)"
+                  @row-context="(r, e, c) => onRowContext(active!, r, e, c)"
                 />
               </div>
               <RowDetailPanel

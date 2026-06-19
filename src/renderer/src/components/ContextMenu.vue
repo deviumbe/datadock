@@ -3,6 +3,7 @@ export interface MenuItem {
   label?: string
   danger?: boolean
   sep?: boolean
+  shortcut?: string
   action?: () => void
 }
 defineProps<{ x: number; y: number; items: MenuItem[] }>()
@@ -22,7 +23,8 @@ function pick(item: MenuItem): void {
         <template v-for="(it, i) in items" :key="i">
           <div v-if="it.sep" class="cm-sep" />
           <button v-else class="cm-item" :class="{ danger: it.danger }" @click="pick(it)">
-            {{ it.label }}
+            <span class="cm-label">{{ it.label }}</span>
+            <span v-if="it.shortcut" class="cm-shortcut">{{ it.shortcut }}</span>
           </button>
         </template>
       </div>
@@ -46,13 +48,22 @@ function pick(item: MenuItem): void {
   padding: 4px;
 }
 .cm-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 18px;
   width: 100%;
   text-align: left;
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 13px;
   color: var(--text);
+}
+.cm-label {
+  flex: 1;
+}
+.cm-shortcut {
+  font-size: 11px;
+  color: var(--text-faint);
 }
 .cm-item:hover {
   background: var(--accent-soft);
