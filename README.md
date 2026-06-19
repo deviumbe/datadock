@@ -185,6 +185,19 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 ---
 
+## 📥 Installing
+
+> ### ⚠️ Heads up: you may see a security warning on first launch
+>
+> DataDock isn't **code-signed / notarized yet**, so macOS (Gatekeeper) and Windows (SmartScreen) may warn that the developer is unidentified when you install it. **It's safe** — this only means the installer doesn't carry a paid signing certificate yet.
+>
+> - **macOS:** right-click the app → **Open**, then confirm (or *System Settings → Privacy & Security → Open Anyway*).
+> - **Windows:** click **More info → Run anyway** on the SmartScreen prompt.
+>
+> **Code signing and notarization are actively in the works** and coming in an upcoming release — at which point installs (and automatic macOS updates) will be warning-free. Sorry for the extra click in the meantime — thanks for bearing with us! 🙏
+
+---
+
 ## 🚀 Getting started
 
 > Requires **Node.js 24+**.
@@ -255,6 +268,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 | Area | Planned |
 |---|---|
+| 🔏 **Signed installers** | Code-signing & notarization for macOS and Windows so installers run **without security warnings** (and macOS auto-updates install in place) — **in progress** |
 | 🎯 **Next up** | Database snapshots — save a restore point before risky changes |
 | 🛡️ **Production safety** | Dangerous-query confirmation flow |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
