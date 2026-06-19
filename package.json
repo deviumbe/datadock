@@ -1,6 +1,6 @@
 {
   "name": "datadock",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "DataDock — a project/environment-organized database client",
   "main": "./out/main/index.js",
   "author": "Alessio De Houwer",
