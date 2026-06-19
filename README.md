@@ -6,7 +6,7 @@
 
 ### The database client that finally organizes itself the way *you* think.
 
-**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams and a command palette built in.
+**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, Redis and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams, a realtime Redis queue viewer and a command palette built in.
 
 <br/>
 
@@ -41,7 +41,8 @@ DataDock fixes the part that actually slows you down: **organization.**
  │   └─ ● shop-staging       (PostgreSQL)
  └─ 🗂  Production
      ├─ ● shop-primary       (PostgreSQL over SSH)
-     └─ ● metrics            (InfluxDB)
+     ├─ ● metrics            (InfluxDB)
+     └─ ● jobs & cache       (Redis)
 ```
 
 Click your way down — **project → environment → connection** — and you're in. No more `prod_db_2_FINAL_v3` in a sea of saved connections.
@@ -55,7 +56,8 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | | Area | What you get |
 |:--:|---|---|
 | 🗄️ | **Organized connections** | Projects → environment folders → connections — color-coded, encrypted at rest, shareable, with a read-only safe mode |
-| 🔌 | **Six engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · InfluxDB |
+| 🔌 | **Seven engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · Redis · InfluxDB |
+| 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
 | 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
 | 🔗 | **Visual exploration** | Click-through foreign keys, a record Explorer, an interactive ER diagram and a dependency map |
@@ -81,8 +83,9 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
 
 #### 🔌 Multi-engine
-- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · MongoDB · InfluxDB** — all from one app.
+- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · MongoDB · Redis · InfluxDB** — all from one app.
 - **MongoDB** — browse collections like tables, run shell-style queries (`db.users.find({ active: true }).sort({ name: 1 }).limit(50)`, `.aggregate([…])`, `.countDocuments(…)`), edit documents inline, and get collection/field autocomplete. Documents are flattened to columns with nested values shown as JSON.
+- **Redis** — keys are grouped **by prefix into pseudo-tables** (`user:1`, `user:2` → *user*), shown with type / TTL / size / value. **View any value type** (string · hash · list · set · zset · stream), **run raw commands** in the editor (`HGETALL user:1`, `LRANGE queues:default 0 10`), edit string values & TTLs, delete keys, and inspect connected clients via the Process List. Plus a **realtime queue viewer** (see below).
 
 #### 🔐 SSH tunneling
 - Reach databases that only live behind a bastion: **connect via SSH (private key, password, or agent), then to the DB** — exactly how you'd hit a prod/staging box.
@@ -151,6 +154,13 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 #### 📈 Performance dashboard
 - Open **Database → Performance** (`⌘⇧P`) for a themed dashboard built from your query history: **query-volume chart**, **slow-query monitor** (grouped by query shape, with a configurable threshold), **heuristic index recommendations**, **connection-pool diagnostics** and a **storage-by-table** breakdown.
 
+#### 📨 Redis & realtime queue viewer
+- Open **Tools → Redis Queues** (or `⌘K` → *Redis Queues*) for a **live, Horizon-style dashboard** of every queue on the connection — refreshing every couple of seconds.
+- **Framework-agnostic auto-detection** — recognizes **Laravel / Horizon, BullMQ / Bull, Sidekiq, Python RQ and Celery**, and falls back to a **generic** detector for any list/sorted-set that looks like a queue. No matter the language, you get the insight.
+- **Live server header** (memory · clients · ops/sec · cache hit-rate · keys · uptime) and **realtime sparklines** for throughput and total pending jobs.
+- **Per-queue cards** show **pending · active · delayed · failed · completed** counts with a framework badge; click any count to **drill into the jobs** — parsed name, attempts, exception and full payload — and **Remove** a stuck job or **Purge** a whole state.
+- The data side works like any other engine: keys grouped by prefix, a value viewer for every type, raw-command editor, and **read-only safe mode** that blocks mutating commands.
+
 #### 🛠️ Server tools
 - Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill).
 - **Table sizes** (`⌘K` → *Table Sizes*) — row counts and on-disk size per table, largest-first with inline size bars; click any table to open it.
@@ -216,7 +226,7 @@ npm run build
 ## 🧩 Tech stack
 
 **Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**  
-Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `@influxdata/influxdb-client` · Tunneling: `ssh2`  
+Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `ioredis`, `@influxdata/influxdb-client` · Tunneling: `ssh2`  
 AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mistral, Grok & Ollama)
 
 ---
@@ -234,6 +244,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
 | ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
+| 📨 **Redis & queues** | Prefix-grouped key browsing · value viewer (string · hash · list · set · zset · stream) · raw-command editor · realtime queue dashboard with framework auto-detect (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
 | 🎭 **Data masking** | Anonymize columns with faker on export (deterministic) — safely copy production into local databases |
@@ -258,8 +269,7 @@ Already covers **≈80–90%** of typical use; more on the way.
 
 | Engine | Status |
 |---|:--:|
-| PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · InfluxDB | ✅ Supported |
-| **Redis** — keys, JSON, queues, cache inspection | ⏳ Planned |
+| PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · **Redis** · InfluxDB | ✅ Supported |
 | **Oracle Database** — enterprise reach | ⏳ Planned |
 | **CockroachDB · TimescaleDB** — ride on PostgreSQL support | ⏳ Planned |
 | Snowflake · ClickHouse · BigQuery · Redshift · DuckDB | 💡 Exploring |
