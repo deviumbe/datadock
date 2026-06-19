@@ -1,9 +1,9 @@
 {
   "name": "datadock",
-  "version": "0.1.8",
+  "version": "0.1.0",
   "description": "DataDock — a project/environment-organized database client",
   "main": "./out/main/index.js",
-  "author": "Alessio De Houwer",
+  "author": "Devium",
   "license": "MIT",
   "type": "module",
   "engines": {
