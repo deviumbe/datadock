@@ -24,6 +24,8 @@ import SmartSearchPanel from './SmartSearchPanel.vue'
 import EnvDiffPanel from './EnvDiffPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
+import RedisQueuePanel from './RedisQueuePanel.vue'
+import RedisKeyModal from './RedisKeyModal.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
 import AiAssistantModal from './AiAssistantModal.vue'
 import QueryVarsModal from './QueryVarsModal.vue'
@@ -210,6 +212,17 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
       { label: 'Copy cell value', action: () => copyText(cell == null ? '' : String(cell)) },
       { sep: true }
     )
+  }
+  // View the full Redis value (handles every type, including non-strings).
+  if (isRedis.value && tab.kind === 'table') {
+    const keyIdx = result.columns.findIndex((c) => c.name === 'key')
+    const key = keyIdx >= 0 ? row[keyIdx] : undefined
+    if (key != null) {
+      items.push(
+        { label: '🔍 View value', action: () => (redisKeyTarget.value = String(key)) },
+        { sep: true }
+      )
+    }
   }
   // Explore record — drill through FK relationships (SQL tables with a PK).
   if (!nonSql.value && tab.kind === 'table' && tab.table && tab.primaryKeys.length) {
@@ -448,9 +461,12 @@ function onFkNavigate(column: string, value: unknown): void {
 }
 const isInflux = computed(() => activeConn.value?.driver === 'influxdb')
 const isMongo = computed(() => activeConn.value?.driver === 'mongodb')
+const isRedis = computed(() => activeConn.value?.driver === 'redis')
+/** When set, RedisKeyModal shows the full value of this key. */
+const redisKeyTarget = ref<string | null>(null)
 // Engines that don't speak SQL — gate SQL-only affordances (Format, AI, the
 // structure editor, EXPLAIN) off these.
-const nonSql = computed(() => isInflux.value || isMongo.value)
+const nonSql = computed(() => isInflux.value || isMongo.value || isRedis.value)
 const readOnly = computed(() => !!activeConn.value && ws.isReadOnly(activeConn.value.id))
 // A read-only connection currently unlocked for writes (shows a countdown).
 const writeUnlocked = computed(
@@ -1084,9 +1100,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               :candidates="otherConnections"
             />
           </div>
+
+          <div v-else-if="active.kind === 'redisQueues'" class="explorer-pane">
+            <RedisQueuePanel :conn-id="activeConn.id" />
+          </div>
         </div>
       </div>
 
+      <RedisKeyModal
+        v-if="redisKeyTarget != null"
+        :conn-id="activeConn.id"
+        :redis-key="redisKeyTarget"
+        @close="redisKeyTarget = null"
+      />
       <ExportModal
         v-if="exportOpen && active && active.result"
         :conn-id="activeConn.id"
@@ -1640,6 +1666,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.envDiff {
   background: #e0a14a;
+}
+.tab-kind.redisQueues {
+  background: #d24b3e;
 }
 .tab-kind.schemaDiff {
   background: #e0a14a;

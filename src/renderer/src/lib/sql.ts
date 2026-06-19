@@ -7,6 +7,7 @@ const LANGUAGE: Record<DriverType, SqlLanguage | null> = {
   sqlite: 'sqlite',
   mssql: 'transactsql',
   mongodb: null, // document store, not SQL
+  redis: null, // key/value, raw commands not SQL
   influxdb: null // Flux, not SQL
 }
 

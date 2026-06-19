@@ -193,6 +193,15 @@ const allItems = computed<PaletteItem[]>(() => {
     }
   ]
 
+  // Redis-only actions (active connection must be a Redis driver).
+  if (connId && ws.findConnection(connId)?.driver === 'redis') {
+    actions.push({
+      label: 'Redis Queues',
+      icon: '📨',
+      handler: () => tabsStore.openRedisQueues(connId)
+    })
+  }
+
   for (const a of actions) {
     items.push({
       id: `action-${a.label}`,

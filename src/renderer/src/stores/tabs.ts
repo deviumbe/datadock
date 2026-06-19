@@ -34,6 +34,7 @@ export type TabKind =
   | 'docs'
   | 'search'
   | 'envDiff'
+  | 'redisQueues'
 
 /** One stop in the record explorer: a single row identified by column = value. */
 export interface ExplorerFocus {
@@ -93,6 +94,10 @@ interface DraftSnapshot {
 // Best-effort detection of write statements, for read-only mode.
 const MUTATING_SQL =
   /(^|;)\s*(insert|update|delete|drop|alter|create|truncate|grant|revoke|replace|merge|call)\b/i
+
+// Redis commands that mutate data — blocked on a read-only connection.
+const REDIS_WRITE =
+  /^\s*(set|setex|setnx|psetex|getset|append|incr|incrby|incrbyfloat|decr|decrby|mset|msetnx|del|unlink|expire|pexpire|expireat|persist|rename|renamenx|move|copy|restore|lpush|rpush|lpushx|rpushx|lpop|rpop|lset|linsert|lrem|ltrim|rpoplpush|lmove|blpop|brpop|sadd|srem|spop|smove|sinterstore|sunionstore|sdiffstore|zadd|zrem|zincrby|zpopmin|zpopmax|zremrangebyrank|zremrangebyscore|zremrangebylex|hset|hsetnx|hmset|hdel|hincrby|hincrbyfloat|xadd|xdel|xtrim|xsetid|xgroup|xack|xclaim|pfadd|pfmerge|setbit|setrange|geoadd|flushdb|flushall|swapdb)\b/i
 
 /** Returns a warning if a statement is destructive (UPDATE/DELETE w/o WHERE, TRUNCATE, DROP). */
 function dangerousStatement(sql: string): string | null {
@@ -283,6 +288,13 @@ export const useTabs = defineStore('tabs', () => {
   function openEnvDiff(connId: string): Tab {
     const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'envDiff')
     const tab = existing ?? push(base(connId, 'envDiff', 'Environment Diff'))
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  function openRedisQueues(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'redisQueues')
+    const tab = existing ?? push(base(connId, 'redisQueues', 'Redis Queues'))
     setActive(connId, tab.id)
     return tab
   }
@@ -497,7 +509,9 @@ export const useTabs = defineStore('tabs', () => {
     try {
       if (tab.kind === 'query') {
         const sql = sqlOverride ?? tab.query
-        if (isReadOnly(tab.connectionId) && MUTATING_SQL.test(sql)) {
+        const driver = useWorkspace().findConnection(tab.connectionId)?.driver
+        const mutates = driver === 'redis' ? REDIS_WRITE.test(sql) : MUTATING_SQL.test(sql)
+        if (isReadOnly(tab.connectionId) && mutates) {
           tab.error = 'Read-only mode: this statement modifies data and was blocked.'
           return
         }
@@ -836,6 +850,7 @@ export const useTabs = defineStore('tabs', () => {
     openDocs,
     openSearch,
     openEnvDiff,
+    openRedisQueues,
     openSchemaDiff,
     openDataDiff,
     clearHistory,

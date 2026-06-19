@@ -21,6 +21,12 @@ import type {
   IpcResult,
   PlanNode,
   PoolStats,
+  QueueAction,
+  QueueJob,
+  QueueJobState,
+  QueueOverview,
+  RedisKeyValue,
+  RedisServerStats,
   SizeSnapshot,
   Snippet,
   QueryResult,
@@ -102,6 +108,20 @@ const api = {
       invoke<void>('db:createTable', id, spec),
     dropTables: (id: string, tables: TableInfo[], opts: DropTableOptions) =>
       invoke<void>('db:dropTables', id, tables, opts)
+  },
+  redis: {
+    keyValue: (id: string, key: string) => invoke<RedisKeyValue>('redis:keyValue', id, key),
+    serverStats: (id: string) => invoke<RedisServerStats>('redis:serverStats', id),
+    queues: (id: string) => invoke<QueueOverview[]>('redis:queues', id),
+    queueJobs: (id: string, queue: string, state: QueueJobState, offset: number, limit: number) =>
+      invoke<QueueJob[]>('redis:queueJobs', id, queue, state, offset, limit),
+    queueAction: (
+      id: string,
+      action: QueueAction,
+      queue: string,
+      state: QueueJobState,
+      jobId?: string
+    ) => invoke<void>('redis:queueAction', id, action, queue, state, jobId)
   },
   io: {
     exportData: (id: string, format: ExportFormat, payload: ExportPayload) =>

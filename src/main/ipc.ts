@@ -13,7 +13,7 @@ import type {
   TableInfo,
   TableQueryOptions
 } from '@shared/types'
-import type { HistoryEntry, Snippet } from '@shared/types'
+import type { HistoryEntry, Snippet, QueueAction, QueueJobState } from '@shared/types'
 import type { MaskConfig } from '@shared/mask'
 import * as store from './storage'
 import * as db from './db'
@@ -52,6 +52,18 @@ function makeRunSql(connId: string, driver: string): RunSql {
     if (/;/.test(trimmed)) throw new Error('Only a single statement is allowed.')
     if (driver === 'mongodb') {
       // The Mongo adapter only exposes read methods, so it's read-only already.
+    } else if (driver === 'redis') {
+      const cmd = trimmed.split(/\s+/)[0]?.toUpperCase() ?? ''
+      const READ_ONLY_REDIS = new Set([
+        'GET', 'MGET', 'STRLEN', 'EXISTS', 'TYPE', 'TTL', 'PTTL', 'KEYS', 'SCAN',
+        'HGET', 'HGETALL', 'HKEYS', 'HVALS', 'HLEN', 'HMGET', 'HSCAN',
+        'LRANGE', 'LLEN', 'LINDEX', 'SMEMBERS', 'SCARD', 'SISMEMBER', 'SSCAN',
+        'ZRANGE', 'ZREVRANGE', 'ZCARD', 'ZSCORE', 'ZRANGEBYSCORE', 'ZSCAN',
+        'XRANGE', 'XLEN', 'XINFO', 'INFO', 'DBSIZE', 'MEMORY', 'OBJECT', 'PING'
+      ])
+      if (!READ_ONLY_REDIS.has(cmd)) {
+        throw new Error(`Only read-only Redis commands are allowed (got "${cmd}").`)
+      }
     } else if (driver === 'influxdb') {
       if (/\bto\s*\(/i.test(trimmed)) throw new Error('Only read-only Flux is allowed.')
     } else if (!/^(select|with|explain|show|pragma)\b/i.test(trimmed)) {
@@ -138,6 +150,23 @@ export function registerIpc(): void {
     db.capability(id, 'killProcess')(pid)
   )
   handle('db:listUsers', (id: string) => db.capability(id, 'listUsers')())
+
+  // Redis-specific
+  handle('redis:keyValue', (id: string, key: string) =>
+    db.capability(id, 'redisKeyValue')(key)
+  )
+  handle('redis:serverStats', (id: string) => db.capability(id, 'redisServerStats')())
+  handle('redis:queues', (id: string) => db.capability(id, 'redisQueues')())
+  handle(
+    'redis:queueJobs',
+    (id: string, queue: string, state: QueueJobState, offset: number, limit: number) =>
+      db.capability(id, 'redisQueueJobs')(queue, state, offset, limit)
+  )
+  handle(
+    'redis:queueAction',
+    (id: string, action: QueueAction, queue: string, state: QueueJobState, jobId?: string) =>
+      db.capability(id, 'redisQueueAction')(action, queue, state, jobId)
+  )
   handle('db:tableDDL', (id: string, table: TableInfo) => db.capability(id, 'tableDDL')(table))
   handle('db:tableStructure', (id: string, table: TableInfo) =>
     db.capability(id, 'tableStructure')(table)

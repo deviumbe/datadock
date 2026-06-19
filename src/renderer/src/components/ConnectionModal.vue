@@ -41,7 +41,8 @@ const hadToken = ref(!!props.config?.hasToken)
 const hadSshPassword = ref(!!props.config?.hasSshPassword)
 const hadSshPassphrase = ref(!!props.config?.hasSshPassphrase)
 
-const isNetwork = computed(() => ['postgres', 'mysql', 'mssql'].includes(form.driver))
+const isNetwork = computed(() => ['postgres', 'mysql', 'mssql', 'redis'].includes(form.driver))
+const isRedis = computed(() => form.driver === 'redis')
 const canTunnel = computed(() => !['sqlite', 'mongodb'].includes(form.driver))
 
 async function pickKey(): Promise<void> {
@@ -136,11 +137,16 @@ function save(): void {
           <input class="input" type="number" v-model.number="form.port" />
         </div>
         <div class="field">
-          <label>Database</label>
-          <input class="input" v-model="form.database" placeholder="optional" />
+          <label>{{ isRedis ? 'Database (index)' : 'Database' }}</label>
+          <input
+            class="input"
+            v-model="form.database"
+            :type="isRedis ? 'number' : 'text'"
+            :placeholder="isRedis ? '0' : 'optional'"
+          />
         </div>
         <div class="field">
-          <label>User</label>
+          <label>{{ isRedis ? 'Username (ACL, optional)' : 'User' }}</label>
           <input class="input" v-model="form.user" autocomplete="off" />
         </div>
         <div class="field">

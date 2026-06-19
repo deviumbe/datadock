@@ -1,6 +1,13 @@
 // Shared type definitions used by the main process, preload, and renderer.
 
-export type DriverType = 'postgres' | 'mysql' | 'sqlite' | 'mssql' | 'influxdb' | 'mongodb'
+export type DriverType =
+  | 'postgres'
+  | 'mysql'
+  | 'sqlite'
+  | 'mssql'
+  | 'influxdb'
+  | 'mongodb'
+  | 'redis'
 
 export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[] = [
   { type: 'postgres', label: 'PostgreSQL', defaultPort: 5432 },
@@ -8,6 +15,7 @@ export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[
   { type: 'sqlite', label: 'SQLite' },
   { type: 'mssql', label: 'SQL Server', defaultPort: 1433 },
   { type: 'mongodb', label: 'MongoDB', defaultPort: 27017 },
+  { type: 'redis', label: 'Redis', defaultPort: 6379 },
   { type: 'influxdb', label: 'InfluxDB' }
 ]
 
@@ -25,6 +33,7 @@ export const COLUMN_TYPES: Record<DriverType, string[]> = {
   ],
   sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB'],
   mongodb: [],
+  redis: [],
   mssql: [
     'int', 'bigint', 'smallint', 'tinyint', 'decimal(18,2)', 'float', 'bit',
     'varchar(255)', 'nvarchar(255)', 'char(1)', 'text', 'date', 'datetime',
@@ -156,6 +165,101 @@ export interface PoolStats {
   active?: number
   /** Requests waiting for a free connection. */
   waiting?: number
+}
+
+// ---- Redis ------------------------------------------------------------------
+
+export type RedisKeyType = 'string' | 'list' | 'set' | 'zset' | 'hash' | 'stream' | 'none'
+
+/** Full value of a single Redis key, shaped per type, for the value viewer. */
+export interface RedisKeyValue {
+  key: string
+  type: RedisKeyType
+  /** Seconds to live, -1 = no expiry, -2 = missing. */
+  ttl: number
+  /** Best-effort serialized memory footprint in bytes. */
+  bytes: number | null
+  /** Number of elements (list/set/zset/hash/stream) or string length. */
+  length: number | null
+  /** Whether the value was truncated to a preview-sized slice. */
+  truncated: boolean
+  /**
+   * string      -> string
+   * list/set    -> string[]
+   * zset        -> { member, score }[]
+   * hash        -> { field, value }[]
+   * stream      -> { id, fields }[]
+   */
+  value: unknown
+}
+
+/** Server-wide Redis stats parsed from INFO (for the queue dashboard header). */
+export interface RedisServerStats {
+  version: string
+  uptimeSec: number
+  usedMemoryBytes: number
+  maxMemoryBytes: number
+  connectedClients: number
+  opsPerSec: number
+  totalCommands: number
+  keyspaceHits: number
+  keyspaceMisses: number
+  totalKeys: number
+}
+
+/** Which queue framework a discovered queue was recognized as. */
+export type QueueFramework =
+  | 'laravel'
+  | 'horizon'
+  | 'bullmq'
+  | 'bull'
+  | 'rq'
+  | 'celery'
+  | 'sidekiq'
+  | 'generic'
+
+/** One discovered queue with its per-state job counts. */
+export interface QueueOverview {
+  name: string
+  framework: QueueFramework
+  /** Jobs waiting to be processed. */
+  pending: number
+  /** Jobs scheduled for the future. */
+  delayed: number
+  /** Jobs currently reserved / in-flight. */
+  reserved: number
+  /** Jobs that have permanently failed. */
+  failed: number
+  /** Completed jobs, when the framework tracks them. */
+  completed?: number
+  /** The underlying Redis keys backing this queue (for drill-down). */
+  keys: string[]
+}
+
+export type QueueJobState = 'pending' | 'delayed' | 'reserved' | 'failed' | 'completed'
+export type QueueAction = 'retry' | 'delete' | 'purge'
+
+/** A single parsed job within a queue. */
+export interface QueueJob {
+  /** Stable id when the framework assigns one. */
+  id?: string
+  state: QueueJobState
+  framework: QueueFramework
+  /** Job/class/handler name when parseable from the payload. */
+  name?: string
+  attempts?: number
+  queue?: string
+  /** ISO timestamp the job became available / failed, when known. */
+  at?: string
+  /** Parsed payload (best-effort JSON), else null. */
+  payload: unknown
+  /** Raw stored entry, for the raw view. */
+  raw: string
+  /** The exact value stored in the queue (raw for inline, id for hash-backed) —
+   *  used as the identifier when removing the job. */
+  member: string
+  /** Failure message/exception, for failed jobs. */
+  exception?: string
 }
 
 export interface SortSpec {
@@ -318,6 +422,8 @@ export const DRIVER_CAPS: Record<DriverType, DriverCapabilities> = {
   mssql: { databases: true, users: true, processes: true },
   sqlite: { databases: false, users: false, processes: false },
   mongodb: { databases: false, users: false, processes: false },
+  // Redis has no users/createDatabase, but CLIENT LIST/KILL maps onto Processes.
+  redis: { databases: false, users: false, processes: true },
   influxdb: { databases: false, users: false, processes: false }
 }
 

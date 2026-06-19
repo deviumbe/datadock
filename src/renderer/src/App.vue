@@ -107,6 +107,9 @@ function handleMenu(action: string): void {
     case 'envDiff':
       tabs.openEnvDiff(id)
       break
+    case 'redisQueues':
+      tabs.openRedisQueues(id)
+      break
     case 'schemaDiff':
       tabs.openSchemaDiff(id)
       break

@@ -67,6 +67,28 @@ export interface DbAdapter {
   listProcesses?(): Promise<QueryResult>
   killProcess?(id: string | number): Promise<void>
   listUsers?(): Promise<QueryResult>
+
+  // Redis-specific capabilities (only the Redis adapter implements these).
+  /** Full typed value of a single key, for the value viewer. */
+  redisKeyValue?(key: string): Promise<import('@shared/types').RedisKeyValue>
+  /** Server-wide stats parsed from INFO, for the queue dashboard header. */
+  redisServerStats?(): Promise<import('@shared/types').RedisServerStats>
+  /** Auto-discover queues across known frameworks (+ generic fallback). */
+  redisQueues?(): Promise<import('@shared/types').QueueOverview[]>
+  /** Fetch + parse jobs for one queue in a given state. */
+  redisQueueJobs?(
+    queue: string,
+    state: import('@shared/types').QueueJobState,
+    offset: number,
+    limit: number
+  ): Promise<import('@shared/types').QueueJob[]>
+  /** Retry/delete a single job, or purge a whole queue state. */
+  redisQueueAction?(
+    action: import('@shared/types').QueueAction,
+    queue: string,
+    state: import('@shared/types').QueueJobState,
+    jobId?: string
+  ): Promise<void>
 }
 
 /** Reject identifiers that aren't safe to interpolate into DDL. */

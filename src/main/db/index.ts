@@ -6,6 +6,7 @@ import { SQLiteAdapter } from './sqlite'
 import { MSSQLAdapter } from './mssql'
 import { MongoAdapter } from './mongodb'
 import { InfluxAdapter } from './influxdb'
+import { RedisAdapter } from './redis'
 import { openTunnel, type Tunnel } from './tunnel'
 
 interface LiveConnection {
@@ -28,6 +29,8 @@ export function createAdapter(config: ConnectionConfig): DbAdapter {
       return new MSSQLAdapter(config)
     case 'mongodb':
       return new MongoAdapter(config)
+    case 'redis':
+      return new RedisAdapter(config)
     case 'influxdb':
       return new InfluxAdapter(config)
     default:
