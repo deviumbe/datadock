@@ -82,26 +82,49 @@ export function buildMenu(): void {
       submenu: [
         { label: 'Reload Tables', accelerator: 'CmdOrCtrl+Shift+R', click: () => send('refreshTables') },
         { type: 'separator' },
-        { label: 'Databases', click: () => send('databases') },
-        { label: 'Users & Roles', click: () => send('users') },
-        { label: 'Process List', click: () => send('processes') },
-        { label: 'Table Sizes', click: () => send('tableSizes') },
-        { label: 'Performance', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('performance') },
-        { label: 'Documentation', accelerator: 'CmdOrCtrl+Shift+D', click: () => send('docs') },
-        { label: 'Search Everywhere', click: () => send('search') },
-        { label: 'Search Schema', click: () => send('columnSearch') },
-        { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
-        { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
-        { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
-        { label: 'Chat with Data', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('chat') },
-        { label: 'Environment Diff', click: () => send('envDiff') },
-        { label: 'Schema Diff', click: () => send('schemaDiff') },
-        { label: 'Data Diff', click: () => send('dataDiff') },
+        {
+          label: 'Server',
+          submenu: [
+            { label: 'Databases', click: () => send('databases') },
+            { label: 'Users & Roles', click: () => send('users') },
+            { label: 'Process List', click: () => send('processes') },
+            { label: 'Table Sizes', click: () => send('tableSizes') }
+          ]
+        },
         { type: 'separator' },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },
         { type: 'separator' },
         { label: 'Disconnect', click: () => send('disconnect') }
+      ]
+    },
+    {
+      label: 'Tools',
+      submenu: [
+        { label: 'Chat with Data', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('chat') },
+        { type: 'separator' },
+        { label: 'Query History', accelerator: 'CmdOrCtrl+Y', click: () => send('history') },
+        { label: 'Saved Queries', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('snippets') },
+        { type: 'separator' },
+        {
+          label: 'Explore',
+          submenu: [
+            { label: 'ER Diagram', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('diagram') },
+            { label: 'Documentation', accelerator: 'CmdOrCtrl+Shift+D', click: () => send('docs') },
+            { label: 'Search Everywhere', click: () => send('search') },
+            { label: 'Search Schema', click: () => send('columnSearch') }
+          ]
+        },
+        {
+          label: 'Compare',
+          submenu: [
+            { label: 'Environment Diff', click: () => send('envDiff') },
+            { label: 'Schema Diff', click: () => send('schemaDiff') },
+            { label: 'Data Diff', click: () => send('dataDiff') }
+          ]
+        },
+        { type: 'separator' },
+        { label: 'Performance', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('performance') }
       ]
     },
     {
