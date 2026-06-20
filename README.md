@@ -191,7 +191,11 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 >
 > DataDock isn't **code-signed / notarized yet**, so macOS (Gatekeeper) and Windows (SmartScreen) may warn that the developer is unidentified when you install it. **It's safe** — this only means the installer doesn't carry a paid signing certificate yet.
 >
-> - **macOS:** right-click the app → **Open**, then confirm (or *System Settings → Privacy & Security → Open Anyway*).
+> - **macOS:** if you see **_"DataDock.app is damaged and can't be opened"_**, that's macOS quarantining an unsigned download — not real damage. Drag DataDock into **Applications**, then run this once in **Terminal**:
+>   ```bash
+>   xattr -cr /Applications/DataDock.app
+>   ```
+>   Now open it normally. _(On some Macs the simpler right-click → **Open** → confirm also works, but the command above is the reliable fix for the "damaged" message.)_
 > - **Windows:** click **More info → Run anyway** on the SmartScreen prompt.
 >
 > **Code signing and notarization are actively in the works** and coming in an upcoming release — at which point installs (and automatic macOS updates) will be warning-free. Sorry for the extra click in the meantime — thanks for bearing with us! 🙏
