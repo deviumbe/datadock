@@ -8,6 +8,7 @@ import type {
   TableInfo,
   Workspace
 } from '@shared/types'
+import { useTabs } from './tabs'
 
 export const useWorkspace = defineStore('workspace', () => {
   const projects = ref<Project[]>([])
@@ -175,6 +176,10 @@ export const useWorkspace = defineStore('workspace', () => {
     try {
       await window.api.db.connect(id)
       connStates[id] = 'connected'
+      // Re-open the tabs that were open for this connection last session. Done
+      // synchronously here (before any await) so it runs ahead of the reactive
+      // "open a default Query tab when a connection has none" fallback.
+      useTabs().restoreForConnection(id)
       await refreshTables(id)
     } catch (e) {
       connStates[id] = 'error'

@@ -60,7 +60,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
 | 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
-| 🔗 | **Visual exploration** | Click-through foreign keys, a record Explorer, an interactive ER diagram and a dependency map |
+| 🔗 | **Visual exploration** | Click-through foreign keys, a record Explorer, a related-records overview, an interactive ER diagram and a dependency map |
 | 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
 | ⌨️ | **Query, your way** | Multi-tab editor, schema-aware autocomplete, history, snippets, variables, formatter & EXPLAIN |
 | ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
@@ -122,7 +122,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Command palette (⌘K)** — fuzzy-search connections, tables and actions from anywhere in the app. Jump to any table, open a query tab, switch themes, open the ER diagram — all without touching the mouse. Navigate with ↑↓, confirm with ↵, dismiss with Esc.
 
 #### 🧰 Query, your way
-- Multi-**tab** workspace — open a tab per table, plus scratch SQL/Flux tabs.
+- Multi-**tab** workspace — open a tab per table, plus scratch SQL/Flux tabs. Your open tabs are **remembered per connection** and reopen automatically the next time you connect.
 - Real SQL editor (CodeMirror) with syntax highlighting and **⌘↵ to run**.
 - **Schema-aware autocomplete** — table and column names from the connected database, right as you type.
 - **Undo / redo** of pending row edits (⌘Z / ⌘⇧Z) and **query history** to re-run past statements.
@@ -151,6 +151,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 #### 🔍 Visual data explorer
 - **Click-through foreign keys** — FK cells in the grid render as links; click the `→` to jump straight to the related row (filtered), then keep chaining through relationships.
 - **Record Explorer** — right-click any row → *Explore record* for a focused, one-record-at-a-time view that walks both directions (parent records and "referenced by" children) with a **breadcrumb trail**.
+- **Related records** — right-click any row → *Related records* for a single aggregated overview of **everything connected to one record** across every related table (the parents it references and the children referencing it), each grouped with a live count. Expand any related row **in place** to drill deeper through the relationship graph — no more hunting table by table to assemble the full picture of a user, project or order.
 
 #### 📈 Performance dashboard
 - Open **Database → Performance** (`⌘⇧P`) for a themed dashboard built from your query history: **query-volume chart**, **slow-query monitor** (grouped by query shape, with a configurable threshold), **heuristic index recommendations**, **connection-pool diagnostics** and a **storage-by-table** breakdown.
@@ -257,7 +258,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 |---|---|
 | 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
 | 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo |
-| 🔗 **Explore** | Click-through FK navigation · record Explorer · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table) |
+| 🔗 **Explore** | Click-through FK navigation · record Explorer · related-records overview (everything linked to one record, drill-down) · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table, with per-connection table exclusions) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
 | ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |

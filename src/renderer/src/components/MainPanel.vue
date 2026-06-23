@@ -18,6 +18,7 @@ import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
 import ChatPanel from './ChatPanel.vue'
 import RecordExplorer from './RecordExplorer.vue'
+import RelatedRecords from './RelatedRecords.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
 import DocsPanel from './DocsPanel.vue'
 import SmartSearchPanel from './SmartSearchPanel.vue'
@@ -236,6 +237,16 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
           label: '🔎 Explore record',
           action: () =>
             tabsStore.openExplorer(tab.connectionId, {
+              table: tableName,
+              column: pkCol,
+              value,
+              label: `${tableName} #${String(value)}`
+            })
+        },
+        {
+          label: '🌐 Related records',
+          action: () =>
+            tabsStore.openRelated(tab.connectionId, {
               table: tableName,
               column: pkCol,
               value,
@@ -1055,6 +1066,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Record explorer tab (click-through relationships) -->
           <div v-else-if="active.kind === 'explorer'" class="explorer-pane">
             <RecordExplorer :tab="active" />
+          </div>
+
+          <!-- Related records overview (aggregated relationships for one record) -->
+          <div v-else-if="active.kind === 'related'" class="explorer-pane">
+            <RelatedRecords :tab="active" />
           </div>
 
           <!-- Performance dashboard tab -->

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, markRaw } from 'vue'
+import { ref, markRaw, computed, watch } from 'vue'
 import { useWorkspace } from './workspace'
 import type {
   AlterOp,
@@ -30,6 +30,7 @@ export type TabKind =
   | 'dataDiff'
   | 'chat'
   | 'explorer'
+  | 'related'
   | 'performance'
   | 'docs'
   | 'search'
@@ -65,6 +66,9 @@ export interface Tab {
   // record-explorer state: a navigation trail + the current position in it
   explorerStack?: ExplorerFocus[]
   explorerIndex?: number
+
+  // related-records overview: the root record whose relationships we aggregate
+  relatedFocus?: ExplorerFocus
 
   // table-tab state
   primaryKeys: string[]
@@ -408,6 +412,16 @@ export const useTabs = defineStore('tabs', () => {
     tab.explorerStack = [focus]
     tab.explorerIndex = 0
     tab.title = explorerTitle(focus)
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  /** Open (or reuse) the related-records overview for a single root record. */
+  function openRelated(connId: string, focus: ExplorerFocus): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'related')
+    const tab = existing ?? push(base(connId, 'related', 'Related'))
+    tab.relatedFocus = focus
+    tab.title = `Related · ${explorerTitle(focus)}`
     setActive(connId, tab.id)
     return tab
   }
@@ -824,6 +838,139 @@ export const useTabs = defineStore('tabs', () => {
     }
   }
 
+  // ---- session persistence (restore open tabs across restarts) --------------
+  // A lightweight, serializable view of a tab. Volatile state (result rows,
+  // pending edits, undo history) is intentionally dropped — restored tabs
+  // re-fetch their data.
+  interface TabDescriptor {
+    kind: TabKind
+    title: string
+    query?: string
+    table?: TableInfo
+    filters?: FilterSpec[]
+    sort?: SortSpec
+    pageSize?: number
+    viewMode?: 'data' | 'structure'
+    explorerStack?: ExplorerFocus[]
+    explorerIndex?: number
+    relatedFocus?: ExplorerFocus
+    active?: boolean
+  }
+  // Kinds worth restoring: content/navigation tabs. Transient or realtime tabs
+  // (diffs, chat, redis queues, server views) are recreated on demand instead.
+  const RESTORABLE: ReadonlySet<TabKind> = new Set<TabKind>([
+    'query',
+    'table',
+    'explorer',
+    'related',
+    'diagram',
+    'performance',
+    'docs',
+    'history',
+    'snippets'
+  ])
+  const TABS_KEY = 'datadock-open-tabs'
+  // Connections opened (and thus authoritative) during this session — only
+  // these get their saved entry rewritten, so other connections' saved tabs
+  // survive even while they're disconnected.
+  const sessionConns = new Set<string>()
+
+  function readTabStore(): Record<string, TabDescriptor[]> {
+    try {
+      return JSON.parse(localStorage.getItem(TABS_KEY) || '{}')
+    } catch {
+      return {}
+    }
+  }
+  function toDescriptor(t: Tab): TabDescriptor | null {
+    if (!RESTORABLE.has(t.kind)) return null
+    const d: TabDescriptor = { kind: t.kind, title: t.title }
+    if (t.kind === 'query') d.query = t.query
+    if (t.kind === 'table' && t.table) {
+      d.table = plainTable(t.table)
+      d.filters = t.filters.filter((f) => f.column)
+      if (t.sort) d.sort = { column: t.sort.column, dir: t.sort.dir }
+      d.pageSize = t.pageSize
+      d.viewMode = t.viewMode
+    }
+    if (t.kind === 'explorer') {
+      d.explorerStack = t.explorerStack
+      d.explorerIndex = t.explorerIndex
+    }
+    if (t.kind === 'related') d.relatedFocus = t.relatedFocus
+    return d
+  }
+  function descriptorsFor(connId: string): TabDescriptor[] {
+    const activeId = activeByConn.value[connId]
+    const out: TabDescriptor[] = []
+    for (const t of forConnection(connId)) {
+      const d = toDescriptor(t)
+      if (!d) continue
+      if (t.id === activeId) d.active = true
+      out.push(d)
+    }
+    return out
+  }
+
+  function persistTabs(): void {
+    const store = readTabStore()
+    for (const connId of sessionConns) {
+      const desc = descriptorsFor(connId)
+      if (desc.length) store[connId] = desc
+      else delete store[connId]
+    }
+    try {
+      localStorage.setItem(TABS_KEY, JSON.stringify(store))
+    } catch {
+      /* storage full / unavailable — skip */
+    }
+  }
+
+  /** Recreate saved tabs for a connection (no-op if it already has live tabs). */
+  function restoreForConnection(connId: string): void {
+    sessionConns.add(connId)
+    if (forConnection(connId).length) return
+    const saved = readTabStore()[connId]
+    if (!saved?.length) return
+    let activeId = ''
+    for (const d of saved) {
+      if (!RESTORABLE.has(d.kind)) continue
+      const tab = base(connId, d.kind, d.title)
+      if (d.kind === 'query') tab.query = d.query ?? ''
+      if (d.kind === 'table' && d.table) {
+        tab.table = plainTable(d.table)
+        tab.filters = d.filters ?? []
+        tab.sort = d.sort
+        if (d.pageSize) tab.pageSize = d.pageSize
+        tab.viewMode = d.viewMode ?? 'data'
+      }
+      if (d.kind === 'explorer') {
+        tab.explorerStack = d.explorerStack
+        tab.explorerIndex = d.explorerIndex ?? 0
+      }
+      if (d.kind === 'related') tab.relatedFocus = d.relatedFocus
+      tabs.value.push(tab)
+      const stored = tabs.value[tabs.value.length - 1]
+      if (d.active) activeId = stored.id
+      // Table tabs need their data (and PKs) fetched; others self-load on render.
+      if (stored.kind === 'table' && stored.table) void initTable(stored)
+    }
+    const list = forConnection(connId)
+    activeByConn.value[connId] = activeId || (list.length ? list[list.length - 1].id : '')
+  }
+
+  // Persist (debounced) whenever the serializable shape of any tab changes.
+  // Using a computed signature keeps the watch off volatile fields like result
+  // rows, so loading data doesn't churn localStorage.
+  const tabSignature = computed(() =>
+    JSON.stringify([...sessionConns].map((c) => [c, descriptorsFor(c)]))
+  )
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  watch(tabSignature, () => {
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistTabs, 400)
+  })
+
   return {
     tabs,
     activeByConn,
@@ -843,6 +990,8 @@ export const useTabs = defineStore('tabs', () => {
     clearChat,
     dockChatFor,
     openExplorer,
+    openRelated,
+    restoreForConnection,
     navigateExplorer,
     explorerGoTo,
     openTableFiltered,
