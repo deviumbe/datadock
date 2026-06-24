@@ -22,6 +22,7 @@ import * as history from './history'
 import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
 import * as analytics from './analytics'
+import { runReport } from './scheduler'
 import * as ai from './ai'
 import * as settings from './settings'
 import { testProvider } from './aiProviders'
@@ -201,6 +202,10 @@ export function registerIpc(): void {
   handle('io:saveFile', (name: string, data: string, binary: boolean) =>
     io.saveFile(name, data, binary)
   )
+  handle('io:exportPdf', (name: string, html: string, landscape?: boolean) =>
+    io.exportHtmlToPdf(name, html, landscape)
+  )
+  handle('io:pickFolder', () => io.pickFolder())
 
   // Query history
   handle('history:add', (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => history.addHistory(entry))
@@ -236,6 +241,14 @@ export function registerIpc(): void {
     analytics.removeDataset(id)
     return true
   })
+  handle('analytics:listMetrics', (connId: string) => analytics.listMetrics(connId))
+  handle('analytics:saveMetric', (input: Parameters<typeof analytics.saveMetric>[0]) =>
+    analytics.saveMetric(input)
+  )
+  handle('analytics:removeMetric', (id: string) => {
+    analytics.removeMetric(id)
+    return true
+  })
   handle('analytics:listCharts', (connId: string) => analytics.listCharts(connId))
   handle('analytics:saveChart', (input: Parameters<typeof analytics.saveChart>[0]) =>
     analytics.saveChart(input)
@@ -252,6 +265,15 @@ export function registerIpc(): void {
     analytics.removeDashboard(id)
     return true
   })
+  handle('analytics:listReports', (connId: string) => analytics.listReports(connId))
+  handle('analytics:saveReport', (input: Parameters<typeof analytics.saveReport>[0]) =>
+    analytics.saveReport(input)
+  )
+  handle('analytics:removeReport', (id: string) => {
+    analytics.removeReport(id)
+    return true
+  })
+  handle('analytics:runReport', (id: string) => runReport(id))
 
   // AI SQL assistant (key held + used only in main; never sent to renderer)
   handle('ai:hasKey', () => ai.hasAiKey())

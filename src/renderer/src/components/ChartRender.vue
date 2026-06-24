@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { ChartType, QueryResult } from '@shared/types'
-import { optionForChart, optionForResult, kpiValue } from '../lib/chartOption'
+import { computed, ref } from 'vue'
+import type { ChartType, MetricFormat, QueryResult } from '@shared/types'
+import { optionForChart, optionForResult, kpiValue, formatMetric, pivotModel } from '../lib/chartOption'
 import EChart from './EChart.vue'
 
 const props = defineProps<{
@@ -13,7 +13,10 @@ const props = defineProps<{
   label?: string
   /** Optional emoji shown on a KPI card. */
   icon?: string
+  /** Display formatting for the KPI value. */
+  format?: MetricFormat
 }>()
+const emit = defineEmits<{ drill: [{ name: string; seriesName?: string }] }>()
 
 const option = computed(() => {
   if (!props.result) return null
@@ -23,9 +26,17 @@ const option = computed(() => {
 })
 
 const kpi = computed(() => (props.result ? kpiValue(props.result) : null))
-const kpiText = computed(() =>
-  kpi.value === null ? '—' : kpi.value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-)
+const kpiText = computed(() => formatMetric(kpi.value, props.format))
+
+const pivot = computed(() => (props.result ? pivotModel(props.result) : null))
+const fmtCell = (v: number): string => v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+
+const chartRef = ref<InstanceType<typeof EChart> | null>(null)
+/** PNG snapshot (charts only) for PDF/report export. */
+function image(): string | null {
+  return chartRef.value?.image() ?? null
+}
+defineExpose({ image })
 </script>
 
 <template>
@@ -39,6 +50,37 @@ const kpiText = computed(() =>
         <span class="kpi-label">{{ label ?? 'Value' }}</span>
         <span class="kpi-value">{{ kpiText }}</span>
       </div>
+    </div>
+
+    <!-- Pivot table (rows × columns matrix with totals) -->
+    <div v-else-if="type === 'pivot'" class="cr-table">
+      <div v-if="!pivot" class="cr-empty">Pick a Rows and Columns dimension to pivot.</div>
+      <table v-else class="pivot">
+        <thead>
+          <tr>
+            <th class="corner"></th>
+            <th v-for="c in pivot.colKeys" :key="c">{{ pivot.singleCol ? (label ?? 'Total') : c }}</th>
+            <th class="tot">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in pivot.rowKeys" :key="r">
+            <th class="rowhead">{{ r }}</th>
+            <td
+              v-for="c in pivot.colKeys"
+              :key="c"
+              class="num clickable"
+              @click="emit('drill', { name: r, seriesName: pivot!.singleCol ? undefined : c })"
+            >{{ fmtCell(pivot.value(r, c)) }}</td>
+            <td class="num tot">{{ fmtCell(pivot.rowTotal(r)) }}</td>
+          </tr>
+          <tr class="totrow">
+            <th class="rowhead">Total</th>
+            <td v-for="c in pivot.colKeys" :key="c" class="num">{{ fmtCell(pivot.colTotal(c)) }}</td>
+            <td class="num tot">{{ fmtCell(pivot.grand) }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Raw table -->
@@ -58,7 +100,7 @@ const kpiText = computed(() =>
     </div>
 
     <!-- Graphical chart -->
-    <EChart v-else-if="option" :option="option" />
+    <EChart v-else-if="option" ref="chartRef" :option="option" @point-click="emit('drill', $event)" />
     <div v-else class="cr-empty">This data can't be charted as a {{ type }}.</div>
   </div>
 </template>
@@ -132,5 +174,39 @@ const kpiText = computed(() =>
   background: var(--bg-panel);
   color: var(--text-dim);
   font-weight: 600;
+}
+.pivot .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pivot .rowhead {
+  position: sticky;
+  left: 0;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+}
+.pivot .corner {
+  left: 0;
+  z-index: 1;
+}
+.pivot .tot {
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+.pivot .totrow td,
+.pivot .totrow th {
+  border-top: 2px solid var(--border-strong);
+  font-weight: 700;
+  color: var(--text);
+}
+.pivot .clickable {
+  cursor: pointer;
+}
+.pivot .clickable:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 </style>

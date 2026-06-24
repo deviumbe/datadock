@@ -5,8 +5,10 @@ import type {
   AnalyticsChart,
   AnalyticsDashboard,
   AnalyticsDataset,
+  AnalyticsMetric,
   AnalyticsPlan,
   AnalyticsState,
+  ScheduledReport,
   AppearanceSettings,
   AppSettings,
   ChatMessage,
@@ -142,7 +144,10 @@ const api = {
     importConnections: () =>
       invoke<{ canceled?: boolean; workspace?: Workspace }>('io:importConnections'),
     saveFile: (name: string, data: string, binary: boolean) =>
-      invoke<FileResult>('io:saveFile', name, data, binary)
+      invoke<FileResult>('io:saveFile', name, data, binary),
+    exportPdf: (name: string, html: string, landscape?: boolean) =>
+      invoke<FileResult>('io:exportPdf', name, html, landscape),
+    pickFolder: () => invoke<FileResult>('io:pickFolder')
   },
   history: {
     add: (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => invoke<HistoryEntry>('history:add', entry),
@@ -168,6 +173,12 @@ const api = {
         Pick<AnalyticsDataset, 'connectionId' | 'name' | 'source'>
     ) => invoke<AnalyticsDataset>('analytics:saveDataset', input),
     removeDataset: (id: string) => invoke<boolean>('analytics:removeDataset', id),
+    listMetrics: (connId: string) => invoke<AnalyticsMetric[]>('analytics:listMetrics', connId),
+    saveMetric: (
+      input: Partial<AnalyticsMetric> &
+        Pick<AnalyticsMetric, 'connectionId' | 'datasetId' | 'name' | 'agg'>
+    ) => invoke<AnalyticsMetric>('analytics:saveMetric', input),
+    removeMetric: (id: string) => invoke<boolean>('analytics:removeMetric', id),
     listCharts: (connId: string) => invoke<AnalyticsChart[]>('analytics:listCharts', connId),
     saveChart: (
       input: Partial<AnalyticsChart> &
@@ -180,7 +191,15 @@ const api = {
       input: Partial<AnalyticsDashboard> &
         Pick<AnalyticsDashboard, 'connectionId' | 'name' | 'widgets'>
     ) => invoke<AnalyticsDashboard>('analytics:saveDashboard', input),
-    removeDashboard: (id: string) => invoke<boolean>('analytics:removeDashboard', id)
+    removeDashboard: (id: string) => invoke<boolean>('analytics:removeDashboard', id),
+    listReports: (connId: string) => invoke<ScheduledReport[]>('analytics:listReports', connId),
+    saveReport: (
+      input: Partial<ScheduledReport> &
+        Pick<ScheduledReport, 'connectionId' | 'name' | 'dashboardId' | 'folder' | 'everyMinutes'>
+    ) => invoke<ScheduledReport>('analytics:saveReport', input),
+    removeReport: (id: string) => invoke<boolean>('analytics:removeReport', id),
+    runReport: (id: string) =>
+      invoke<{ ok: boolean; path?: string; error?: string }>('analytics:runReport', id)
   },
   ai: {
     hasKey: () => invoke<boolean>('ai:hasKey'),

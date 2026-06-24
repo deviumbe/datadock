@@ -5,30 +5,54 @@ import type {
   AnalyticsDashboard,
   AnalyticsDashboardWidget,
   AnalyticsDataset,
+  AnalyticsMetric,
   AnalyticsOpWidget,
   AnalyticsPlan,
-  AnalyticsState
+  AnalyticsState,
+  ChartEncoding
 } from '@shared/types'
+import { previewSql } from '../lib/analyticsSql'
 import { useWorkspace } from './workspace'
 
 export const useAnalytics = defineStore('analytics', () => {
   const datasets = ref<AnalyticsDataset[]>([])
+  const metrics = ref<AnalyticsMetric[]>([])
   const charts = ref<AnalyticsChart[]>([])
   const dashboards = ref<AnalyticsDashboard[]>([])
   const loadedConns = ref<Set<string>>(new Set())
+  // Cache of a dataset's output column names (for column-aware dashboard filters).
+  const columnsCache = ref<Map<string, string[]>>(new Map())
 
   async function loadFor(connId: string, force = false): Promise<void> {
     if (!force && loadedConns.value.has(connId)) return
-    const [ds, cs, db] = await Promise.all([
+    const [ds, ms, cs, db] = await Promise.all([
       window.api.analytics.listDatasets(connId),
+      window.api.analytics.listMetrics(connId),
       window.api.analytics.listCharts(connId),
       window.api.analytics.listDashboards(connId)
     ])
     // Replace this connection's entries, keep others.
     datasets.value = [...datasets.value.filter((d) => d.connectionId !== connId), ...ds]
+    metrics.value = [...metrics.value.filter((m) => m.connectionId !== connId), ...ms]
     charts.value = [...charts.value.filter((c) => c.connectionId !== connId), ...cs]
     dashboards.value = [...dashboards.value.filter((d) => d.connectionId !== connId), ...db]
     loadedConns.value = new Set(loadedConns.value).add(connId)
+  }
+
+  /** Output column names of a dataset (cached); used to apply matching filters. */
+  async function ensureColumns(connId: string, driver: string, datasetId: string): Promise<string[]> {
+    const cached = columnsCache.value.get(datasetId)
+    if (cached) return cached
+    const ds = getDataset(datasetId)
+    if (!ds) return []
+    try {
+      const res = await window.api.db.query(connId, previewSql(driver, ds.source))
+      const cols = res.columns.map((c) => c.name)
+      columnsCache.value = new Map(columnsCache.value).set(datasetId, cols)
+      return cols
+    } catch {
+      return []
+    }
   }
 
   const datasetsFor = (connId: string): AnalyticsDataset[] =>
@@ -41,6 +65,27 @@ export const useAnalytics = defineStore('analytics', () => {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const getDataset = (id: string): AnalyticsDataset | undefined =>
     datasets.value.find((d) => d.id === id)
+  const metricsFor = (connId: string): AnalyticsMetric[] =>
+    metrics.value
+      .filter((m) => m.connectionId === connId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const getMetric = (id: string): AnalyticsMetric | undefined =>
+    metrics.value.find((m) => m.id === id)
+
+  /**
+   * Resolve a chart's encoding: when it binds a saved metric, the measure
+   * (agg/column) and the metric's filters come from that metric.
+   */
+  function effectiveEncoding(encoding: ChartEncoding): ChartEncoding {
+    const m = encoding.metricId ? getMetric(encoding.metricId) : undefined
+    if (!m) return encoding
+    return {
+      ...encoding,
+      yAgg: m.agg,
+      yColumn: m.column,
+      filters: [...(m.filters ?? []), ...(encoding.filters ?? [])]
+    }
+  }
   const dashboardsFor = (connId: string): AnalyticsDashboard[] =>
     dashboards.value
       .filter((d) => d.connectionId === connId)
@@ -55,12 +100,19 @@ export const useAnalytics = defineStore('analytics', () => {
   ): Promise<AnalyticsDataset> {
     const saved = await window.api.analytics.saveDataset(input)
     datasets.value = [...datasets.value.filter((d) => d.id !== saved.id), saved]
+    // Source may have changed — drop any cached column list for this dataset.
+    if (columnsCache.value.has(saved.id)) {
+      const next = new Map(columnsCache.value)
+      next.delete(saved.id)
+      columnsCache.value = next
+    }
     return saved
   }
   async function removeDataset(id: string): Promise<void> {
     await window.api.analytics.removeDataset(id)
     datasets.value = datasets.value.filter((d) => d.id !== id)
-    // Cascade (mirrors main): drop charts on this dataset, then widgets on those charts.
+    // Cascade (mirrors main): drop metrics + charts on this dataset, then widgets on those charts.
+    metrics.value = metrics.value.filter((m) => m.datasetId !== id)
     const droppedCharts = new Set(charts.value.filter((c) => c.datasetId === id).map((c) => c.id))
     charts.value = charts.value.filter((c) => c.datasetId !== id)
     dashboards.value = dashboards.value.map((d) =>
@@ -69,6 +121,25 @@ export const useAnalytics = defineStore('analytics', () => {
         : d
     )
   }
+  async function saveMetric(
+    input: Partial<AnalyticsMetric> &
+      Pick<AnalyticsMetric, 'connectionId' | 'datasetId' | 'name' | 'agg'>
+  ): Promise<AnalyticsMetric> {
+    const saved = await window.api.analytics.saveMetric(input)
+    metrics.value = [...metrics.value.filter((m) => m.id !== saved.id), saved]
+    return saved
+  }
+  async function removeMetric(id: string): Promise<void> {
+    await window.api.analytics.removeMetric(id)
+    metrics.value = metrics.value.filter((m) => m.id !== id)
+    // Mirror main: unbind any charts that referenced this metric.
+    charts.value = charts.value.map((c) =>
+      c.encoding.metricId === id
+        ? { ...c, encoding: { ...c.encoding, metricId: undefined } }
+        : c
+    )
+  }
+
   async function saveChart(
     input: Partial<AnalyticsChart> &
       Pick<AnalyticsChart, 'connectionId' | 'datasetId' | 'name' | 'type' | 'encoding'>
@@ -107,6 +178,14 @@ export const useAnalytics = defineStore('analytics', () => {
   function stateFor(connId: string): AnalyticsState {
     return {
       datasets: datasetsFor(connId).map((d) => ({ id: d.id, name: d.name, source: d.source })),
+      metrics: metricsFor(connId).map((m) => ({
+        id: m.id,
+        name: m.name,
+        datasetId: m.datasetId,
+        agg: m.agg,
+        column: m.column,
+        icon: m.icon
+      })),
       charts: chartsFor(connId).map((c) => ({
         id: c.id,
         name: c.name,
@@ -118,7 +197,9 @@ export const useAnalytics = defineStore('analytics', () => {
       dashboards: dashboardsFor(connId).map((d) => ({
         id: d.id,
         name: d.name,
-        widgets: d.widgets
+        widgets: d.widgets,
+        filters: d.filters,
+        refreshSec: d.refreshSec
       }))
     }
   }
@@ -152,11 +233,21 @@ export const useAnalytics = defineStore('analytics', () => {
     plan: AnalyticsPlan
   ): Promise<{ created: number; updated: number; deleted: number; focusDashboardId?: string }> {
     const dsKeyToId = new Map<string, string>()
+    const metricKeyToId = new Map<string, string>()
     const chartKeyToId = new Map<string, string>()
     let created = 0
     let updated = 0
     let deleted = 0
     let focusDashboardId: string | undefined
+
+    // A chart's encoding may bind a metric by its real id or by a key created
+    // earlier in this same plan — resolve keys to ids before saving.
+    const resolveEnc = (enc: ChartEncoding): ChartEncoding => {
+      if (enc.metricId && metricKeyToId.has(enc.metricId)) {
+        return { ...enc, metricId: metricKeyToId.get(enc.metricId) }
+      }
+      return enc
+    }
 
     for (const op of plan.ops) {
       switch (op.op) {
@@ -182,6 +273,46 @@ export const useAnalytics = defineStore('analytics', () => {
           await removeDataset(op.id)
           deleted++
           break
+        case 'createMetric': {
+          const datasetId = op.datasetId ?? (op.datasetKey ? dsKeyToId.get(op.datasetKey) : undefined)
+          if (!datasetId) break
+          const saved = await saveMetric({
+            connectionId: connId,
+            datasetId,
+            name: op.name,
+            agg: op.agg,
+            column: op.column,
+            filters: op.filters,
+            format: op.format,
+            icon: op.icon
+          })
+          if (op.key) metricKeyToId.set(op.key, saved.id)
+          created++
+          break
+        }
+        case 'updateMetric': {
+          const cur = getMetric(op.id)
+          if (!cur) break
+          const datasetId =
+            op.datasetId ?? (op.datasetKey ? dsKeyToId.get(op.datasetKey) : undefined) ?? cur.datasetId
+          await saveMetric({
+            id: cur.id,
+            connectionId: connId,
+            datasetId,
+            name: op.name ?? cur.name,
+            agg: op.agg ?? cur.agg,
+            column: op.column !== undefined ? op.column : cur.column,
+            filters: op.filters ?? cur.filters,
+            format: op.format ?? cur.format,
+            icon: op.icon !== undefined ? op.icon : cur.icon
+          })
+          updated++
+          break
+        }
+        case 'deleteMetric':
+          await removeMetric(op.id)
+          deleted++
+          break
         case 'createChart': {
           const datasetId = op.datasetId ?? (op.datasetKey ? dsKeyToId.get(op.datasetKey) : undefined)
           if (!datasetId) break
@@ -190,7 +321,7 @@ export const useAnalytics = defineStore('analytics', () => {
             datasetId,
             name: op.name,
             type: op.type,
-            encoding: op.encoding,
+            encoding: resolveEnc(op.encoding),
             icon: op.icon
           })
           if (op.key) chartKeyToId.set(op.key, saved.id)
@@ -208,7 +339,7 @@ export const useAnalytics = defineStore('analytics', () => {
             datasetId,
             name: op.name ?? cur.name,
             type: op.type ?? cur.type,
-            encoding: op.encoding ?? cur.encoding,
+            encoding: op.encoding ? resolveEnc(op.encoding) : cur.encoding,
             icon: op.icon !== undefined ? op.icon : cur.icon
           })
           updated++
@@ -283,17 +414,24 @@ export const useAnalytics = defineStore('analytics', () => {
 
   return {
     datasets,
+    metrics,
     charts,
     dashboards,
     loadFor,
+    ensureColumns,
     datasetsFor,
+    metricsFor,
     chartsFor,
     dashboardsFor,
     getDataset,
+    getMetric,
     getChart,
     getDashboard,
+    effectiveEncoding,
     saveDataset,
     removeDataset,
+    saveMetric,
+    removeMetric,
     saveChart,
     removeChart,
     saveDashboard,

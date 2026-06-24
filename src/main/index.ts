@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, nativeImage } from 'electron'
 import { join } from 'path'
 import { registerIpc } from './ipc'
+import { startScheduler } from './scheduler'
 import { loadWorkspace } from './storage'
 import { disconnectAll } from './db'
 import { buildMenu } from './menu'
@@ -67,6 +68,7 @@ app.whenReady().then(() => {
   loadWorkspace()
   registerIpc()
   buildMenu()
+  startScheduler()
   const win = createWindow()
   setupUpdater(win)
 

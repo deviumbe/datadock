@@ -64,7 +64,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
 | ⌨️ | **Query, your way** | Multi-tab editor, schema-aware autocomplete, history, snippets, variables, formatter & EXPLAIN |
 | ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
-| 📈 | **Analytics** | A dedicated analytics area — datasets, a no-SQL chart builder, KPI cards, drag-and-drop resizable dashboards, instant one-click charts, and an AI that builds *and edits* them from a plain-English prompt |
+| 📈 | **Analytics** | A dedicated analytics area — datasets, a no-SQL chart builder, KPI cards, reusable saved metrics, drag-and-drop resizable dashboards with **filters · drill-through · realtime refresh · PDF/Excel export**, and an AI that builds *and edits* them from a plain-English prompt |
 | 📈 | **Performance & insights** | Slow-query dashboard, index hints, pool diagnostics, table sizes & column search |
 | 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
 | 🎭 | **Data masking** | Anonymize chosen columns with realistic fake data on export — safely copy production into a local database |
@@ -163,10 +163,16 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Visual chart builder (no SQL required)** — pick a dataset, a measure (`count` / `sum` / `avg` / `min` / `max`), a group-by dimension with optional **time bucketing** (day · week · month · quarter · year) and an optional **split series**; DataDock generates the right aggregation SQL per engine and shows a **live preview**. Render as **bar, horizontal bar, line, area, pie, donut, KPI card or table** (powered by Apache ECharts).
 - **Drag-and-drop dashboards** — assemble charts onto a **resizable 12-column grid** (à la Power BI / Grafana): drag a chart's title bar to move it, drag the corner to resize, and the layout saves automatically.
 - **KPI cards** — single headline numbers (*"Sales this month → €55,320"*) from any aggregate (`sum` / `avg` / `count` / …), each with an optional **icon** — perfect for an at-a-glance metrics row.
+- **Saved metrics** — define a measure **once** (e.g. *"Total revenue"* = `SUM(amount)`, with currency/percent formatting and an icon) and **bind KPI cards and charts to it**. Edit the metric and every chart using it updates. Metrics show their live value in the hub and the AI can create/bind them.
+- **Dashboard filters** — add interactive **text, equals or date-range** filters above a dashboard; they apply to **every widget whose dataset has that column** (column-aware, so mixed-dataset boards just work) and re-query instantly.
+- **Drill-through** — **click any bar / point / slice** to open the **underlying rows** behind that data point (bucket- and series-aware), so you can go from a number straight to the records.
+- **Pivot tables** — a **rows × columns cross-tab** widget: pick a row dimension and a column dimension and DataDock builds the matrix with **row, column and grand totals** — click any cell to drill into its rows.
+- **Realtime dashboards** — set an **auto-refresh interval** (5s · 15s · 30s · 1m · 5m) per dashboard for live, always-current boards.
+- **Reports & export** — export any chart's data to **Excel / CSV / JSON**, or export a whole **dashboard to PDF** (a clean, paginated report with the current filter values in the header).
+- **Scheduled reports** — schedule a dashboard to **auto-export to Excel** (one worksheet per chart) into a folder on a cadence (hourly · daily · weekly · custom), with a desktop notification on each run. Runs in the background while DataDock is open and the connection is active.
 - **Instant Visualization** — any query result has a **Table / Chart toggle**; one click auto-detects the axes and draws a chart (switch bar/line/area/pie on the fly).
-- **Build & edit with AI** — describe what you want in plain English (*"a sales overview dashboard"*) and the assistant designs the datasets, charts and a laid-out dashboard for you (right per-engine SQL: joins, top-N, time bucketing). It's **stateful** — ask it to *"fix the revenue chart"* or *"add a KPI for total orders"* and it **edits the existing chart/dashboard in place** instead of creating duplicates. Powered by your configured provider (Claude · Gemini · Mistral · Grok · Ollama).
-- Datasets, charts and dashboards are **saved per connection** and reopen with your tabs.
-- *More coming:* saved metrics, pivot tables, drill-down/through, dashboard filters and scheduled reports.
+- **Build & edit with AI** — describe what you want in plain English (*"a sales overview dashboard"*) and the assistant designs the datasets, **metrics**, charts and a laid-out dashboard for you (right per-engine SQL: joins, top-N, time bucketing). It's **stateful** — ask it to *"fix the revenue chart"* or *"add a KPI for total orders"* and it **edits the existing chart/dashboard in place** instead of creating duplicates. Powered by your configured provider (Claude · Gemini · Mistral · Grok · Ollama).
+- Datasets, metrics, charts, dashboards and schedules are **saved per connection**, and open tabs reopen with your workspace.
 
 #### 📨 Redis & realtime queue viewer
 - Open **Tools → Redis Queues** (or `⌘K` → *Redis Queues*) for a **live, Horizon-style dashboard** of every queue on the connection — refreshing every couple of seconds.
@@ -275,7 +281,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
 | ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock · AI-built analytics dashboards |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
-| 📊 **Analytics** | Dedicated analytics area · reusable datasets (table / view / saved SQL) · no-SQL visual chart builder (aggregations · time bucketing · series) · bar / line / area / pie / donut / table + **KPI cards with icons** via ECharts · **drag-and-drop resizable dashboards** · instant one-click charts from any query result · **AI that builds *and edits* dashboards/charts in place** from plain English |
+| 📊 **Analytics** | Dedicated analytics area · reusable datasets (table / view / saved SQL) · no-SQL visual chart builder (aggregations · time bucketing · series) · bar / line / area / pie / donut / table / **pivot** + **KPI cards with icons** via ECharts · **reusable saved metrics** (bind cards/charts to one definition) · **drag-and-drop resizable dashboards** · **dashboard filters** (text / equals / date-range, column-aware) · **drill-through to underlying rows** · **realtime auto-refresh** · **chart data → Excel/CSV/JSON**, **dashboard → PDF** and **scheduled Excel reports** · instant one-click charts from any query result · **AI that builds *and edits* dashboards/charts/metrics in place** from plain English |
 | 📨 **Redis & queues** | Prefix-grouped key browsing · value viewer (string · hash · list · set · zset · stream) · raw-command editor · realtime queue dashboard with framework auto-detect (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
@@ -291,7 +297,6 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 🛡️ **Production safety** | Dangerous-query confirmation flow |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
 | 📈 **Performance** | Query-plan regression alerts |
-| 📊 **Analytics** | Saved metrics · pivot tables · drill-down / drill-through · dashboard filters · reports + PDF/Excel export · scheduled reports · realtime dashboards |
 | 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |
 | 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |
 | 🪄 **Wow** | Time-travel row history · clone prod schema → local SQLite |

@@ -1,5 +1,6 @@
-// Compile a chart encoding into driver-specific SQL. The result set is always
-// shaped as columns: `x` (omitted for KPI), optional `series`, and `y`.
+// Driver-specific SQL builder for the analytics module, usable in the main
+// process (the report scheduler). Mirrors src/renderer/src/lib/analyticsSql.ts;
+// kept separate so the main bundle has no renderer/Vue dependency.
 import type { ChartEncoding, DatasetSource, FilterSpec, TimeBucket } from '@shared/types'
 
 function quote(driver: string, id: string): string {
@@ -11,7 +12,6 @@ function lit(v: string): string {
   return `'${String(v).replace(/'/g, "''")}'`
 }
 
-/** The FROM subject — a quoted table/view, or the saved SQL wrapped as a subquery. */
 function fromExpr(driver: string, source: DatasetSource): string {
   if (source.kind === 'sql') {
     const inner = source.sql.trim().replace(/;\s*$/, '')
@@ -25,11 +25,6 @@ function aggExpr(driver: string, agg: string, col?: string): string {
   return `${agg.toUpperCase()}(${quote(driver, col)})`
 }
 
-/**
- * A grouping label for a temporal column. Returns a string expression so the
- * result groups + sorts consistently across dialects (the chart treats X as a
- * category axis), sidestepping per-driver date-arithmetic edge cases.
- */
 function bucketExpr(driver: string, col: string, bucket: TimeBucket): string {
   const c = quote(driver, col)
   if (bucket === 'none') return c
@@ -55,7 +50,6 @@ function bucketExpr(driver: string, col: string, bucket: TimeBucket): string {
       case 'year': return `FORMAT(${c}, 'yyyy')`
     }
   }
-  // sqlite (strftime)
   switch (bucket) {
     case 'day': return `strftime('%Y-%m-%d', ${c})`
     case 'week': return `strftime('%Y-W%W', ${c})`
@@ -63,6 +57,7 @@ function bucketExpr(driver: string, col: string, bucket: TimeBucket): string {
     case 'quarter': return `(strftime('%Y', ${c}) || '-Q' || ((cast(strftime('%m', ${c}) as integer) + 2) / 3))`
     case 'year': return `strftime('%Y', ${c})`
   }
+  return c
 }
 
 function whereClause(driver: string, filters?: FilterSpec[]): string {
@@ -81,71 +76,23 @@ function whereClause(driver: string, filters?: FilterSpec[]): string {
   return ' WHERE ' + parts.join(' AND ')
 }
 
-/** Raw dataset rows (for the "table" chart type and column introspection). */
-export function datasetRowsSql(driver: string, source: DatasetSource, limit = 200): string {
+export function datasetRowsSql(driver: string, source: DatasetSource, limit = 5000): string {
   const from = fromExpr(driver, source)
   if (driver === 'mssql') return `SELECT TOP ${limit} * FROM ${from}`
   return `SELECT * FROM ${from} LIMIT ${limit}`
 }
 
-/** A one-row query to introspect a dataset's column names. */
-export function previewSql(driver: string, source: DatasetSource): string {
-  return datasetRowsSql(driver, source, 1)
-}
-
-/** True when this encoding produces a single aggregate value (KPI), not a series. */
-export function isKpi(encoding: ChartEncoding): boolean {
-  return !encoding.x
-}
-
-/**
- * Raw underlying rows behind a single clicked data point (drill-through). Filters
- * the dataset to the bucketed X value (and series value, if the chart is split),
- * plus any encoding filters. Returns full rows, not the aggregate.
- */
-export function drillRowsSql(
-  driver: string,
-  source: DatasetSource,
-  encoding: ChartEncoding,
-  xValue: string,
-  seriesValue?: string,
-  limit = 500
-): string {
-  const from = fromExpr(driver, source)
-  const conds: string[] = []
-  if (encoding.x) {
-    const xExpr = bucketExpr(driver, encoding.x, encoding.bucket ?? 'none')
-    conds.push(`${xExpr} = ${lit(xValue)}`)
-  }
-  if (encoding.series && seriesValue !== undefined) {
-    conds.push(`${quote(driver, encoding.series)} = ${lit(seriesValue)}`)
-  }
-  // Reuse the same filter compilation by folding encoding filters into the WHERE.
-  const base = whereClause(driver, encoding.filters)
-  let where = ''
-  if (conds.length && base) where = `${base} AND ${conds.join(' AND ')}`
-  else if (conds.length) where = ' WHERE ' + conds.join(' AND ')
-  else where = base
-  if (driver === 'mssql') return `SELECT TOP ${limit} * FROM ${from}${where}`
-  return `SELECT * FROM ${from}${where} LIMIT ${limit}`
-}
-
-export function buildChartSql(
-  driver: string,
-  source: DatasetSource,
-  encoding: ChartEncoding
-): string {
+export function buildChartSql(driver: string, source: DatasetSource, encoding: ChartEncoding): string {
   const from = fromExpr(driver, source)
   const where = whereClause(driver, encoding.filters)
   const y = `${aggExpr(driver, encoding.yAgg, encoding.yColumn)} AS y`
 
-  // KPI: one row, one value.
-  if (isKpi(encoding)) {
+  if (!encoding.x) {
     if (driver === 'mssql') return `SELECT TOP 1 ${y} FROM ${from}${where}`
     return `SELECT ${y} FROM ${from}${where}`
   }
 
-  const xExpr = bucketExpr(driver, encoding.x!, encoding.bucket ?? 'none')
+  const xExpr = bucketExpr(driver, encoding.x, encoding.bucket ?? 'none')
   const sel = [`${xExpr} AS x`]
   const groupBy = [xExpr]
   if (encoding.series) {
@@ -154,13 +101,10 @@ export function buildChartSql(
     groupBy.push(s)
   }
   sel.push(y)
-  const limit = encoding.limit && encoding.limit > 0 ? encoding.limit : 200
-
+  const limit = encoding.limit && encoding.limit > 0 ? encoding.limit : 1000
   const core =
     `SELECT ${sel.join(', ')} FROM ${from}${where}` +
     ` GROUP BY ${groupBy.join(', ')} ORDER BY ${xExpr}`
-  if (driver === 'mssql') {
-    return core.replace(/^SELECT /, `SELECT TOP ${limit} `)
-  }
+  if (driver === 'mssql') return core.replace(/^SELECT /, `SELECT TOP ${limit} `)
   return `${core} LIMIT ${limit}`
 }

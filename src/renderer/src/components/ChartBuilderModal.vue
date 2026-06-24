@@ -32,7 +32,8 @@ const CHART_TYPES: { value: ChartType; label: string }[] = [
   { value: 'pie', label: 'Pie' },
   { value: 'donut', label: 'Donut' },
   { value: 'kpi', label: 'KPI card' },
-  { value: 'table', label: 'Table' }
+  { value: 'table', label: 'Table' },
+  { value: 'pivot', label: 'Pivot table' }
 ]
 const AGGS: Aggregation[] = ['count', 'sum', 'avg', 'min', 'max']
 const BUCKETS: TimeBucket[] = ['none', 'day', 'week', 'month', 'quarter', 'year']
@@ -41,6 +42,13 @@ const name = ref(props.editing?.name ?? '')
 const datasetId = ref(props.editing?.datasetId ?? props.datasets[0]?.id ?? '')
 const type = ref<ChartType>(props.editing?.type ?? props.initialType ?? 'bar')
 const icon = ref(props.editing?.icon ?? '')
+const metricId = ref(props.editing?.encoding.metricId ?? '')
+const availableMetrics = computed(() =>
+  analytics.metricsFor(props.connectionId).filter((m) => m.datasetId === datasetId.value)
+)
+const boundMetric = computed(() =>
+  metricId.value ? analytics.getMetric(metricId.value) : undefined
+)
 const ICONS = ['💰', '📈', '📉', '🛒', '👥', '📦', '⭐', '⚡', '🔥', '✅', '⏱️', '🌍']
 const enc = reactive({
   x: props.editing?.encoding.x ?? '',
@@ -64,13 +72,16 @@ const isTable = computed(() => type.value === 'table')
 const needsValueCol = computed(() => enc.yAgg !== 'count')
 
 function buildEncoding() {
+  const m = boundMetric.value
   return {
     x: isKpi.value || isTable.value ? undefined : enc.x || undefined,
     bucket: enc.bucket,
-    yAgg: enc.yAgg,
-    yColumn: needsValueCol.value ? enc.yColumn || undefined : undefined,
+    // When bound to a metric, the measure comes from it (so preview matches render).
+    yAgg: m ? m.agg : enc.yAgg,
+    yColumn: m ? m.column : needsValueCol.value ? enc.yColumn || undefined : undefined,
     series: isKpi.value || isTable.value ? undefined : enc.series || undefined,
-    limit: enc.limit
+    limit: enc.limit,
+    metricId: m ? m.id : undefined
   }
 }
 
@@ -112,7 +123,7 @@ async function runPreview(): Promise<void> {
     return
   }
   if (!isKpi.value && !enc.x) return
-  if (needsValueCol.value && !enc.yColumn) return
+  if (!boundMetric.value && needsValueCol.value && !enc.yColumn) return
   loading.value = true
   previewError.value = ''
   try {
@@ -127,10 +138,14 @@ async function runPreview(): Promise<void> {
 }
 watch(datasetId, async () => {
   enc.x = ''
+  metricId.value = '' // metrics are dataset-scoped
   await loadColumns()
   schedulePreview()
 })
-watch([type, () => enc.x, () => enc.bucket, () => enc.yAgg, () => enc.yColumn, () => enc.series, () => enc.limit], schedulePreview)
+watch(
+  [type, metricId, () => enc.x, () => enc.bucket, () => enc.yAgg, () => enc.yColumn, () => enc.series, () => enc.limit],
+  schedulePreview
+)
 
 onMounted(async () => {
   await loadColumns()
@@ -184,6 +199,16 @@ async function save(): Promise<void> {
           </select>
         </label>
 
+        <label v-if="!isTable && availableMetrics.length" class="fld">
+          <span>Measure source</span>
+          <select v-model="metricId" class="input">
+            <option value="">Define manually below</option>
+            <option v-for="m in availableMetrics" :key="m.id" :value="m.id">
+              Saved metric · {{ m.name }}
+            </option>
+          </select>
+        </label>
+
         <div v-if="type === 'kpi'" class="fld">
           <span>Card icon</span>
           <div class="icons">
@@ -207,7 +232,12 @@ async function save(): Promise<void> {
         </div>
 
         <template v-if="!isTable">
-          <div class="row">
+          <p v-if="boundMetric" class="metric-note">
+            Measure from saved metric <strong>{{ boundMetric.name }}</strong>
+            ({{ boundMetric.agg.toUpperCase() }}{{ boundMetric.column ? ' of ' + boundMetric.column : '' }}).
+            Edit the metric to change it everywhere.
+          </p>
+          <div v-else class="row">
             <label class="fld">
               <span>Measure</span>
               <select v-model="enc.yAgg" class="input">
@@ -225,7 +255,7 @@ async function save(): Promise<void> {
 
           <template v-if="!isKpi">
             <label class="fld">
-              <span>Group by (X axis)</span>
+              <span>{{ type === 'pivot' ? 'Rows' : 'Group by (X axis)' }}</span>
               <select v-model="enc.x" class="input">
                 <option value="">—</option>
                 <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
@@ -239,7 +269,7 @@ async function save(): Promise<void> {
                 </select>
               </label>
               <label class="fld">
-                <span>Split series</span>
+                <span>{{ type === 'pivot' ? 'Columns' : 'Split series' }}</span>
                 <select v-model="enc.series" class="input">
                   <option value="">none</option>
                   <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
@@ -346,6 +376,15 @@ async function save(): Promise<void> {
   font-size: 11.5px;
   color: var(--danger);
   margin: 0;
+}
+.metric-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
 }
 .preview {
   display: flex;

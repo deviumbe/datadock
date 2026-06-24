@@ -1,4 +1,4 @@
-import { dialog } from 'electron'
+import { dialog, BrowserWindow } from 'electron'
 import { writeFile, readFile, unlink } from 'fs/promises'
 import { createWriteStream, createReadStream, type WriteStream } from 'fs'
 import { tmpdir } from 'os'
@@ -268,6 +268,54 @@ export async function saveFile(defaultName: string, data: string, binary: boolea
   if (canceled || !filePath) return { canceled: true }
   await writeFile(filePath, binary ? Buffer.from(data, 'base64') : data)
   return { canceled: false, path: filePath }
+}
+
+/**
+ * Render a self-contained HTML document (the renderer composes it with chart
+ * images already embedded as data-URLs) to a PDF in an offscreen window. Used
+ * for dashboard/report export. No external print dependency required.
+ */
+export async function exportHtmlToPdf(
+  defaultName: string,
+  html: string,
+  landscape = true
+): Promise<FileResult> {
+  const name = defaultName.endsWith('.pdf') ? defaultName : `${defaultName}.pdf`
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: name,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  })
+  if (canceled || !filePath) return { canceled: true }
+
+  const win = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 900,
+    webPreferences: { offscreen: true, sandbox: true }
+  })
+  try {
+    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    // Give embedded images/fonts a tick to settle before printing.
+    await new Promise((r) => setTimeout(r, 250))
+    const pdf = await win.webContents.printToPDF({
+      landscape,
+      printBackground: true,
+      margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 }
+    })
+    await writeFile(filePath, pdf)
+  } finally {
+    win.destroy()
+  }
+  return { canceled: false, path: filePath }
+}
+
+/** Pick a destination folder (for scheduled report output). */
+export async function pickFolder(): Promise<FileResult> {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (canceled || !filePaths[0]) return { canceled: true }
+  return { canceled: false, path: filePaths[0] }
 }
 
 // ---- import -----------------------------------------------------------------

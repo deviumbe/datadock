@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps<{ option: echarts.EChartsCoreOption | null }>()
+const emit = defineEmits<{ pointClick: [{ name: string; seriesName?: string }] }>()
 
 const el = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
@@ -14,10 +15,24 @@ function render(): void {
   chart.setOption(props.option, true)
 }
 
+/** A PNG data-URL snapshot of the current chart, for PDF/report export. */
+function image(): string | null {
+  if (!chart) return null
+  try {
+    return chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: 'transparent' })
+  } catch {
+    return null
+  }
+}
+defineExpose({ image })
+
 onMounted(() => {
   if (!el.value) return
   chart = echarts.init(el.value, null, { renderer: 'canvas' })
   render()
+  chart.on('click', (p: { name?: string; seriesName?: string }) => {
+    if (p && p.name !== undefined) emit('pointClick', { name: String(p.name), seriesName: p.seriesName })
+  })
   ro = new ResizeObserver(() => chart?.resize())
   ro.observe(el.value)
 })

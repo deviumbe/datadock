@@ -545,7 +545,16 @@ export interface AnalyticsDataset {
   updatedAt: string
 }
 
-export type ChartType = 'bar' | 'hbar' | 'line' | 'area' | 'pie' | 'donut' | 'kpi' | 'table'
+export type ChartType =
+  | 'bar'
+  | 'hbar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'donut'
+  | 'kpi'
+  | 'table'
+  | 'pivot'
 export type Aggregation = 'count' | 'sum' | 'avg' | 'min' | 'max'
 /** Time bucketing applied to a temporal X dimension. */
 export type TimeBucket = 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -563,6 +572,42 @@ export interface ChartEncoding {
   series?: string
   filters?: FilterSpec[]
   limit?: number
+  /**
+   * When set, the measure (yAgg/yColumn + extra filters) is taken from a saved
+   * metric of this id — so updating the metric updates every chart using it.
+   */
+  metricId?: string
+}
+
+/** Display formatting for a metric / KPI value. */
+export interface MetricFormat {
+  style?: 'plain' | 'currency' | 'percent'
+  /** Fraction digits (default 0 for plain/currency, 1 for percent). */
+  decimals?: number
+  /** Prefix/suffix wrapped around the formatted number (e.g. "$", " ms"). */
+  prefix?: string
+  suffix?: string
+}
+
+/**
+ * A reusable, named measure (e.g. "Total Revenue" = SUM(amount) on a dataset).
+ * Charts and KPI cards can bind to a metric so its definition is shared and a
+ * single edit updates everywhere it is used.
+ */
+export interface AnalyticsMetric {
+  id: string
+  connectionId: string
+  name: string
+  datasetId: string
+  agg: Aggregation
+  /** Measure column. Omitted when agg is 'count'. */
+  column?: string
+  filters?: FilterSpec[]
+  format?: MetricFormat
+  /** Optional emoji shown when the metric is rendered as a card. */
+  icon?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface AnalyticsChart {
@@ -586,11 +631,31 @@ export interface AnalyticsDashboardWidget {
   w: number
   h: number
 }
+
+/** A dashboard-level filter the viewer can adjust; applied to every widget. */
+export type DashboardFilterType = 'text' | 'select' | 'daterange'
+export interface DashboardFilter {
+  id: string
+  label: string
+  /** Dataset column this filter targets (applied only to widgets that have it). */
+  column: string
+  type: DashboardFilterType
+  /** Current value for text/select filters. */
+  value?: string
+  /** Current range for daterange filters (ISO date strings). */
+  from?: string
+  to?: string
+}
+
 export interface AnalyticsDashboard {
   id: string
   connectionId: string
   name: string
   widgets: AnalyticsDashboardWidget[]
+  /** Interactive filters shown above the grid (applied to all widgets). */
+  filters?: DashboardFilter[]
+  /** Auto-refresh interval in seconds (0/undefined = off) for realtime boards. */
+  refreshSec?: number
   createdAt: string
   updatedAt: string
 }
@@ -614,6 +679,31 @@ export type AnalyticsOp =
   | { op: 'createDataset'; key: string; name: string; source: DatasetSource }
   | { op: 'updateDataset'; id: string; name?: string; source?: DatasetSource }
   | { op: 'deleteDataset'; id: string }
+  | {
+      op: 'createMetric'
+      key?: string
+      name: string
+      datasetId?: string
+      datasetKey?: string
+      agg: Aggregation
+      column?: string
+      filters?: FilterSpec[]
+      format?: MetricFormat
+      icon?: string
+    }
+  | {
+      op: 'updateMetric'
+      id: string
+      name?: string
+      datasetId?: string
+      datasetKey?: string
+      agg?: Aggregation
+      column?: string
+      filters?: FilterSpec[]
+      format?: MetricFormat
+      icon?: string
+    }
+  | { op: 'deleteMetric'; id: string }
   | {
       op: 'createChart'
       key?: string
@@ -645,9 +735,40 @@ export interface AnalyticsPlan {
   notes?: string
 }
 
+/** A report run on a schedule, exported headlessly to a local folder. */
+export type ReportFormat = 'xlsx'
+export interface ScheduledReport {
+  id: string
+  connectionId: string
+  name: string
+  /** Dashboard whose widgets are exported (one worksheet per chart). */
+  dashboardId: string
+  format: ReportFormat
+  /** Destination folder for generated files. */
+  folder: string
+  /** Run cadence in minutes (60 = hourly, 1440 = daily, 10080 = weekly). */
+  everyMinutes: number
+  enabled: boolean
+  /** ISO timestamps tracked by the scheduler. */
+  lastRunAt?: string
+  nextRunAt?: string
+  /** Outcome of the last run ("OK" or an error message). */
+  lastStatus?: string
+  createdAt: string
+  updatedAt: string
+}
+
 /** Snapshot of the connection's analytics objects, sent to the AI for context. */
 export interface AnalyticsState {
   datasets: { id: string; name: string; source: DatasetSource }[]
+  metrics: {
+    id: string
+    name: string
+    datasetId: string
+    agg: Aggregation
+    column?: string
+    icon?: string
+  }[]
   charts: {
     id: string
     name: string
@@ -656,5 +777,11 @@ export interface AnalyticsState {
     datasetId: string
     encoding: ChartEncoding
   }[]
-  dashboards: { id: string; name: string; widgets: AnalyticsDashboardWidget[] }[]
+  dashboards: {
+    id: string
+    name: string
+    widgets: AnalyticsDashboardWidget[]
+    filters?: DashboardFilter[]
+    refreshSec?: number
+  }[]
 }

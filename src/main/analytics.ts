@@ -2,15 +2,23 @@ import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { randomUUID } from 'crypto'
-import type { AnalyticsChart, AnalyticsDashboard, AnalyticsDataset } from '@shared/types'
+import type {
+  AnalyticsChart,
+  AnalyticsDashboard,
+  AnalyticsDataset,
+  AnalyticsMetric,
+  ScheduledReport
+} from '@shared/types'
 
 interface Store {
   datasets: AnalyticsDataset[]
+  metrics: AnalyticsMetric[]
   charts: AnalyticsChart[]
   dashboards: AnalyticsDashboard[]
+  reports: ScheduledReport[]
 }
 
-let store: Store = { datasets: [], charts: [], dashboards: [] }
+let store: Store = { datasets: [], metrics: [], charts: [], dashboards: [], reports: [] }
 let loaded = false
 let path = ''
 
@@ -27,12 +35,14 @@ function load(): void {
       const parsed = JSON.parse(readFileSync(file(), 'utf-8'))
       store = {
         datasets: Array.isArray(parsed?.datasets) ? parsed.datasets : [],
+        metrics: Array.isArray(parsed?.metrics) ? parsed.metrics : [],
         charts: Array.isArray(parsed?.charts) ? parsed.charts : [],
-        dashboards: Array.isArray(parsed?.dashboards) ? parsed.dashboards : []
+        dashboards: Array.isArray(parsed?.dashboards) ? parsed.dashboards : [],
+        reports: Array.isArray(parsed?.reports) ? parsed.reports : []
       }
     }
   } catch {
-    store = { datasets: [], charts: [], dashboards: [] }
+    store = { datasets: [], metrics: [], charts: [], dashboards: [], reports: [] }
   }
 }
 
@@ -81,11 +91,70 @@ export function saveDataset(
 export function removeDataset(id: string): void {
   load()
   store.datasets = store.datasets.filter((d) => d.id !== id)
-  // Cascade: drop charts that referenced this dataset, and any dashboard
-  // widgets that referenced those charts.
+  // Cascade: drop metrics + charts that referenced this dataset, and any
+  // dashboard widgets that referenced those charts.
+  store.metrics = store.metrics.filter((m) => m.datasetId !== id)
   const droppedCharts = new Set(store.charts.filter((c) => c.datasetId === id).map((c) => c.id))
   store.charts = store.charts.filter((c) => c.datasetId !== id)
   dropWidgets(droppedCharts)
+  persist()
+}
+
+// ---- metrics ---------------------------------------------------------------
+
+export function listMetrics(connectionId: string): AnalyticsMetric[] {
+  load()
+  return store.metrics
+    .filter((m) => m.connectionId === connectionId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export function saveMetric(
+  input: Partial<AnalyticsMetric> &
+    Pick<AnalyticsMetric, 'connectionId' | 'datasetId' | 'name' | 'agg'>
+): AnalyticsMetric {
+  load()
+  const now = new Date().toISOString()
+  const existing = input.id ? store.metrics.find((m) => m.id === input.id) : undefined
+  if (existing) {
+    Object.assign(existing, {
+      datasetId: input.datasetId,
+      name: input.name,
+      agg: input.agg,
+      column: input.column,
+      filters: input.filters,
+      format: input.format,
+      icon: input.icon,
+      updatedAt: now
+    })
+    persist()
+    return existing
+  }
+  const metric: AnalyticsMetric = {
+    id: randomUUID(),
+    connectionId: input.connectionId,
+    datasetId: input.datasetId,
+    name: input.name,
+    agg: input.agg,
+    column: input.column,
+    filters: input.filters,
+    format: input.format,
+    icon: input.icon,
+    createdAt: now,
+    updatedAt: now
+  }
+  store.metrics.push(metric)
+  persist()
+  return metric
+}
+
+export function removeMetric(id: string): void {
+  load()
+  store.metrics = store.metrics.filter((m) => m.id !== id)
+  // Charts bound to this metric keep their own fallback encoding, so just unbind.
+  for (const c of store.charts) {
+    if (c.encoding?.metricId === id) delete c.encoding.metricId
+  }
   persist()
 }
 
@@ -184,5 +253,106 @@ export function saveDashboard(
 export function removeDashboard(id: string): void {
   load()
   store.dashboards = store.dashboards.filter((d) => d.id !== id)
+  // Cascade: drop scheduled reports that targeted this dashboard.
+  store.reports = store.reports.filter((r) => r.dashboardId !== id)
+  persist()
+}
+
+// ---- by-id accessors (used by the report scheduler) ------------------------
+
+export function findDashboard(id: string): AnalyticsDashboard | undefined {
+  load()
+  return store.dashboards.find((d) => d.id === id)
+}
+export function findChart(id: string): AnalyticsChart | undefined {
+  load()
+  return store.charts.find((c) => c.id === id)
+}
+export function findDataset(id: string): AnalyticsDataset | undefined {
+  load()
+  return store.datasets.find((d) => d.id === id)
+}
+export function findMetric(id: string): AnalyticsMetric | undefined {
+  load()
+  return store.metrics.find((m) => m.id === id)
+}
+
+// ---- scheduled reports -----------------------------------------------------
+
+export function listReports(connectionId: string): ScheduledReport[] {
+  load()
+  return store.reports
+    .filter((r) => r.connectionId === connectionId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export function listAllReports(): ScheduledReport[] {
+  load()
+  return store.reports
+}
+
+export function findReport(id: string): ScheduledReport | undefined {
+  load()
+  return store.reports.find((r) => r.id === id)
+}
+
+export function saveReport(
+  input: Partial<ScheduledReport> &
+    Pick<ScheduledReport, 'connectionId' | 'name' | 'dashboardId' | 'folder' | 'everyMinutes'>
+): ScheduledReport {
+  load()
+  const now = new Date().toISOString()
+  const next = new Date(Date.now() + Math.max(1, input.everyMinutes) * 60_000).toISOString()
+  const existing = input.id ? store.reports.find((r) => r.id === input.id) : undefined
+  if (existing) {
+    Object.assign(existing, {
+      name: input.name,
+      dashboardId: input.dashboardId,
+      format: input.format ?? 'xlsx',
+      folder: input.folder,
+      everyMinutes: input.everyMinutes,
+      enabled: input.enabled ?? existing.enabled,
+      // Reschedule from now whenever the report is edited.
+      nextRunAt: next,
+      updatedAt: now
+    })
+    persist()
+    return existing
+  }
+  const report: ScheduledReport = {
+    id: randomUUID(),
+    connectionId: input.connectionId,
+    name: input.name,
+    dashboardId: input.dashboardId,
+    format: input.format ?? 'xlsx',
+    folder: input.folder,
+    everyMinutes: input.everyMinutes,
+    enabled: input.enabled ?? true,
+    nextRunAt: next,
+    createdAt: now,
+    updatedAt: now
+  }
+  store.reports.push(report)
+  persist()
+  return report
+}
+
+export function removeReport(id: string): void {
+  load()
+  store.reports = store.reports.filter((r) => r.id !== id)
+  persist()
+}
+
+/** Record the outcome of a scheduler run (does not touch user-edited fields). */
+export function setReportRun(
+  id: string,
+  patch: { lastRunAt: string; nextRunAt: string; lastStatus: string }
+): void {
+  load()
+  const r = store.reports.find((x) => x.id === id)
+  if (!r) return
+  r.lastRunAt = patch.lastRunAt
+  r.nextRunAt = patch.nextRunAt
+  r.lastStatus = patch.lastStatus
   persist()
 }

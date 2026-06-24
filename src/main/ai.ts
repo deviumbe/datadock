@@ -7,6 +7,8 @@ import type {
   ChartType,
   Aggregation,
   DatasetSource,
+  FilterSpec,
+  MetricFormat,
   ChatStep
 } from '@shared/types'
 import { complete, chatWithData, type ChatTurn, type RunSql } from './aiProviders'
@@ -131,14 +133,43 @@ export interface AiAnalyticsRequest {
   state?: AnalyticsState
 }
 
-const CHART_TYPES: ChartType[] = ['bar', 'hbar', 'line', 'area', 'pie', 'donut', 'kpi', 'table']
+const CHART_TYPES: ChartType[] = ['bar', 'hbar', 'line', 'area', 'pie', 'donut', 'kpi', 'table', 'pivot']
 const AGGS: Aggregation[] = ['count', 'sum', 'avg', 'min', 'max']
 const BUCKETS = ['none', 'day', 'week', 'month', 'quarter', 'year']
+const FILTER_OPS = new Set(['=', '!=', '<', '<=', '>', '>=', 'contains', 'starts', 'is null', 'not null'])
+const FORMAT_STYLES = new Set(['plain', 'currency', 'percent'])
 const OP_KINDS = new Set([
   'createDataset', 'updateDataset', 'deleteDataset',
+  'createMetric', 'updateMetric', 'deleteMetric',
   'createChart', 'updateChart', 'deleteChart',
   'createDashboard', 'updateDashboard', 'deleteDashboard'
 ])
+
+function parseFilters(raw: unknown): FilterSpec[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: FilterSpec[] = []
+  for (const f of raw as Record<string, unknown>[]) {
+    if (!f?.column || !FILTER_OPS.has(String(f.op))) continue
+    out.push({
+      column: String(f.column),
+      op: String(f.op) as FilterSpec['op'],
+      value: f.value !== undefined ? String(f.value) : undefined
+    })
+  }
+  return out.length ? out : undefined
+}
+function parseFormat(raw: unknown): MetricFormat | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const f = raw as Record<string, unknown>
+  const style = FORMAT_STYLES.has(String(f.style)) ? (f.style as MetricFormat['style']) : undefined
+  const fmt: MetricFormat = {
+    style,
+    decimals: typeof f.decimals === 'number' ? f.decimals : undefined,
+    prefix: f.prefix !== undefined ? String(f.prefix) : undefined,
+    suffix: f.suffix !== undefined ? String(f.suffix) : undefined
+  }
+  return style || fmt.decimals !== undefined || fmt.prefix || fmt.suffix ? fmt : undefined
+}
 
 function parseSource(src: Record<string, unknown> | undefined): DatasetSource | undefined {
   if (!src?.kind) return undefined
@@ -155,7 +186,8 @@ function parseEncoding(enc: Record<string, unknown>): ChartEncoding {
     yAgg: AGGS.includes(enc.yAgg as Aggregation) ? (enc.yAgg as Aggregation) : 'count',
     yColumn: enc.yColumn ? String(enc.yColumn) : undefined,
     series: enc.series ? String(enc.series) : undefined,
-    limit: typeof enc.limit === 'number' ? enc.limit : undefined
+    limit: typeof enc.limit === 'number' ? enc.limit : undefined,
+    metricId: enc.metricId ? String(enc.metricId) : undefined
   }
 }
 function parseWidgets(raw: unknown): AnalyticsOpWidget[] {
@@ -209,6 +241,42 @@ function parseAnalytics(text: string): AnalyticsPlan {
       }
       case 'deleteDataset':
         if (r.id) ops.push({ op: 'deleteDataset', id: String(r.id) })
+        break
+      case 'createMetric': {
+        const agg = AGGS.includes(r.agg as Aggregation) ? (r.agg as Aggregation) : 'count'
+        if (!r.name || (!r.datasetId && !r.datasetKey)) continue
+        ops.push({
+          op: 'createMetric',
+          key: r.key ? String(r.key) : undefined,
+          name: String(r.name),
+          datasetId: r.datasetId ? String(r.datasetId) : undefined,
+          datasetKey: r.datasetKey ? String(r.datasetKey) : undefined,
+          agg,
+          column: r.column ? String(r.column) : undefined,
+          filters: parseFilters(r.filters),
+          format: parseFormat(r.format),
+          icon: r.icon ? String(r.icon) : undefined
+        })
+        break
+      }
+      case 'updateMetric': {
+        if (!r.id) continue
+        ops.push({
+          op: 'updateMetric',
+          id: String(r.id),
+          name: r.name ? String(r.name) : undefined,
+          datasetId: r.datasetId ? String(r.datasetId) : undefined,
+          datasetKey: r.datasetKey ? String(r.datasetKey) : undefined,
+          agg: AGGS.includes(r.agg as Aggregation) ? (r.agg as Aggregation) : undefined,
+          column: r.column !== undefined ? String(r.column) : undefined,
+          filters: parseFilters(r.filters),
+          format: parseFormat(r.format),
+          icon: r.icon !== undefined ? String(r.icon) : undefined
+        })
+        break
+      }
+      case 'deleteMetric':
+        if (r.id) ops.push({ op: 'deleteMetric', id: String(r.id) })
         break
       case 'createChart': {
         if (!r.name || (!r.datasetId && !r.datasetKey)) continue
@@ -295,6 +363,9 @@ export async function generateAnalytics(req: AiAnalyticsRequest): Promise<Analyt
     `- {"op":"createDataset","key":"d1","name":"...","source":<source>}\n` +
     `- {"op":"updateDataset","id":"...","name?":"...","source?":<source>}\n` +
     `- {"op":"deleteDataset","id":"..."}\n` +
+    `- {"op":"createMetric","key":"m1","name":"...","datasetKey":"d1" OR "datasetId":"...","agg":"count|sum|avg|min|max","column?":"<measure col>","format?":<format>,"icon?":"<emoji>"}\n` +
+    `- {"op":"updateMetric","id":"...","name?":"...","agg?":"...","column?":"...","format?":<format>,"icon?":"<emoji>"}\n` +
+    `- {"op":"deleteMetric","id":"..."}\n` +
     `- {"op":"createChart","key":"c1","name":"...","datasetKey":"d1" OR "datasetId":"...","type":<chartType>,"encoding":<encoding>,"icon?":"<emoji, kpi only>"}\n` +
     `- {"op":"updateChart","id":"...","name?":"...","type?":<chartType>,"encoding?":<encoding>,"datasetId?":"...","icon?":"<emoji>"}\n` +
     `- {"op":"deleteChart","id":"..."}\n` +
@@ -307,9 +378,13 @@ export async function generateAnalytics(req: AiAnalyticsRequest): Promise<Analyt
     `Use "sql" for joins, derived columns, pre-filtering or TOP-N (e.g. WHERE id IN (SELECT ... ORDER BY SUM(...) DESC LIMIT 10)). ` +
     `Dataset SQL MUST return ROW-LEVEL data (dimension, measure, optional series columns) and must NOT pre-aggregate — the app aggregates.\n` +
     `<chartType>: ${CHART_TYPES.join(', ')}. Use "line" for time trends, "bar" for category comparisons, "pie"/"donut" for share, ` +
-    `"kpi" for a single headline number (a card; give it a relevant "icon" emoji), "table" for raw rows.\n` +
+    `"kpi" for a single headline number (a card; give it a relevant "icon" emoji), "table" for raw rows, ` +
+    `"pivot" for a rows × columns cross-tab (set encoding.x = the row dimension and encoding.series = the column dimension; measure in cells).\n` +
     `<encoding>: {"x":"<dimension col, omit for kpi>","bucket":"none|day|week|month|quarter|year","yAgg":"count|sum|avg|min|max",` +
-    `"yColumn":"<measure col, required unless count>","series":"<optional split col>","limit":<max rows>}. ` +
+    `"yColumn":"<measure col, required unless count>","series":"<optional split col>","limit":<max rows>,"metricId?":"<bind measure to a saved metric id/key>"}. ` +
+    `<format> (for metric display): {"style":"plain|currency|percent","decimals":<n>,"prefix?":"...","suffix?":"..."}.\n` +
+    `A METRIC is a reusable named measure. Prefer creating a metric and binding KPI cards/charts to it (encoding.metricId) when the same number is reused, ` +
+    `e.g. "total revenue". For a standalone headline number a kpi chart with a direct yAgg/yColumn is also fine.\n` +
     `Every column named in an encoding MUST be an output column of its dataset. Use only tables/columns from the schema; never invent names.\n` +
     `When building a dashboard, lay KPI cards (w=3,h=4) in a top row and larger charts (w=6,h=8) below on a 12-column grid; x/y optional (auto-arranged).`
   const user =
