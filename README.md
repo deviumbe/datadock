@@ -22,7 +22,7 @@
 <br/>
 
 <p align="center">
-  <img src="docs/screenshots/01-connections.png" alt="DataDock — projects, environments and connections" width="860" />
+  <img src="docs/screenshots/09-dashboard.png" alt="DataDock — analytics dashboard with KPI cards, charts, filters and realtime refresh" width="860" />
 </p>
 
 ---
@@ -199,8 +199,10 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | ![Structure](docs/screenshots/03-structure.png) | ![Query](docs/screenshots/04-query.png) |
 | **Export** — whole DB, per-table structure/data | **SSH tunnel** — key / password / agent auth |
 | ![Export](docs/screenshots/05-export.png) | ![SSH](docs/screenshots/06-ssh.png) |
-| **Autocomplete** — schema-aware table & column names | **ER Diagram** — interactive schema map with zoom |
-| ![Autocomplete](docs/screenshots/07-autocomplete.png) | |
+| **Autocomplete** — schema-aware table & column names | **Analytics** — no-SQL builder, saved metrics & scheduled reports |
+| ![Autocomplete](docs/screenshots/07-autocomplete.png) | ![Analytics](docs/screenshots/08-analytics.png) |
+| **Dashboards** — drag-and-drop KPIs & charts, filters, drill-through, realtime | |
+| ![Dashboard](docs/screenshots/09-dashboard.png) | |
 
 ---
 

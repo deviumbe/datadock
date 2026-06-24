@@ -179,6 +179,7 @@ defineExpose({ snapshot })
         :label="chart.name"
         :icon="chart.icon"
         :format="metricFormat"
+        :hide-label="chart.type === 'kpi'"
         @drill="onDrill"
       />
     </div>

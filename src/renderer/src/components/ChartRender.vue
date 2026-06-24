@@ -15,6 +15,8 @@ const props = defineProps<{
   icon?: string
   /** Display formatting for the KPI value. */
   format?: MetricFormat
+  /** Hide the in-body KPI label (when an outer card header already names it). */
+  hideLabel?: boolean
 }>()
 const emit = defineEmits<{ drill: [{ name: string; seriesName?: string }] }>()
 
@@ -44,11 +46,12 @@ defineExpose({ image })
     <div v-if="!result || !result.rows.length" class="cr-empty">No data.</div>
 
     <!-- KPI card -->
-    <div v-else-if="type === 'kpi'" class="kpi">
-      <div class="kpi-top">
+    <div v-else-if="type === 'kpi'" class="kpi" :class="{ 'kpi-compact': hideLabel }">
+      <div v-if="!hideLabel" class="kpi-top">
         <span v-if="icon" class="kpi-chip">{{ icon }}</span>
         <span class="kpi-label">{{ label ?? 'Value' }}</span>
       </div>
+      <span v-else-if="icon" class="kpi-chip">{{ icon }}</span>
       <div class="kpi-value">{{ kpiText }}</div>
     </div>
 
@@ -127,6 +130,16 @@ defineExpose({ image })
   height: 100%;
   padding: 18px 20px;
   gap: 14px;
+}
+/* Compact variant for dashboard cards (the card header already shows the name). */
+.kpi.kpi-compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.kpi-compact .kpi-value {
+  font-size: clamp(22px, 7cqw, 38px);
 }
 .kpi-top {
   display: flex;
