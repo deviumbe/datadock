@@ -526,3 +526,135 @@ export interface ChatMessage {
 
 /** Standard envelope returned by every IPC handler. */
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string }
+
+// ---- Analytics module ------------------------------------------------------
+
+/** Where a dataset's rows come from. */
+export type DatasetSource =
+  | { kind: 'table'; table: string }
+  | { kind: 'view'; table: string }
+  | { kind: 'sql'; sql: string }
+
+/** A reusable, named query source for charts/metrics. */
+export interface AnalyticsDataset {
+  id: string
+  connectionId: string
+  name: string
+  source: DatasetSource
+  createdAt: string
+  updatedAt: string
+}
+
+export type ChartType = 'bar' | 'hbar' | 'line' | 'area' | 'pie' | 'donut' | 'kpi' | 'table'
+export type Aggregation = 'count' | 'sum' | 'avg' | 'min' | 'max'
+/** Time bucketing applied to a temporal X dimension. */
+export type TimeBucket = 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year'
+
+/** How dataset columns map onto a chart's axes/measures. */
+export interface ChartEncoding {
+  /** Dimension column for the X axis / category (omit for a single-value KPI). */
+  x?: string
+  bucket?: TimeBucket
+  /** Aggregation applied to the measure. */
+  yAgg: Aggregation
+  /** Measure column. Omitted when yAgg is 'count'. */
+  yColumn?: string
+  /** Optional column to split into multiple series. */
+  series?: string
+  filters?: FilterSpec[]
+  limit?: number
+}
+
+export interface AnalyticsChart {
+  id: string
+  connectionId: string
+  datasetId: string
+  name: string
+  type: ChartType
+  encoding: ChartEncoding
+  /** Optional emoji shown on KPI cards (e.g. "💰"). */
+  icon?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** One chart placed on a dashboard grid (12-column units). */
+export interface AnalyticsDashboardWidget {
+  chartId: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+export interface AnalyticsDashboard {
+  id: string
+  connectionId: string
+  name: string
+  widgets: AnalyticsDashboardWidget[]
+  createdAt: string
+  updatedAt: string
+}
+
+// ---- AI-generated analytics plan -------------------------------------------
+// The AI returns an ordered list of operations. New objects are introduced with
+// a local `key` (so later ops can reference them); existing objects are targeted
+// by their real `id`. This lets the AI create, edit, fix or delete in place.
+
+export interface AnalyticsOpWidget {
+  /** An existing chart by id, or a chart created earlier in this plan by key. */
+  chartId?: string
+  chartKey?: string
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+}
+
+export type AnalyticsOp =
+  | { op: 'createDataset'; key: string; name: string; source: DatasetSource }
+  | { op: 'updateDataset'; id: string; name?: string; source?: DatasetSource }
+  | { op: 'deleteDataset'; id: string }
+  | {
+      op: 'createChart'
+      key?: string
+      name: string
+      datasetId?: string
+      datasetKey?: string
+      type: ChartType
+      encoding: ChartEncoding
+      icon?: string
+    }
+  | {
+      op: 'updateChart'
+      id: string
+      name?: string
+      datasetId?: string
+      datasetKey?: string
+      type?: ChartType
+      encoding?: ChartEncoding
+      icon?: string
+    }
+  | { op: 'deleteChart'; id: string }
+  | { op: 'createDashboard'; key?: string; name: string; widgets: AnalyticsOpWidget[] }
+  | { op: 'updateDashboard'; id: string; name?: string; widgets?: AnalyticsOpWidget[] }
+  | { op: 'deleteDashboard'; id: string }
+
+export interface AnalyticsPlan {
+  ops: AnalyticsOp[]
+  /** Short natural-language summary of what was built/changed and any assumptions. */
+  notes?: string
+}
+
+/** Snapshot of the connection's analytics objects, sent to the AI for context. */
+export interface AnalyticsState {
+  datasets: { id: string; name: string; source: DatasetSource }[]
+  charts: {
+    id: string
+    name: string
+    type: ChartType
+    icon?: string
+    datasetId: string
+    encoding: ChartEncoding
+  }[]
+  dashboards: { id: string; name: string; widgets: AnalyticsDashboardWidget[] }[]
+}

@@ -126,6 +126,7 @@ export function buildMenu(): void {
           ]
         },
         { type: 'separator' },
+        { label: 'Analytics', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('analytics') },
         { label: 'Performance', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('performance') },
         { label: 'Redis Queues', click: () => send('redisQueues') }
       ]

@@ -22,6 +22,9 @@ import RelatedRecords from './RelatedRecords.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
 import DocsPanel from './DocsPanel.vue'
 import SmartSearchPanel from './SmartSearchPanel.vue'
+import AnalyticsPanel from './AnalyticsPanel.vue'
+import ChartRender from './ChartRender.vue'
+import { canChart, autoDetect } from '../lib/chartOption'
 import EnvDiffPanel from './EnvDiffPanel.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
@@ -35,7 +38,7 @@ import BulkEditModal from './BulkEditModal.vue'
 import DependenciesModal from './DependenciesModal.vue'
 import TableSizesModal from './TableSizesModal.vue'
 import ColumnSearchModal from './ColumnSearchModal.vue'
-import type { DropTableOptions, PlanNode } from '@shared/types'
+import type { ChartType, DropTableOptions, PlanNode } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
 import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
@@ -53,6 +56,13 @@ const tableFilter = ref('')
 const newDbName = ref('')
 
 const exportOpen = ref(false)
+// Instant Visualization: per-query toggle between the data grid and a chart.
+const qResultView = ref<'table' | 'chart'>('table')
+const qChartType = ref<ChartType>('bar')
+function showChartView(): void {
+  if (active.value?.result) qChartType.value = autoDetect(active.value.result).type
+  qResultView.value = 'chart'
+}
 const saveSnippetOpen = ref(false)
 const createTableOpen = ref(false)
 const exportTableTarget = ref<TableInfo | null>(null)
@@ -696,6 +706,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           title="Chat with your data"
           @click="ui.toggleChatDock()"
         >✨ Chat</button>
+        <button class="btn btn-ghost" title="Analytics — charts & dashboards (⌘⇧A)" @click="tabsStore.openAnalytics(activeConn.id)">📈 Analytics</button>
         <button class="btn btn-ghost" @click="newQuery">＋ Query</button>
         <button class="btn" @click="disconnect">Disconnect</button>
       </template>
@@ -821,7 +832,24 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
                 </div>
               </div>
-              <ResultsGrid v-else :result="active.result" @row-context="(r, e, c) => onRowContext(active!, r, e, c)" />
+              <template v-else>
+                <!-- Instant Visualization: chart any result with one click -->
+                <div v-if="canChart(active.result)" class="result-view">
+                  <div class="rv-toggle">
+                    <button :class="{ on: qResultView === 'table' }" @click="qResultView = 'table'">▦ Table</button>
+                    <button :class="{ on: qResultView === 'chart' }" @click="showChartView">📊 Chart</button>
+                  </div>
+                  <div v-if="qResultView === 'chart'" class="rv-types">
+                    <button v-for="t in (['bar','line','area','pie'] as ChartType[])" :key="t" :class="{ on: qChartType === t }" @click="qChartType = t">{{ t }}</button>
+                  </div>
+                </div>
+                <div v-if="qResultView === 'chart' && canChart(active.result)" class="instant-chart">
+                  <ChartRender :type="qChartType" :result="active.result" instant />
+                </div>
+                <div v-else class="grid-host">
+                  <ResultsGrid :result="active.result" @row-context="(r, e, c) => onRowContext(active!, r, e, c)" />
+                </div>
+              </template>
             </div>
           </div>
 
@@ -1086,6 +1114,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Universal smart search tab -->
           <div v-else-if="active.kind === 'search'" class="explorer-pane">
             <SmartSearchPanel :conn-id="activeConn.id" :driver="activeConn.driver" />
+          </div>
+
+          <!-- Analytics module (dashboards / charts / datasets) -->
+          <div v-else-if="active.kind === 'analytics'" class="explorer-pane">
+            <AnalyticsPanel :conn-id="activeConn.id" :driver="activeConn.driver" />
           </div>
 
           <!-- Schema diff tab -->
@@ -1981,6 +2014,51 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .results {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.grid-host,
+.instant-chart {
+  flex: 1;
+  min-height: 0;
+}
+.instant-chart {
+  padding: 8px 10px 10px;
+}
+.result-view {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.rv-toggle,
+.rv-types {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+.rv-toggle button,
+.rv-types button {
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-dim);
+  text-transform: capitalize;
+}
+.rv-toggle button:hover,
+.rv-types button:hover {
+  color: var(--text);
+}
+.rv-toggle button.on,
+.rv-types button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }
 .run-error {
   padding: 14px;

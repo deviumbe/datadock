@@ -21,6 +21,7 @@ import * as io from './io'
 import * as history from './history'
 import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
+import * as analytics from './analytics'
 import * as ai from './ai'
 import * as settings from './settings'
 import { testProvider } from './aiProviders'
@@ -225,6 +226,33 @@ export function registerIpc(): void {
     return true
   })
 
+  // Analytics module: datasets + saved charts (persisted per connection)
+  handle('analytics:listDatasets', (connId: string) => analytics.listDatasets(connId))
+  handle(
+    'analytics:saveDataset',
+    (input: Parameters<typeof analytics.saveDataset>[0]) => analytics.saveDataset(input)
+  )
+  handle('analytics:removeDataset', (id: string) => {
+    analytics.removeDataset(id)
+    return true
+  })
+  handle('analytics:listCharts', (connId: string) => analytics.listCharts(connId))
+  handle('analytics:saveChart', (input: Parameters<typeof analytics.saveChart>[0]) =>
+    analytics.saveChart(input)
+  )
+  handle('analytics:removeChart', (id: string) => {
+    analytics.removeChart(id)
+    return true
+  })
+  handle('analytics:listDashboards', (connId: string) => analytics.listDashboards(connId))
+  handle('analytics:saveDashboard', (input: Parameters<typeof analytics.saveDashboard>[0]) =>
+    analytics.saveDashboard(input)
+  )
+  handle('analytics:removeDashboard', (id: string) => {
+    analytics.removeDashboard(id)
+    return true
+  })
+
   // AI SQL assistant (key held + used only in main; never sent to renderer)
   handle('ai:hasKey', () => ai.hasAiKey())
   handle('ai:setKey', (key: string) => ai.setAiKey(key))
@@ -232,6 +260,7 @@ export function registerIpc(): void {
   handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
   handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
   handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
+  handle('ai:generateAnalytics', (req: ai.AiAnalyticsRequest) => ai.generateAnalytics(req))
   handle('ai:chat', (connId: string, req: ai.AiChatRequest) =>
     ai.chat(req, makeRunSql(connId, req.driver))
   )

@@ -74,7 +74,9 @@ async function run(): Promise<void> {
   if (busy.value) return
   busy.value = true
   reset()
-  const base = { driver: props.driver, schema: props.schema ?? {} }
+  // Clone the schema: it's a reactive Proxy, which can't be structured-cloned
+  // across the IPC boundary ("object could not be cloned").
+  const base = { driver: props.driver, schema: JSON.parse(JSON.stringify(props.schema ?? {})) }
   try {
     if (mode.value === 'generate') {
       if (!prompt.value.trim()) return

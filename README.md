@@ -64,6 +64,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
 | ⌨️ | **Query, your way** | Multi-tab editor, schema-aware autocomplete, history, snippets, variables, formatter & EXPLAIN |
 | ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
+| 📈 | **Analytics** | A dedicated analytics area — datasets, a no-SQL chart builder, KPI cards, drag-and-drop resizable dashboards, instant one-click charts, and an AI that builds *and edits* them from a plain-English prompt |
 | 📈 | **Performance & insights** | Slow-query dashboard, index hints, pool diagnostics, table sizes & column search |
 | 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
 | 🎭 | **Data masking** | Anonymize chosen columns with realistic fake data on export — safely copy production into a local database |
@@ -155,6 +156,17 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 #### 📈 Performance dashboard
 - Open **Database → Performance** (`⌘⇧P`) for a themed dashboard built from your query history: **query-volume chart**, **slow-query monitor** (grouped by query shape, with a configurable threshold), **heuristic index recommendations**, **connection-pool diagnostics** and a **storage-by-table** breakdown.
+
+#### 📈 Analytics module
+- A **dedicated Analytics area** (open from the connection header, **Database → Analytics** `⌘⇧A`, or `⌘K` → *Analytics*) — separate from the table/query/schema views, focused entirely on visualizing your data.
+- **Datasets** — reusable sources built from a **table, view or saved SQL query**. Define once, reuse across charts.
+- **Visual chart builder (no SQL required)** — pick a dataset, a measure (`count` / `sum` / `avg` / `min` / `max`), a group-by dimension with optional **time bucketing** (day · week · month · quarter · year) and an optional **split series**; DataDock generates the right aggregation SQL per engine and shows a **live preview**. Render as **bar, horizontal bar, line, area, pie, donut, KPI card or table** (powered by Apache ECharts).
+- **Drag-and-drop dashboards** — assemble charts onto a **resizable 12-column grid** (à la Power BI / Grafana): drag a chart's title bar to move it, drag the corner to resize, and the layout saves automatically.
+- **KPI cards** — single headline numbers (*"Sales this month → €55,320"*) from any aggregate (`sum` / `avg` / `count` / …), each with an optional **icon** — perfect for an at-a-glance metrics row.
+- **Instant Visualization** — any query result has a **Table / Chart toggle**; one click auto-detects the axes and draws a chart (switch bar/line/area/pie on the fly).
+- **Build & edit with AI** — describe what you want in plain English (*"a sales overview dashboard"*) and the assistant designs the datasets, charts and a laid-out dashboard for you (right per-engine SQL: joins, top-N, time bucketing). It's **stateful** — ask it to *"fix the revenue chart"* or *"add a KPI for total orders"* and it **edits the existing chart/dashboard in place** instead of creating duplicates. Powered by your configured provider (Claude · Gemini · Mistral · Grok · Ollama).
+- Datasets, charts and dashboards are **saved per connection** and reopen with your tabs.
+- *More coming:* saved metrics, pivot tables, drill-down/through, dashboard filters and scheduled reports.
 
 #### 📨 Redis & realtime queue viewer
 - Open **Tools → Redis Queues** (or `⌘K` → *Redis Queues*) for a **live, Horizon-style dashboard** of every queue on the connection — refreshing every couple of seconds.
@@ -261,8 +273,9 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · related-records overview (everything linked to one record, drill-down) · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table, with per-connection table exclusions) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
 | ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
-| ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock |
+| ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock · AI-built analytics dashboards |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
+| 📊 **Analytics** | Dedicated analytics area · reusable datasets (table / view / saved SQL) · no-SQL visual chart builder (aggregations · time bucketing · series) · bar / line / area / pie / donut / table + **KPI cards with icons** via ECharts · **drag-and-drop resizable dashboards** · instant one-click charts from any query result · **AI that builds *and edits* dashboards/charts in place** from plain English |
 | 📨 **Redis & queues** | Prefix-grouped key browsing · value viewer (string · hash · list · set · zset · stream) · raw-command editor · realtime queue dashboard with framework auto-detect (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
@@ -278,6 +291,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 🛡️ **Production safety** | Dangerous-query confirmation flow |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
 | 📈 **Performance** | Query-plan regression alerts |
+| 📊 **Analytics** | Saved metrics · pivot tables · drill-down / drill-through · dashboard filters · reports + PDF/Excel export · scheduled reports · realtime dashboards |
 | 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |
 | 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |
 | 🪄 **Wow** | Time-travel row history · clone prod schema → local SQLite |

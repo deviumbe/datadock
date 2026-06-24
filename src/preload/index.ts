@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { MaskConfig } from '@shared/mask'
 import type {
   AiProvider,
+  AnalyticsChart,
+  AnalyticsDashboard,
+  AnalyticsDataset,
+  AnalyticsPlan,
+  AnalyticsState,
   AppearanceSettings,
   AppSettings,
   ChatMessage,
@@ -155,6 +160,28 @@ const api = {
       invoke<Snippet>('snippets:save', input),
     remove: (id: string) => invoke<boolean>('snippets:remove', id)
   },
+  analytics: {
+    listDatasets: (connId: string) =>
+      invoke<AnalyticsDataset[]>('analytics:listDatasets', connId),
+    saveDataset: (
+      input: Partial<AnalyticsDataset> &
+        Pick<AnalyticsDataset, 'connectionId' | 'name' | 'source'>
+    ) => invoke<AnalyticsDataset>('analytics:saveDataset', input),
+    removeDataset: (id: string) => invoke<boolean>('analytics:removeDataset', id),
+    listCharts: (connId: string) => invoke<AnalyticsChart[]>('analytics:listCharts', connId),
+    saveChart: (
+      input: Partial<AnalyticsChart> &
+        Pick<AnalyticsChart, 'connectionId' | 'datasetId' | 'name' | 'type' | 'encoding'>
+    ) => invoke<AnalyticsChart>('analytics:saveChart', input),
+    removeChart: (id: string) => invoke<boolean>('analytics:removeChart', id),
+    listDashboards: (connId: string) =>
+      invoke<AnalyticsDashboard[]>('analytics:listDashboards', connId),
+    saveDashboard: (
+      input: Partial<AnalyticsDashboard> &
+        Pick<AnalyticsDashboard, 'connectionId' | 'name' | 'widgets'>
+    ) => invoke<AnalyticsDashboard>('analytics:saveDashboard', input),
+    removeDashboard: (id: string) => invoke<boolean>('analytics:removeDashboard', id)
+  },
   ai: {
     hasKey: () => invoke<boolean>('ai:hasKey'),
     setKey: (key: string) => invoke<boolean>('ai:setKey', key),
@@ -169,6 +196,12 @@ const api = {
       sql: string
       error: string
     }) => invoke<{ sql: string; notes: string }>('ai:fixQuery', req),
+    generateAnalytics: (req: {
+      driver: string
+      schema: Record<string, string[]>
+      prompt: string
+      state?: AnalyticsState
+    }) => invoke<AnalyticsPlan>('ai:generateAnalytics', req),
     chat: (
       connId: string,
       req: { driver: string; schema: Record<string, string[]>; history: ChatMessage[] }

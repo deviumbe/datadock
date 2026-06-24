@@ -100,6 +100,9 @@ function handleMenu(action: string): void {
     case 'search':
       tabs.openSearch(id)
       break
+    case 'analytics':
+      tabs.openAnalytics(id)
+      break
     case 'history':
       tabs.openHistory(id)
       break

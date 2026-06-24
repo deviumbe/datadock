@@ -31,6 +31,7 @@ export type TabKind =
   | 'chat'
   | 'explorer'
   | 'related'
+  | 'analytics'
   | 'performance'
   | 'docs'
   | 'search'
@@ -285,6 +286,13 @@ export const useTabs = defineStore('tabs', () => {
   function openSearch(connId: string): Tab {
     const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'search')
     const tab = existing ?? push(base(connId, 'search', 'Search'))
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  function openAnalytics(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'analytics')
+    const tab = existing ?? push(base(connId, 'analytics', 'Analytics'))
     setActive(connId, tab.id)
     return tab
   }
@@ -863,6 +871,7 @@ export const useTabs = defineStore('tabs', () => {
     'table',
     'explorer',
     'related',
+    'analytics',
     'diagram',
     'performance',
     'docs',
@@ -998,6 +1007,7 @@ export const useTabs = defineStore('tabs', () => {
     openPerformance,
     openDocs,
     openSearch,
+    openAnalytics,
     openEnvDiff,
     openRedisQueues,
     openSchemaDiff,
