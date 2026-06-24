@@ -45,11 +45,11 @@ defineExpose({ image })
 
     <!-- KPI card -->
     <div v-else-if="type === 'kpi'" class="kpi">
-      <span v-if="icon" class="kpi-icon">{{ icon }}</span>
-      <div class="kpi-text">
+      <div class="kpi-top">
+        <span v-if="icon" class="kpi-chip">{{ icon }}</span>
         <span class="kpi-label">{{ label ?? 'Value' }}</span>
-        <span class="kpi-value">{{ kpiText }}</span>
       </div>
+      <div class="kpi-value">{{ kpiText }}</div>
     </div>
 
     <!-- Pivot table (rows × columns matrix with totals) -->
@@ -110,6 +110,7 @@ defineExpose({ image })
   width: 100%;
   height: 100%;
   min-height: 0;
+  container-type: inline-size;
 }
 .cr-empty {
   display: flex;
@@ -121,35 +122,47 @@ defineExpose({ image })
 }
 .kpi {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  height: 100%;
-  padding: 16px 20px;
-  gap: 16px;
-}
-.kpi-icon {
-  font-size: 38px;
-  line-height: 1;
-  flex: none;
-}
-.kpi-text {
-  display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  height: 100%;
+  padding: 18px 20px;
+  gap: 14px;
+}
+.kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
+.kpi-chip {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 9px;
+  background: var(--accent-soft);
+}
 .kpi-label {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   color: var(--text-faint);
-  font-weight: 600;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kpi-value {
-  font-size: 42px;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 6cqw, 40px);
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text);
-  line-height: 1;
+  line-height: 1.05;
 }
 .cr-table {
   height: 100%;

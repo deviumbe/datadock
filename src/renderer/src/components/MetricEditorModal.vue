@@ -201,11 +201,11 @@ async function save(): Promise<void> {
           <div v-if="loading" class="pv-state">Running…</div>
           <div v-else-if="previewError" class="pv-state err">{{ previewError }}</div>
           <div v-else class="kpi">
-            <span v-if="icon" class="kpi-icon">{{ icon }}</span>
-            <div class="kpi-text">
+            <div class="kpi-top">
+              <span v-if="icon" class="kpi-chip">{{ icon }}</span>
               <span class="kpi-label">{{ name || 'Value' }}</span>
-              <span class="kpi-value">{{ previewText }}</span>
             </div>
+            <span class="kpi-value">{{ previewText }}</span>
           </div>
         </div>
       </div>
@@ -317,28 +317,39 @@ async function save(): Promise<void> {
 }
 .kpi {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-.kpi-icon {
-  font-size: 40px;
-}
-.kpi-text {
-  display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
+  padding: 24px;
+}
+.kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.kpi-chip {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  line-height: 1;
+  border-radius: 9px;
+  background: var(--accent-soft);
 }
 .kpi-label {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   color: var(--text-faint);
-  font-weight: 600;
+  font-weight: 700;
 }
 .kpi-value {
+  font-family: var(--font-display);
   font-size: 40px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1;
 }

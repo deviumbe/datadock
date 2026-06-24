@@ -39,51 +39,68 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
 
 <template>
   <div class="mcard">
-    <span v-if="metric.icon" class="m-icon">{{ metric.icon }}</span>
-    <div class="m-body">
+    <div class="m-top">
+      <span v-if="metric.icon" class="m-chip">{{ metric.icon }}</span>
       <span class="m-label">{{ metric.name }}</span>
-      <span class="m-value" :class="{ err: !!error }" :title="error || ''">{{ error ? 'Error' : text }}</span>
+      <div class="m-actions">
+        <button class="ic" title="Edit" @click="emit('edit', metric)">✎</button>
+        <button class="ic" title="Delete" @click="emit('remove', metric)">🗑</button>
+      </div>
     </div>
-    <div class="m-actions">
-      <button class="ic" title="Edit" @click="emit('edit', metric)">✎</button>
-      <button class="ic" title="Delete" @click="emit('remove', metric)">🗑</button>
-    </div>
+    <span class="m-value" :class="{ err: !!error }" :title="error || ''">{{ error ? 'Error' : text }}</span>
   </div>
 </template>
 
 <style scoped>
 .mcard {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
-}
-.m-icon {
-  font-size: 28px;
-  line-height: 1;
-}
-.m-body {
-  display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 14px;
+  padding: 15px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-input);
+  transition: border-color 0.15s;
+}
+.mcard:hover {
+  border-color: var(--border-strong);
+}
+.mcard:hover .m-actions {
+  opacity: 1;
+}
+.m-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   min-width: 0;
+}
+.m-chip {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 9px;
+  background: var(--accent-soft);
 }
 .m-label {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.06em;
   color: var(--text-faint);
-  font-weight: 600;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .m-value {
+  font-family: var(--font-display);
   font-size: 26px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1.05;
 }
@@ -95,6 +112,8 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   margin-left: auto;
   display: flex;
   gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 .ic {
   font-size: 12px;

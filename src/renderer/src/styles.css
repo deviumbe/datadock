@@ -1,5 +1,6 @@
-/* Fonts — Inter for UI, JetBrains Mono for data/code (Stitch design system). */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts — Inter for UI, JetBrains Mono for data/code, Space Grotesk for display
+   numerals (Stitch design system + analytics mock). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
   /* Surfaces — deep-navy "midnight" scale */
@@ -35,6 +36,26 @@
   --radius-sm: 7px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --font-display: 'Space Grotesk', 'Inter', -apple-system, sans-serif;
+
+  /* Analytics chart palette (mock-aligned: teal · blue · amber · purple) */
+  --chart-1: #2dd4bf;
+  --chart-2: #5b8def;
+  --chart-3: #e0a14a;
+  --chart-4: #b07fd6;
+}
+
+/* Soft glowing pulse for "live"/realtime indicators. */
+@keyframes ddpulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  50% {
+    opacity: 0.65;
+    box-shadow: 0 0 0 4px transparent;
+  }
 }
 
 /* Light theme */

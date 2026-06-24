@@ -445,7 +445,8 @@ async function askAi(): Promise<void> {
 }
 .rt-dot.on {
   background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 8px var(--accent);
+  animation: ddpulse 2s ease-in-out infinite;
 }
 .filter-bar {
   display: flex;

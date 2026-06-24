@@ -147,6 +147,7 @@ defineExpose({ snapshot })
         <span v-if="chart.encoding.metricId" class="bound" title="Bound to a saved metric">∑</span>
         {{ chart.name }}
       </span>
+      <span class="card-meta">{{ chart.type }}</span>
       <div class="card-actions">
         <div class="exp">
           <button class="ic" title="Export data" @click="exportOpen = !exportOpen">⤓</button>
@@ -217,17 +218,23 @@ defineExpose({ snapshot })
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
+  border-radius: 12px;
+  background: var(--bg-input);
   overflow: hidden;
   min-height: 260px;
+  transition: border-color 0.15s;
+}
+.card:hover {
+  border-color: var(--border-strong);
+}
+.card:hover .card-actions {
+  opacity: 1;
 }
 .card-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
 }
 .card-title {
   font-size: 13px;
@@ -237,15 +244,24 @@ defineExpose({ snapshot })
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.card-meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
 .bound {
   color: var(--accent);
   font-weight: 700;
   margin-right: 2px;
 }
 .card-actions {
-  margin-left: auto;
   display: flex;
   gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 .exp {
   position: relative;
