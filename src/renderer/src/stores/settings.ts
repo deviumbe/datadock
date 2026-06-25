@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AiProvider, AppSettings, AppearanceSettings, ProviderInfo } from '@shared/types'
+import type {
+  AiProvider,
+  AppSettings,
+  AppearanceSettings,
+  McpInfo,
+  ProviderInfo
+} from '@shared/types'
 
 export const useSettings = defineStore('settings', () => {
   const data = ref<AppSettings | null>(null)
@@ -57,6 +63,26 @@ export const useSettings = defineStore('settings', () => {
     return window.api.settings.testProvider(p)
   }
 
+  // ---- MCP server -----------------------------------------------------------
+  const mcp = ref<McpInfo | null>(null)
+
+  async function loadMcp(): Promise<void> {
+    try {
+      mcp.value = await window.api.mcp.get()
+    } catch {
+      /* MCP unavailable */
+    }
+  }
+  async function setMcpEnabled(enabled: boolean): Promise<void> {
+    mcp.value = await window.api.mcp.setEnabled(enabled)
+  }
+  async function setMcpConfig(cfg: { port?: number; allowWrites?: boolean }): Promise<void> {
+    mcp.value = await window.api.mcp.setConfig(cfg)
+  }
+  async function regenerateMcpToken(): Promise<void> {
+    mcp.value = await window.api.mcp.regenerateToken()
+  }
+
   return {
     data,
     loaded,
@@ -71,6 +97,11 @@ export const useSettings = defineStore('settings', () => {
     clearProviderKey,
     setProviderConfig,
     setAppearance,
-    testProvider
+    testProvider,
+    mcp,
+    loadMcp,
+    setMcpEnabled,
+    setMcpConfig,
+    regenerateMcpToken
   }
 })

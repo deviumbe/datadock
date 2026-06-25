@@ -42,6 +42,9 @@ const DIALECT: Record<string, string> = {
   mysql: 'MySQL',
   sqlite: 'SQLite',
   mssql: 'Microsoft SQL Server (T-SQL)',
+  cockroachdb: 'CockroachDB (PostgreSQL-compatible SQL)',
+  timescaledb: 'TimescaleDB (PostgreSQL SQL with hypertable extensions)',
+  redshift: 'Amazon Redshift (PostgreSQL-compatible SQL)',
   influxdb: 'InfluxDB Flux',
   mongodb: 'MongoDB (shell-style queries)'
 }

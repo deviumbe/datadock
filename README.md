@@ -56,7 +56,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | | Area | What you get |
 |:--:|---|---|
 | 🗄️ | **Organized connections** | Projects → environment folders → connections — color-coded, encrypted at rest, shareable, with a read-only safe mode |
-| 🔌 | **Seven engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · Redis · InfluxDB |
+| 🔌 | **Ten engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · CockroachDB · TimescaleDB · Amazon Redshift · MongoDB · Redis · InfluxDB |
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
 | 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
@@ -64,6 +64,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
 | ⌨️ | **Query, your way** | Multi-tab editor, schema-aware autocomplete, history, snippets, variables, formatter & EXPLAIN |
 | ✨ | **Built-in AI** | NL → SQL, explain, fix-with-AI and chat-with-your-data — Claude, Gemini, Mistral, Grok or Ollama |
+| 🔌 | **MCP server** | Let Claude Code (or any MCP agent) discover & query your databases — local-only, token-auth, read-only by default, with a one-switch kill-switch and per-connection opt-out |
 | 📈 | **Analytics** | A dedicated analytics area — datasets, a no-SQL chart builder, KPI cards, reusable saved metrics, drag-and-drop resizable dashboards with **filters · drill-through · realtime refresh · PDF/Excel export**, and an AI that builds *and edits* them from a plain-English prompt |
 | 📈 | **Performance & insights** | Slow-query dashboard, index hints, pool diagnostics, table sizes & column search |
 | 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
@@ -311,9 +312,9 @@ Already covers **≈80–90%** of typical use; more on the way.
 | Engine | Status |
 |---|:--:|
 | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · **Redis** · InfluxDB | ✅ Supported |
+| **CockroachDB · TimescaleDB · Amazon Redshift** — ride on PostgreSQL support | ✅ Supported |
 | **Oracle Database** — enterprise reach | ⏳ Planned |
-| **CockroachDB · TimescaleDB** — ride on PostgreSQL support | ⏳ Planned |
-| Snowflake · ClickHouse · BigQuery · Redshift · DuckDB | 💡 Exploring |
+| Snowflake · ClickHouse · BigQuery · DuckDB | 💡 Exploring |
 
 ---
 

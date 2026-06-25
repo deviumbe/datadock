@@ -8,16 +8,45 @@ export type DriverType =
   | 'influxdb'
   | 'mongodb'
   | 'redis'
+  | 'cockroachdb'
+  | 'timescaledb'
+  | 'redshift'
 
 export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[] = [
   { type: 'postgres', label: 'PostgreSQL', defaultPort: 5432 },
   { type: 'mysql', label: 'MySQL / MariaDB', defaultPort: 3306 },
   { type: 'sqlite', label: 'SQLite' },
   { type: 'mssql', label: 'SQL Server', defaultPort: 1433 },
+  { type: 'cockroachdb', label: 'CockroachDB', defaultPort: 26257 },
+  { type: 'timescaledb', label: 'TimescaleDB', defaultPort: 5432 },
+  { type: 'redshift', label: 'Amazon Redshift', defaultPort: 5439 },
   { type: 'mongodb', label: 'MongoDB', defaultPort: 27017 },
   { type: 'redis', label: 'Redis', defaultPort: 6379 },
   { type: 'influxdb', label: 'InfluxDB' }
 ]
+
+/**
+ * PostgreSQL wire-compatible engines. They reuse the Postgres adapter verbatim
+ * and share its SQL dialect (quoting, LIMIT/OFFSET, date formatting, EXPLAIN).
+ */
+export const PG_FAMILY: DriverType[] = ['postgres', 'cockroachdb', 'timescaledb', 'redshift']
+
+/** Engines that speak SQL (vs. the document / key-value / time-series stores). */
+export const SQL_DRIVERS: DriverType[] = [...PG_FAMILY, 'mysql', 'sqlite', 'mssql']
+
+export function isSqlDriver(driver: string): boolean {
+  return (SQL_DRIVERS as string[]).includes(driver)
+}
+
+/** The base SQL dialect a driver follows, for query generation. */
+export type SqlDialect = 'postgres' | 'mysql' | 'sqlite' | 'mssql'
+
+/** Normalize a driver to its base SQL dialect (pg-wire engines → postgres). */
+export function sqlDialect(driver: string): SqlDialect {
+  if ((PG_FAMILY as string[]).includes(driver)) return 'postgres'
+  if (driver === 'mysql' || driver === 'sqlite' || driver === 'mssql') return driver
+  return 'postgres'
+}
 
 /** Common column types offered in the "New table" dropdown, per engine. */
 export const COLUMN_TYPES: Record<DriverType, string[]> = {
@@ -32,6 +61,22 @@ export const COLUMN_TYPES: Record<DriverType, string[]> = {
     'time', 'json', 'blob'
   ],
   sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB'],
+  // pg-wire engines reuse the PostgreSQL type list.
+  cockroachdb: [
+    'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'numeric', 'real',
+    'double precision', 'boolean', 'text', 'varchar(255)', 'char(1)', 'date',
+    'timestamp', 'timestamptz', 'time', 'uuid', 'json', 'jsonb', 'bytea'
+  ],
+  timescaledb: [
+    'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'numeric', 'real',
+    'double precision', 'boolean', 'text', 'varchar(255)', 'char(1)', 'date',
+    'timestamp', 'timestamptz', 'time', 'uuid', 'json', 'jsonb', 'bytea'
+  ],
+  redshift: [
+    'integer', 'bigint', 'smallint', 'numeric', 'real', 'double precision',
+    'boolean', 'text', 'varchar(255)', 'char(1)', 'date', 'timestamp',
+    'timestamptz', 'time', 'super'
+  ],
   mongodb: [],
   redis: [],
   mssql: [
@@ -57,6 +102,8 @@ export interface ConnectionConfig {
   readOnly?: boolean
   /** Show a prominent red "PRODUCTION" banner for this connection. */
   production?: boolean
+  /** Hide this connection from the MCP server (no discovery or query access). */
+  mcpExcluded?: boolean
 
   // Network drivers (postgres, mysql, mssql)
   host?: string
@@ -420,6 +467,11 @@ export const DRIVER_CAPS: Record<DriverType, DriverCapabilities> = {
   postgres: { databases: true, users: true, processes: true },
   mysql: { databases: true, users: true, processes: true },
   mssql: { databases: true, users: true, processes: true },
+  // CockroachDB & TimescaleDB expose the same pg catalogs/roles/activity views.
+  cockroachdb: { databases: true, users: true, processes: true },
+  timescaledb: { databases: true, users: true, processes: true },
+  // Redshift lacks pg_stat_activity / pg_roles — keep it to databases only.
+  redshift: { databases: true, users: false, processes: false },
   sqlite: { databases: false, users: false, processes: false },
   mongodb: { databases: false, users: false, processes: false },
   // Redis has no users/createDatabase, but CLIENT LIST/KILL maps onto Processes.
@@ -509,6 +561,30 @@ export interface AppSettings {
     providers: ProviderInfo[]
   }
   appearance: AppearanceSettings
+}
+
+/**
+ * Local MCP server config. Lets an external AI agent (e.g. Claude Code) discover
+ * and query the user's databases over a localhost-only HTTP endpoint. Off by
+ * default; `enabled` is the master kill-switch that fully starts/stops the server.
+ */
+export interface McpSettings {
+  /** Master switch — when false the server is fully stopped (port closed). */
+  enabled: boolean
+  /** Loopback TCP port the Streamable-HTTP endpoint listens on. */
+  port: number
+  /** Bearer token required by every request (the user's own local secret). */
+  token: string
+  /** Opt-in: allow write/DDL statements (still blocked on read-only/production connections). */
+  allowWrites: boolean
+}
+
+/** MCP persisted settings plus live runtime status, for the settings UI. */
+export interface McpInfo extends McpSettings {
+  /** True while the HTTP server is actively listening. */
+  running: boolean
+  /** Last start error, if the server failed to bind. */
+  error?: string
 }
 
 /** A single message in a data-chat conversation. */

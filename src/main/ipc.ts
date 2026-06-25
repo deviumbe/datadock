@@ -25,9 +25,11 @@ import * as analytics from './analytics'
 import { runReport } from './scheduler'
 import * as ai from './ai'
 import * as settings from './settings'
+import * as mcp from './mcp'
+import { prepareStatement } from './sqlGuard'
 import { testProvider } from './aiProviders'
 import type { RunSql } from './aiProviders'
-import type { AiProvider, AppearanceSettings, QueryResult } from '@shared/types'
+import type { AiProvider, AppearanceSettings, McpSettings, QueryResult } from '@shared/types'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
 
@@ -49,28 +51,7 @@ function formatRowsForAi(res: QueryResult): { text: string; rowCount: number } {
 /** A read-only query runner for the data-chat, bound to one connection. */
 function makeRunSql(connId: string, driver: string): RunSql {
   return async (sql: string) => {
-    const trimmed = sql.trim().replace(/;\s*$/, '')
-    if (!trimmed) throw new Error('Empty query.')
-    if (/;/.test(trimmed)) throw new Error('Only a single statement is allowed.')
-    if (driver === 'mongodb') {
-      // The Mongo adapter only exposes read methods, so it's read-only already.
-    } else if (driver === 'redis') {
-      const cmd = trimmed.split(/\s+/)[0]?.toUpperCase() ?? ''
-      const READ_ONLY_REDIS = new Set([
-        'GET', 'MGET', 'STRLEN', 'EXISTS', 'TYPE', 'TTL', 'PTTL', 'KEYS', 'SCAN',
-        'HGET', 'HGETALL', 'HKEYS', 'HVALS', 'HLEN', 'HMGET', 'HSCAN',
-        'LRANGE', 'LLEN', 'LINDEX', 'SMEMBERS', 'SCARD', 'SISMEMBER', 'SSCAN',
-        'ZRANGE', 'ZREVRANGE', 'ZCARD', 'ZSCORE', 'ZRANGEBYSCORE', 'ZSCAN',
-        'XRANGE', 'XLEN', 'XINFO', 'INFO', 'DBSIZE', 'MEMORY', 'OBJECT', 'PING'
-      ])
-      if (!READ_ONLY_REDIS.has(cmd)) {
-        throw new Error(`Only read-only Redis commands are allowed (got "${cmd}").`)
-      }
-    } else if (driver === 'influxdb') {
-      if (/\bto\s*\(/i.test(trimmed)) throw new Error('Only read-only Flux is allowed.')
-    } else if (!/^(select|with|explain|show|pragma)\b/i.test(trimmed)) {
-      throw new Error('Only read-only queries (SELECT / WITH / EXPLAIN / SHOW) are allowed.')
-    }
+    const trimmed = prepareStatement(driver, sql, true)
     const res = await db.getAdapter(connId).query(trimmed)
     return formatRowsForAi(res)
   }
@@ -300,6 +281,14 @@ export function registerIpc(): void {
     await testProvider(p)
     return true
   })
+
+  // MCP server (local AI-agent access to the user's databases; off by default)
+  handle('mcp:get', () => mcp.getMcpInfo())
+  handle('mcp:setEnabled', (enabled: boolean) => mcp.setEnabled(enabled))
+  handle('mcp:setConfig', (cfg: Partial<Pick<McpSettings, 'port' | 'allowWrites'>>) =>
+    mcp.setConfig(cfg)
+  )
+  handle('mcp:regenerateToken', () => mcp.regenerateToken())
 
   handle('app:version', () => app.getVersion())
 

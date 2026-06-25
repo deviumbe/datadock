@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { isSqlDriver } from '@shared/types'
 import type {
   AnalyticsChart,
   AnalyticsMetric,
@@ -22,7 +23,7 @@ const props = defineProps<{ connId: string; driver: string }>()
 const analytics = useAnalytics()
 const ws = useWorkspace()
 
-const isSql = computed(() => ['postgres', 'mysql', 'sqlite', 'mssql'].includes(props.driver))
+const isSql = computed(() => isSqlDriver(props.driver))
 const datasets = computed(() => analytics.datasetsFor(props.connId))
 const metrics = computed(() => analytics.metricsFor(props.connId))
 const charts = computed(() => analytics.chartsFor(props.connId))

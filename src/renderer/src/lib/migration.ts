@@ -1,4 +1,5 @@
 // Turn a schema diff (from schemaDiff.ts) into dialect-aware migration DDL.
+import { sqlDialect } from '@shared/types'
 import type { SchemaColumn } from '@shared/types'
 import type { TableDiff } from './schemaDiff'
 
@@ -63,6 +64,7 @@ function dropTable(driver: string, table: string): string {
  * @param toTarget true → make THIS connection match the target; false → reverse.
  */
 export function buildMigration(diff: TableDiff[], driver: string, toTarget: boolean): string {
+  driver = sqlDialect(driver)
   const out: string[] = []
 
   for (const t of diff) {

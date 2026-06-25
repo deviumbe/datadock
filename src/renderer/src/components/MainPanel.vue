@@ -41,7 +41,7 @@ import ColumnSearchModal from './ColumnSearchModal.vue'
 import type { ChartType, DropTableOptions, PlanNode } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
-import { type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
+import { sqlDialect, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
 import { lintSql } from '../lib/sqlLint'
 import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
@@ -511,11 +511,12 @@ function relockWrites(): void {
 }
 const isProduction = computed(() => !!activeConn.value?.production)
 const explainable = computed(() =>
-  ['postgres', 'mysql', 'sqlite'].includes(activeConn.value?.driver ?? '')
+  ['postgres', 'mysql', 'sqlite'].includes(sqlDialect(activeConn.value?.driver ?? ''))
 )
-// Visual EXPLAIN — only engines that expose a structured plan.
+// Visual EXPLAIN — only engines that expose a structured plan. Of the pg-wire
+// family only real Postgres + TimescaleDB support `EXPLAIN (FORMAT JSON)`.
 const visualExplainable = computed(() =>
-  ['postgres', 'sqlite'].includes(activeConn.value?.driver ?? '')
+  ['postgres', 'sqlite', 'timescaledb'].includes(activeConn.value?.driver ?? '')
 )
 
 // Other connections (for schema diff target picker), labeled project / env / name.

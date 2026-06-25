@@ -11,6 +11,8 @@ import type {
   ScheduledReport,
   AppearanceSettings,
   AppSettings,
+  McpInfo,
+  McpSettings,
   ChatMessage,
   ChatStep,
   AlterOp,
@@ -237,6 +239,13 @@ const api = {
     setAppearance: (a: Partial<AppearanceSettings>) =>
       invoke<AppSettings>('settings:setAppearance', a),
     testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p)
+  },
+  mcp: {
+    get: () => invoke<McpInfo>('mcp:get'),
+    setEnabled: (enabled: boolean) => invoke<McpInfo>('mcp:setEnabled', enabled),
+    setConfig: (cfg: Partial<Pick<McpSettings, 'port' | 'allowWrites'>>) =>
+      invoke<McpInfo>('mcp:setConfig', cfg),
+    regenerateToken: () => invoke<McpInfo>('mcp:regenerateToken')
   },
   updates: {
     // main → renderer events (each returns an unsubscribe fn)

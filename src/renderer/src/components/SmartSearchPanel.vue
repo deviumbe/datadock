@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { QueryResult } from '@shared/types'
+import { isSqlDriver, type QueryResult } from '@shared/types'
 import { useTabs } from '../stores/tabs'
 import { textColumns, buildSearchSql } from '../lib/search'
 import ResultsGrid from './ResultsGrid.vue'
@@ -8,7 +8,7 @@ import ResultsGrid from './ResultsGrid.vue'
 const props = defineProps<{ connId: string; driver: string }>()
 const tabsStore = useTabs()
 
-const isSql = computed(() => ['postgres', 'mysql', 'sqlite', 'mssql'].includes(props.driver))
+const isSql = computed(() => isSqlDriver(props.driver))
 
 const term = ref('')
 const running = ref(false)

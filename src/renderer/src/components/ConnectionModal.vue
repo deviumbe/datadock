@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, watch } from 'vue'
 import Modal from './Modal.vue'
-import { DRIVERS, type ConnectionConfig, type DriverType } from '@shared/types'
+import { DRIVERS, PG_FAMILY, type ConnectionConfig, type DriverType } from '@shared/types'
 
 const props = defineProps<{
   environmentId: string
@@ -27,6 +27,7 @@ function blank(): ConnectionConfig {
     ssl: false,
     readOnly: false,
     production: false,
+    mcpExcluded: false,
     sshEnabled: false,
     sshPort: 22,
     sshAuthMethod: 'key'
@@ -41,7 +42,9 @@ const hadToken = ref(!!props.config?.hasToken)
 const hadSshPassword = ref(!!props.config?.hasSshPassword)
 const hadSshPassphrase = ref(!!props.config?.hasSshPassphrase)
 
-const isNetwork = computed(() => ['postgres', 'mysql', 'mssql', 'redis'].includes(form.driver))
+const isNetwork = computed(() =>
+  ['mysql', 'mssql', 'redis', ...PG_FAMILY].includes(form.driver)
+)
 const isRedis = computed(() => form.driver === 'redis')
 const canTunnel = computed(() => !['sqlite', 'mongodb'].includes(form.driver))
 
@@ -124,6 +127,10 @@ function save(): void {
       <label class="check span2 ro">
         <input type="checkbox" v-model="form.production" />
         <span>⚠️ Production — show a prominent red banner when this connection is active</span>
+      </label>
+      <label class="check span2 ro">
+        <input type="checkbox" v-model="form.mcpExcluded" />
+        <span>🔌 Disable discovery from MCP — hide this connection from AI agents</span>
       </label>
 
       <!-- Network drivers -->

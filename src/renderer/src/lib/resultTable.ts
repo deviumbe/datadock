@@ -3,11 +3,10 @@
 // conservatively from the data (falling back to text on any ambiguity), and
 // column names are sanitized to safe identifiers.
 
-import type { ColumnMeta, CreateTableSpec, DriverType, NewColumn } from '@shared/types'
+import { isSqlDriver, sqlDialect } from '@shared/types'
+import type { ColumnMeta, CreateTableSpec, DriverType, NewColumn, SqlDialect } from '@shared/types'
 
-type SqlDriver = 'postgres' | 'mysql' | 'sqlite' | 'mssql'
-
-const TYPES: Record<SqlDriver, { int: string; real: string; bool: string; text: string }> = {
+const TYPES: Record<SqlDialect, { int: string; real: string; bool: string; text: string }> = {
   postgres: { int: 'bigint', real: 'double precision', bool: 'boolean', text: 'text' },
   mysql: { int: 'bigint', real: 'double', bool: 'tinyint(1)', text: 'text' },
   sqlite: { int: 'INTEGER', real: 'REAL', bool: 'INTEGER', text: 'TEXT' },
@@ -15,8 +14,8 @@ const TYPES: Record<SqlDriver, { int: string; real: string; bool: string; text: 
 }
 
 /** Engines that can create a table from a result (have createTable + applyChanges). */
-export function canExportToTable(driver: DriverType): driver is SqlDriver {
-  return driver === 'postgres' || driver === 'mysql' || driver === 'sqlite' || driver === 'mssql'
+export function canExportToTable(driver: DriverType): boolean {
+  return isSqlDriver(driver)
 }
 
 const INT_RE = /^-?\d+$/
@@ -36,7 +35,7 @@ function isBool(v: unknown): boolean {
 }
 
 /** Pick a column type from the non-null sample values for the given engine. */
-function inferType(values: unknown[], t: (typeof TYPES)[SqlDriver]): string {
+function inferType(values: unknown[], t: (typeof TYPES)[SqlDialect]): string {
   const present = values.filter((v) => v !== null && v !== undefined && v !== '')
   if (present.length === 0) return t.text
   if (present.every(isBool)) return t.bool
@@ -70,9 +69,9 @@ export function planResultTable(
   name: string,
   columns: ColumnMeta[],
   rows: unknown[][],
-  driver: SqlDriver
+  driver: DriverType
 ): ResultTablePlan {
-  const t = TYPES[driver]
+  const t = TYPES[sqlDialect(driver)]
   const used = new Set<string>()
   const safeNames = columns.map((c) => sanitize(c.name, used))
 

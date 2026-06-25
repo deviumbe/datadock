@@ -6,6 +6,9 @@ const LANGUAGE: Record<DriverType, SqlLanguage | null> = {
   mysql: 'mysql',
   sqlite: 'sqlite',
   mssql: 'transactsql',
+  cockroachdb: 'postgresql', // pg-wire compatible
+  timescaledb: 'postgresql', // pg-wire compatible
+  redshift: 'redshift',
   mongodb: null, // document store, not SQL
   redis: null, // key/value, raw commands not SQL
   influxdb: null // Flux, not SQL

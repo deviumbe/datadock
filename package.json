@@ -101,6 +101,7 @@
     "@faker-js/faker": "^10.5.0",
     "@influxdata/influxdb-client": "^1.35.0",
     "@influxdata/influxdb-client-apis": "^1.35.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",
     "echarts": "^6.1.0",
     "electron-updater": "^6.8.9",
@@ -115,7 +116,8 @@
     "papaparse": "^5.5.4",
     "pg": "^8.22.0",
     "sql-formatter": "^15.8.1",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",

@@ -20,6 +20,10 @@ const live = new Map<string, LiveConnection>()
 export function createAdapter(config: ConnectionConfig): DbAdapter {
   switch (config.driver) {
     case 'postgres':
+    case 'cockroachdb':
+    case 'timescaledb':
+    case 'redshift':
+      // All PostgreSQL wire-compatible — the Postgres adapter handles them.
       return new PostgresAdapter(config)
     case 'mysql':
       return new MySQLAdapter(config)
@@ -159,7 +163,9 @@ function sqliteTree(rows: unknown[][]): PlanNode {
 export async function explainPlan(id: string, sql: string): Promise<PlanNode | null> {
   const adapter = getAdapter(id)
   const driver = adapter.config.driver
-  if (driver === 'postgres') {
+  // TimescaleDB is real Postgres, so it supports the JSON-format plan too.
+  // CockroachDB/Redshift differ here — they fall back to the flat text EXPLAIN.
+  if (driver === 'postgres' || driver === 'timescaledb') {
     const res = await adapter.query(`EXPLAIN (FORMAT JSON, COSTS true) ${sql}`)
     const cell = res.rows?.[0]?.[0]
     const parsed = typeof cell === 'string' ? JSON.parse(cell) : cell

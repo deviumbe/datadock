@@ -1,5 +1,6 @@
 // Compile a chart encoding into driver-specific SQL. The result set is always
 // shaped as columns: `x` (omitted for KPI), optional `series`, and `y`.
+import { sqlDialect } from '@shared/types'
 import type { ChartEncoding, DatasetSource, FilterSpec, TimeBucket } from '@shared/types'
 
 function quote(driver: string, id: string): string {
@@ -83,6 +84,7 @@ function whereClause(driver: string, filters?: FilterSpec[]): string {
 
 /** Raw dataset rows (for the "table" chart type and column introspection). */
 export function datasetRowsSql(driver: string, source: DatasetSource, limit = 200): string {
+  driver = sqlDialect(driver)
   const from = fromExpr(driver, source)
   if (driver === 'mssql') return `SELECT TOP ${limit} * FROM ${from}`
   return `SELECT * FROM ${from} LIMIT ${limit}`
@@ -111,6 +113,7 @@ export function drillRowsSql(
   seriesValue?: string,
   limit = 500
 ): string {
+  driver = sqlDialect(driver)
   const from = fromExpr(driver, source)
   const conds: string[] = []
   if (encoding.x) {
@@ -135,6 +138,7 @@ export function buildChartSql(
   source: DatasetSource,
   encoding: ChartEncoding
 ): string {
+  driver = sqlDialect(driver)
   const from = fromExpr(driver, source)
   const where = whereClause(driver, encoding.filters)
   const y = `${aggExpr(driver, encoding.yAgg, encoding.yColumn)} AS y`

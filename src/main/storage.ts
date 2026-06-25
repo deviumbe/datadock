@@ -71,6 +71,17 @@ export function workspaceForRenderer(): Workspace {
   }
 }
 
+/** Flat list of all stored connections (secrets stripped), across projects/envs. */
+export function allConnections(): ConnectionConfig[] {
+  const out: ConnectionConfig[] = []
+  for (const p of workspace.projects) {
+    for (const e of p.environments) {
+      for (const c of e.connections) out.push(sanitizeConnection(c))
+    }
+  }
+  return out
+}
+
 function sanitizeConnection(c: ConnectionConfig): ConnectionConfig {
   const clone: ConnectionConfig = { ...c }
   clone.hasPassword = !!c.password

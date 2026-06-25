@@ -1,10 +1,12 @@
 import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { randomBytes } from 'crypto'
 import { join } from 'path'
 import type {
   AiProvider,
   AppSettings,
   AppearanceSettings,
+  McpSettings,
   ProviderInfo
 } from '@shared/types'
 
@@ -21,6 +23,7 @@ interface RawProvider {
 interface RawSettings {
   ai: { activeProvider: AiProvider; providers: Partial<Record<AiProvider, RawProvider>> }
   appearance: AppearanceSettings
+  mcp: McpSettings
 }
 
 export const PROVIDER_META: Record<
@@ -44,6 +47,18 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   density: 'comfortable',
   pageSize: 200,
   theme: 'dark'
+}
+
+// MCP is off by default; a token is generated lazily the first time it's enabled.
+const DEFAULT_MCP: McpSettings = {
+  enabled: false,
+  port: 4319,
+  token: '',
+  allowWrites: false
+}
+
+function newToken(): string {
+  return randomBytes(24).toString('base64url')
 }
 
 let settingsPath: string | undefined
@@ -70,7 +85,11 @@ function decrypt(stored: string | undefined): string | undefined {
 let cache: RawSettings | undefined
 
 function blank(): RawSettings {
-  return { ai: { activeProvider: 'anthropic', providers: {} }, appearance: { ...DEFAULT_APPEARANCE } }
+  return {
+    ai: { activeProvider: 'anthropic', providers: {} },
+    appearance: { ...DEFAULT_APPEARANCE },
+    mcp: { ...DEFAULT_MCP }
+  }
 }
 
 /** Pull an Anthropic key from the legacy ai.json (pre-multi-provider) once. */
@@ -100,7 +119,8 @@ function load(): RawSettings {
           activeProvider: parsed.ai?.activeProvider ?? 'anthropic',
           providers: parsed.ai?.providers ?? {}
         },
-        appearance: { ...DEFAULT_APPEARANCE, ...(parsed.appearance ?? {}) }
+        appearance: { ...DEFAULT_APPEARANCE, ...(parsed.appearance ?? {}) },
+        mcp: { ...DEFAULT_MCP, ...(parsed.mcp ?? {}) }
       }
     } catch {
       s = blank()
@@ -183,6 +203,29 @@ export function setAppearance(partial: Partial<AppearanceSettings>): AppSettings
   raw.appearance = { ...raw.appearance, ...partial }
   save()
   return getSettings()
+}
+
+// ---- MCP server settings ----------------------------------------------------
+
+export function getMcpSettings(): McpSettings {
+  return { ...load().mcp }
+}
+
+/** Merge a partial MCP config and persist. Generating a token when first needed. */
+export function setMcpSettings(partial: Partial<McpSettings>): McpSettings {
+  const raw = load()
+  raw.mcp = { ...raw.mcp, ...partial }
+  // Mint a token the first time the server is turned on so the UI can show it.
+  if (raw.mcp.enabled && !raw.mcp.token) raw.mcp.token = newToken()
+  save()
+  return { ...raw.mcp }
+}
+
+export function regenerateMcpToken(): McpSettings {
+  const raw = load()
+  raw.mcp.token = newToken()
+  save()
+  return { ...raw.mcp }
 }
 
 // ---- internal accessors for the provider layer ------------------------------

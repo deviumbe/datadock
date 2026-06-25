@@ -9,12 +9,13 @@ const settings = useSettings()
 const ui = useUi()
 const emit = defineEmits<{ close: [] }>()
 
-type Section = 'ai' | 'appearance' | 'about'
+type Section = 'ai' | 'appearance' | 'mcp' | 'about'
 const section = ref<Section>('ai')
 
 const appVersion = ref('0.1.0')
 onMounted(async () => {
   if (!settings.loaded) void settings.load()
+  void settings.loadMcp()
   try {
     appVersion.value = await window.api.getVersion()
   } catch {
@@ -74,6 +75,47 @@ function setPageSize(n: number): void {
   void settings.setAppearance({ pageSize: n })
 }
 
+// MCP server
+const mcp = computed(() => settings.mcp)
+const portDraft = ref<number | null>(null)
+const tokenShown = ref(false)
+const copied = ref('')
+
+const mcpCommand = computed(() => {
+  const m = mcp.value
+  if (!m) return ''
+  return (
+    `claude mcp add --transport http datadock ` +
+    `http://127.0.0.1:${m.port}/mcp ` +
+    `--header "Authorization: Bearer ${m.token}"`
+  )
+})
+
+async function toggleMcp(): Promise<void> {
+  await settings.setMcpEnabled(!mcp.value?.enabled)
+}
+async function saveMcpPort(): Promise<void> {
+  if (portDraft.value && portDraft.value !== mcp.value?.port) {
+    await settings.setMcpConfig({ port: portDraft.value })
+  }
+  portDraft.value = null
+}
+async function toggleMcpWrites(): Promise<void> {
+  await settings.setMcpConfig({ allowWrites: !mcp.value?.allowWrites })
+}
+async function regenMcpToken(): Promise<void> {
+  await settings.regenerateMcpToken()
+}
+async function copy(text: string, what: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = what
+    setTimeout(() => (copied.value = ''), 1500)
+  } catch {
+    /* clipboard unavailable */
+  }
+}
+
 </script>
 
 <template>
@@ -84,6 +126,7 @@ function setPageSize(n: number): void {
           <div class="nav-title">Settings</div>
           <button :class="{ on: section === 'ai' }" @click="section = 'ai'">✨ AI Providers</button>
           <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'">🎨 Appearance</button>
+          <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'">🔌 MCP Server</button>
           <button :class="{ on: section === 'about' }" @click="section = 'about'">ℹ️ About</button>
           <div class="nav-spacer" />
           <button class="close-x" @click="emit('close')">Close ✕</button>
@@ -223,6 +266,102 @@ function setPageSize(n: number): void {
                 </select>
               </div>
             </div>
+          </section>
+
+          <!-- MCP server -->
+          <section v-else-if="section === 'mcp'">
+            <h2>MCP Server</h2>
+            <p class="lead">
+              Let an external AI agent (like Claude Code) discover and query your databases through
+              the <strong>Model Context Protocol</strong>. The server runs locally on
+              <code>127.0.0.1</code> only and requires the token below on every request. It's
+              <strong>off by default</strong> — the switch is a hard kill-switch that fully closes
+              the port.
+            </p>
+
+            <div class="setting">
+              <div class="setting-label">
+                <span>Enable MCP access</span>
+                <small>Master switch. When off, no MCP communication is possible at all.</small>
+              </div>
+              <div class="setting-control">
+                <button
+                  class="toggle"
+                  :class="{ on: mcp?.enabled }"
+                  role="switch"
+                  :aria-checked="!!mcp?.enabled"
+                  @click="toggleMcp"
+                >
+                  <span class="knob" />
+                </button>
+              </div>
+            </div>
+
+            <p v-if="mcp?.enabled" class="status" :class="{ ok: mcp?.running, bad: !mcp?.running }">
+              <template v-if="mcp?.running">● Listening on http://127.0.0.1:{{ mcp?.port }}/mcp</template>
+              <template v-else>● Not running{{ mcp?.error ? ` — ${mcp.error}` : '' }}</template>
+            </p>
+
+            <template v-if="mcp?.enabled">
+              <div class="setting">
+                <div class="setting-label">
+                  <span>Port</span>
+                  <small>Loopback TCP port for the MCP endpoint.</small>
+                </div>
+                <div class="setting-control">
+                  <input
+                    class="input port"
+                    type="number"
+                    :value="portDraft ?? mcp?.port"
+                    @input="portDraft = Number(($event.target as HTMLInputElement).value)"
+                    @blur="saveMcpPort"
+                    @keydown.enter="saveMcpPort"
+                  />
+                </div>
+              </div>
+
+              <div class="setting">
+                <div class="setting-label">
+                  <span>Allow writes</span>
+                  <small>Off = read-only (SELECT/SHOW/EXPLAIN). Writes never touch read-only or production connections.</small>
+                </div>
+                <div class="setting-control">
+                  <button
+                    class="toggle"
+                    :class="{ on: mcp?.allowWrites, warn: mcp?.allowWrites }"
+                    role="switch"
+                    :aria-checked="!!mcp?.allowWrites"
+                    @click="toggleMcpWrites"
+                  >
+                    <span class="knob" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="row mcp-field">
+                <label>Access token</label>
+                <div class="row-inputs">
+                  <input class="input mono" :type="tokenShown ? 'text' : 'password'" :value="mcp?.token" readonly />
+                  <button class="btn btn-ghost" @click="tokenShown = !tokenShown">{{ tokenShown ? 'Hide' : 'Show' }}</button>
+                  <button class="btn" @click="copy(mcp?.token ?? '', 'token')">{{ copied === 'token' ? 'Copied!' : 'Copy' }}</button>
+                  <button class="btn btn-ghost" @click="regenMcpToken">Regenerate</button>
+                </div>
+              </div>
+
+              <div class="row mcp-field">
+                <label>Connect Claude Code</label>
+                <p class="hint">Run this once in your project, then the agent can use the DataDock tools:</p>
+                <div class="cmd">
+                  <code>{{ mcpCommand }}</code>
+                  <button class="btn" @click="copy(mcpCommand, 'cmd')">{{ copied === 'cmd' ? 'Copied!' : 'Copy' }}</button>
+                </div>
+                <p class="hint">
+                  Tools exposed: <code>list_connections</code>, <code>list_tables</code>,
+                  <code>describe_table</code>, <code>run_query</code>. A connection can be hidden from
+                  MCP via “Disable discovery from MCP” in its connection settings.
+                </p>
+              </div>
+            </template>
           </section>
 
           <!-- About -->
@@ -444,6 +583,90 @@ h2 {
 .seg button.on {
   background: var(--bg-active);
   color: var(--accent);
+}
+/* MCP toggle + fields */
+.toggle {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  transition: background 0.15s;
+}
+.toggle .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s, background 0.15s;
+}
+.toggle.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.toggle.on .knob {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+.toggle.on.warn {
+  background: rgba(229, 97, 106, 0.18);
+  border-color: var(--danger);
+}
+.toggle.on.warn .knob {
+  background: var(--danger);
+}
+.status {
+  font-size: 12px;
+  font-family: var(--mono);
+  margin: 4px 0 8px;
+}
+.status.ok {
+  color: var(--ok);
+}
+.status.bad {
+  color: var(--text-faint);
+}
+.input.port {
+  width: 96px;
+}
+.input.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.mcp-field {
+  margin-top: 16px;
+}
+.mcp-field > label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin: 4px 0;
+}
+.cmd {
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  margin: 4px 0;
+}
+.cmd code {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  word-break: break-all;
+  user-select: all;
 }
 .about {
   text-align: center;

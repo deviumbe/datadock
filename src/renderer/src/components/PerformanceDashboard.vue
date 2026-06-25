@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { isSqlDriver } from '@shared/types'
 import type { HistoryEntry, TableSizeInfo, PoolStats, SizeSnapshot } from '@shared/types'
 import { useTabs } from '../stores/tabs'
 import {
@@ -17,7 +18,7 @@ import { analyzeIndexes, type AnalyzedTable, type IndexFinding } from '../lib/in
 const props = defineProps<{ connId: string; driver: string }>()
 const tabsStore = useTabs()
 
-const isSql = computed(() => ['postgres', 'mysql', 'sqlite', 'mssql'].includes(props.driver))
+const isSql = computed(() => isSqlDriver(props.driver))
 
 const loading = ref(false)
 const history = ref<HistoryEntry[]>([])

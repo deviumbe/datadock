@@ -4,6 +4,7 @@ import { registerIpc } from './ipc'
 import { startScheduler } from './scheduler'
 import { loadWorkspace } from './storage'
 import { disconnectAll } from './db'
+import { startMcp, stopMcp } from './mcp'
 import { buildMenu } from './menu'
 import { setupUpdater } from './updater'
 
@@ -69,6 +70,8 @@ app.whenReady().then(() => {
   registerIpc()
   buildMenu()
   startScheduler()
+  // Start the MCP server only if the user previously enabled it (kill-switch).
+  startMcp()
   const win = createWindow()
   setupUpdater(win)
 
@@ -82,5 +85,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  stopMcp()
   await disconnectAll()
 })

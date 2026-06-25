@@ -16,6 +16,7 @@ import type {
   TableDumpSpec,
   TableInfo
 } from '@shared/types'
+import { sqlDialect } from '@shared/types'
 import type { MaskConfig } from '@shared/mask'
 import { applyMasks, tableMasks } from './mask'
 import { getAdapter } from '../db'
@@ -29,7 +30,7 @@ const PAGE = 2000
 
 function dialectOf(connId: string): Dialect {
   try {
-    return getAdapter(connId).config.driver
+    return sqlDialect(getAdapter(connId).config.driver)
   } catch {
     return 'postgres'
   }
@@ -172,7 +173,7 @@ async function streamDump(
   filePath: string,
   maskConfig?: MaskConfig
 ): Promise<void> {
-  const dialect = adapter.config.driver
+  const dialect = sqlDialect(adapter.config.driver)
   const out = createWriteStream(filePath, { encoding: 'utf-8' })
   const write = writer(out)
   const masked = !!maskConfig && Object.keys(maskConfig).length > 0
@@ -399,7 +400,7 @@ export async function importCsv(
     fields.map((f) => (obj[f] === '' || obj[f] == null ? null : obj[f]))
   )
 
-  const dialect = adapter.config.driver
+  const dialect = sqlDialect(adapter.config.driver)
   const batchSize = 200
   let inserted = 0
   const errors: string[] = []

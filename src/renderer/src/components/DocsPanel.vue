@@ -2,10 +2,11 @@
 import { ref, computed, watch } from 'vue'
 import { buildMarkdown, slug, type DocModel, type DocTable, type DocColumn } from '../lib/docs'
 import { fmtBytes } from '../lib/perf'
+import { isSqlDriver } from '@shared/types'
 
 const props = defineProps<{ connId: string; connName: string; driver: string }>()
 
-const isSql = computed(() => ['postgres', 'mysql', 'sqlite', 'mssql'].includes(props.driver))
+const isSql = computed(() => isSqlDriver(props.driver))
 
 const loading = ref(false)
 const progress = ref(0)

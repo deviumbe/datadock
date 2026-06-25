@@ -13,6 +13,9 @@ const DEFAULT_DB_PORT: Record<string, number> = {
   postgres: 5432,
   mysql: 3306,
   mssql: 1433,
+  cockroachdb: 26257,
+  timescaledb: 5432,
+  redshift: 5439,
   influxdb: 8086
 }
 
