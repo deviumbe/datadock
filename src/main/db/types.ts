@@ -3,6 +3,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   PoolStats,
   QueryResult,
   RowChangeSet,
@@ -59,6 +60,8 @@ export interface DbAdapter {
   createTable?(spec: CreateTableSpec): Promise<void>
   /** Drop one or more tables, honoring FK options. */
   dropTables?(tables: TableInfo[], opts: DropTableOptions): Promise<void>
+  /** Empty one or more tables (TRUNCATE / DELETE), honoring FK options. */
+  truncateTables?(tables: TableInfo[], opts: TruncateOptions): Promise<void>
 
   // Optional server-level capabilities (see DRIVER_CAPS).
   listDatabases?(): Promise<string[]>

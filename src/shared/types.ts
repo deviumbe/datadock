@@ -454,6 +454,13 @@ export interface DropTableOptions {
   cascade?: boolean
 }
 
+export interface TruncateOptions {
+  /** Skip foreign-key checks (engine-specific: FK toggle, or CASCADE on Postgres). */
+  ignoreForeignKeys?: boolean
+  /** Reset auto-increment / identity counters back to their seed. */
+  restartIdentity?: boolean
+}
+
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 /** Server-level features a driver supports beyond querying tables. */

@@ -4,6 +4,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -470,6 +471,12 @@ export class MSSQLAdapter implements DbAdapter {
     // SQL Server has no global FK toggle or CASCADE for DROP TABLE; if a table
     // is referenced by a foreign key the drop will error (the caller is warned).
     for (const t of tables) await this.pool!.request().query(`drop table if exists ${this.ident(t)}`)
+  }
+
+  async truncateTables(tables: TableInfo[], _opts: TruncateOptions): Promise<void> {
+    // TRUNCATE resets identity automatically. SQL Server has no FK-check toggle,
+    // so an FK-referenced table errors unless its constraints are removed first.
+    for (const t of tables) await this.pool!.request().query(`truncate table ${this.ident(t)}`)
   }
 
   async listDatabases(): Promise<string[]> {

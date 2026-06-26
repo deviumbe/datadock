@@ -4,6 +4,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -455,6 +456,16 @@ export class PostgresAdapter implements DbAdapter {
     } finally {
       client.release()
     }
+  }
+
+  async truncateTables(tables: TableInfo[], opts: TruncateOptions): Promise<void> {
+    if (!tables.length) return
+    // Postgres truncates all tables in one statement. It refuses a table that is
+    // FK-referenced unless CASCADE (which also empties the dependent tables).
+    const list = tables.map((t) => this.ident(t)).join(', ')
+    const restart = opts.restartIdentity ? ' restart identity' : ''
+    const cascade = opts.ignoreForeignKeys ? ' cascade' : ''
+    await this.pool!.query(`truncate table ${list}${restart}${cascade}`)
   }
 
   async listDatabases(): Promise<string[]> {

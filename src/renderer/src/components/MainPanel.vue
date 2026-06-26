@@ -14,6 +14,7 @@ import ImportModal from './ImportModal.vue'
 import NamePrompt from './NamePrompt.vue'
 import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
+import TruncateTablesModal from './TruncateTablesModal.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
 import ChatPanel from './ChatPanel.vue'
@@ -38,7 +39,7 @@ import BulkEditModal from './BulkEditModal.vue'
 import DependenciesModal from './DependenciesModal.vue'
 import TableSizesModal from './TableSizesModal.vue'
 import ColumnSearchModal from './ColumnSearchModal.vue'
-import type { ChartType, DropTableOptions, PlanNode } from '@shared/types'
+import type { ChartType, DropTableOptions, PlanNode, TruncateOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
 import { sqlDialect, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
@@ -268,9 +269,13 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
     }
   }
   if (tabsStore.editsAllowed(tab)) {
+    // If the right-clicked row is part of a multi-selection, act on the whole set.
+    const multi = tab.selection.length > 1 && tab.selection.includes(rowIndex)
     items.push(
       { label: 'Duplicate row', action: () => tabsStore.duplicateRow(tab, rowIndex) },
-      { label: 'Delete row', danger: true, shortcut: '⌫', action: () => tabsStore.toggleDelete(tab, rowIndex) },
+      multi
+        ? { label: `Delete ${tab.selection.length} rows`, danger: true, shortcut: '⌫', action: () => tabsStore.deleteSelectedRows(tab) }
+        : { label: 'Delete row', danger: true, shortcut: '⌫', action: () => tabsStore.toggleDelete(tab, rowIndex) },
       { sep: true }
     )
   }
@@ -349,6 +354,11 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
     items.push(
       { sep: true },
       {
+        label: multiSelect.value ? `Truncate ${selectedTables.value.length} tables…` : 'Truncate data…',
+        danger: true,
+        action: openTruncateModal
+      },
+      {
         label: multiSelect.value ? `Delete ${selectedTables.value.length} tables…` : 'Delete table…',
         danger: true,
         action: openDropModal
@@ -387,6 +397,30 @@ async function performDrop(opts: DropTableOptions): Promise<void> {
     }
     selectedTables.value = []
     await ws.refreshTables(conn.id)
+  } catch (e) {
+    ws.error = e instanceof Error ? e.message : String(e)
+  }
+}
+
+// ---- truncate modal --------------------------------------------------------
+const truncateTargets = ref<TableInfo[] | null>(null)
+function openTruncateModal(): void {
+  const sel = ws.tables.filter((t) => selectedTables.value.includes(tableKey(t)))
+  if (sel.length) truncateTargets.value = sel.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
+}
+async function performTruncate(opts: TruncateOptions): Promise<void> {
+  const conn = activeConn.value
+  const targets = truncateTargets.value
+  truncateTargets.value = null
+  if (!conn || !targets) return
+  try {
+    await window.api.db.truncateTables(conn.id, targets, opts)
+    // Structure is unchanged — just reload the data of any open tabs for these tables.
+    const names = new Set(targets.map((t) => t.name))
+    for (const tab of tabsStore.forConnection(conn.id)) {
+      if (tab.kind === 'table' && tab.table && names.has(tab.table.name)) void tabsStore.reloadTable(tab)
+    }
+    selectedTables.value = []
   } catch (e) {
     ws.error = e instanceof Error ? e.message : String(e)
   }
@@ -585,10 +619,18 @@ function onKeydown(e: KeyboardEvent): void {
   // selected in the list (unless typing in a field).
   if (e.key !== 'Backspace' && e.key !== 'Delete') return
   if (inEditableField()) return
-  if (a && a.kind === 'table' && a.viewMode === 'data' && a.selectedRow !== null && tabsStore.editsAllowed(a)) {
-    e.preventDefault()
-    tabsStore.toggleDelete(a, a.selectedRow)
-    return
+  if (a && a.kind === 'table' && a.viewMode === 'data' && tabsStore.editsAllowed(a)) {
+    // Checkbox multi-selection takes precedence — delete them all at once.
+    if (a.selection.length) {
+      e.preventDefault()
+      tabsStore.deleteSelectedRows(a)
+      return
+    }
+    if (a.selectedRow !== null) {
+      e.preventDefault()
+      tabsStore.toggleDelete(a, a.selectedRow)
+      return
+    }
   }
   if (selectedTables.value.length && !nonSql.value && !readOnly.value) {
     e.preventDefault()
@@ -1213,6 +1255,13 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :driver="activeConn.driver"
         @confirm="performDrop"
         @close="dropTargets = null"
+      />
+      <TruncateTablesModal
+        v-if="truncateTargets"
+        :tables="truncateTargets"
+        :driver="activeConn.driver"
+        @confirm="performTruncate"
+        @close="truncateTargets = null"
       />
       <ExportModal
         v-if="exportTableTarget"

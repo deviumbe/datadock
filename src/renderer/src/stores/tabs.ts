@@ -801,6 +801,15 @@ export const useTabs = defineStore('tabs', () => {
   }
   const isDeleted = (tab: Tab, rowIndex: number): boolean => tab.deletes.includes(rowIndex)
 
+  /** Mark every checkbox-selected row for deletion at once, then clear the selection. */
+  function deleteSelectedRows(tab: Tab): void {
+    if (!editsAllowed(tab) || !tab.selection.length) return
+    record(tab)
+    const marked = new Set([...tab.deletes, ...tab.selection])
+    tab.deletes = [...marked]
+    tab.selection = []
+  }
+
   async function commit(tab: Tab): Promise<void> {
     if (!tab.table || !tab.result || dirtyCount(tab) === 0) return
     const colIndex: Record<string, number> = {}
@@ -1041,6 +1050,7 @@ export const useTabs = defineStore('tabs', () => {
     editInsert,
     removeInsert,
     toggleDelete,
+    deleteSelectedRows,
     isDeleted,
     discardEdits,
     undo,

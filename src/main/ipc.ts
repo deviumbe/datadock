@@ -11,7 +11,8 @@ import type {
   RowChangeSet,
   TableDumpSpec,
   TableInfo,
-  TableQueryOptions
+  TableQueryOptions,
+  TruncateOptions
 } from '@shared/types'
 import type { HistoryEntry, Snippet, QueueAction, QueueJobState } from '@shared/types'
 import type { MaskConfig } from '@shared/mask'
@@ -162,6 +163,9 @@ export function registerIpc(): void {
   )
   handle('db:dropTables', (id: string, tables: TableInfo[], opts: DropTableOptions) =>
     db.capability(id, 'dropTables')(tables, opts)
+  )
+  handle('db:truncateTables', (id: string, tables: TableInfo[], opts: TruncateOptions) =>
+    db.capability(id, 'truncateTables')(tables, opts)
   )
 
   // Import / export

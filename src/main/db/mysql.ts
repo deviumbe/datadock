@@ -4,6 +4,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -374,6 +375,17 @@ export class MySQLAdapter implements DbAdapter {
     if (off) await this.conn!.query('set foreign_key_checks = 0')
     try {
       for (const t of tables) await this.conn!.query(`drop table if exists ${q(t.name)}`)
+    } finally {
+      if (off) await this.conn!.query('set foreign_key_checks = 1')
+    }
+  }
+
+  async truncateTables(tables: TableInfo[], opts: TruncateOptions): Promise<void> {
+    // TRUNCATE always resets AUTO_INCREMENT, so restartIdentity needs no extra work.
+    const off = !!opts.ignoreForeignKeys
+    if (off) await this.conn!.query('set foreign_key_checks = 0')
+    try {
+      for (const t of tables) await this.conn!.query(`truncate table ${q(t.name)}`)
     } finally {
       if (off) await this.conn!.query('set foreign_key_checks = 1')
     }

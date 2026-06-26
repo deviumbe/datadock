@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { QueryResult, SortSpec } from '@shared/types'
 
 interface CellPos {
@@ -129,6 +129,34 @@ watch(
     }
   }
 )
+
+// Horizontal scrolling for wide grids. A plain mouse wheel only emits vertical
+// ticks (and a tilt/thumb wheel's horizontal ticks are tiny with no momentum),
+// so Chromium's native handling barely moves a wide table sideways. Map any
+// horizontal intent — a thumb wheel's deltaX, or Shift+vertical — onto
+// scrollLeft ourselves so it reaches the far edge. Pure vertical wheel is left
+// to the browser, and trackpads (which already carry their own momentum in the
+// event stream) still feel natural since we just apply their deltas.
+function onWheel(e: WheelEvent): void {
+  const el = wrap.value
+  if (!el) return
+  const max = el.scrollWidth - el.clientWidth
+  if (max <= 0) return // nothing to scroll horizontally
+  let delta = 0
+  if (e.shiftKey && e.deltaX === 0) delta = e.deltaY // Shift + vertical wheel → horizontal
+  else if (e.deltaX !== 0 && e.deltaY === 0) delta = e.deltaX // pure-horizontal wheel (tilt/thumb)
+  else return // vertical or diagonal (trackpad) — leave to the browser
+  // Normalize line/page delta modes to pixels (mouse wheels often report lines).
+  if (e.deltaMode === 1) delta *= 16
+  else if (e.deltaMode === 2) delta *= el.clientWidth
+  const next = Math.max(0, Math.min(max, el.scrollLeft + delta))
+  if (next !== el.scrollLeft) {
+    el.scrollLeft = next
+    e.preventDefault()
+  }
+}
+onMounted(() => wrap.value?.addEventListener('wheel', onWheel, { passive: false }))
+onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
 </script>
 
 <template>

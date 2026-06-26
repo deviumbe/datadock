@@ -19,6 +19,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   DumpFormat,
   ErModel,
   SchemaSnapshot,
@@ -116,7 +117,9 @@ const api = {
     createTable: (id: string, spec: CreateTableSpec) =>
       invoke<void>('db:createTable', id, spec),
     dropTables: (id: string, tables: TableInfo[], opts: DropTableOptions) =>
-      invoke<void>('db:dropTables', id, tables, opts)
+      invoke<void>('db:dropTables', id, tables, opts),
+    truncateTables: (id: string, tables: TableInfo[], opts: TruncateOptions) =>
+      invoke<void>('db:truncateTables', id, tables, opts)
   },
   redis: {
     keyValue: (id: string, key: string) => invoke<RedisKeyValue>('redis:keyValue', id, key),

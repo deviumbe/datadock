@@ -4,6 +4,7 @@ import type {
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
+  TruncateOptions,
   QueryResult,
   RowChangeSet,
   TableInfo,
@@ -183,6 +184,29 @@ export class SQLiteAdapter implements DbAdapter {
     try {
       const txn = this.db!.transaction(() => {
         for (const t of tables) this.db!.exec(`drop table if exists ${q(t.name)}`)
+      })
+      txn()
+    } finally {
+      if (off) this.db!.pragma('foreign_keys = ON')
+    }
+  }
+
+  async truncateTables(tables: TableInfo[], opts: TruncateOptions): Promise<void> {
+    // SQLite has no TRUNCATE — DELETE every row. Reset rowids via sqlite_sequence
+    // (only present once a table uses AUTOINCREMENT).
+    const off = !!opts.ignoreForeignKeys
+    const hasSeq = !!this.db!
+      .prepare(`select 1 from sqlite_master where type = 'table' and name = 'sqlite_sequence'`)
+      .get()
+    if (off) this.db!.pragma('foreign_keys = OFF')
+    try {
+      const txn = this.db!.transaction(() => {
+        for (const t of tables) {
+          this.db!.exec(`delete from ${q(t.name)}`)
+          if (opts.restartIdentity && hasSeq) {
+            this.db!.prepare(`delete from sqlite_sequence where name = ?`).run(t.name)
+          }
+        }
       })
       txn()
     } finally {
