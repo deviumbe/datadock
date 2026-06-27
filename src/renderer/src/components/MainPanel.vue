@@ -15,6 +15,8 @@ import NamePrompt from './NamePrompt.vue'
 import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
 import TruncateTablesModal from './TruncateTablesModal.vue'
+import CellValueModal from './CellValueModal.vue'
+import ColumnStatsModal from './ColumnStatsModal.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErDiagram from './ErDiagram.vue'
 import ChatPanel from './ChatPanel.vue'
@@ -42,7 +44,7 @@ import ColumnSearchModal from './ColumnSearchModal.vue'
 import type { ChartType, DropTableOptions, PlanNode, TruncateOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
-import { sqlDialect, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
+import { sqlDialect, type FilterOp, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
 import { lintSql } from '../lib/sqlLint'
 import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
@@ -74,13 +76,19 @@ const aiMode = ref<'generate' | 'explain' | 'fix'>('generate')
 // Query variables: `{{name}}` placeholders are collected and substituted before
 // the query runs, without altering the saved template.
 const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
-const queryVars = ref<{ names: string[]; tab: Tab } | null>(null)
+const queryVars = ref<{ names: string[]; tab: Tab; source: string } | null>(null)
 
-function runActive(tab: Tab): void {
+function runActive(tab: Tab, sqlOverride?: string): void {
   if (tab.kind === 'query') {
-    const names = [...new Set([...tab.query.matchAll(VAR_RE)].map((m) => m[1]))]
+    // Run the selection/statement when given (⌘↵), else the whole buffer.
+    const source = sqlOverride ?? tab.query
+    const names = [...new Set([...source.matchAll(VAR_RE)].map((m) => m[1]))]
     if (names.length) {
-      queryVars.value = { names, tab }
+      queryVars.value = { names, tab, source }
+      return
+    }
+    if (sqlOverride !== undefined) {
+      void tabsStore.run(tab, sqlOverride)
       return
     }
   }
@@ -90,7 +98,7 @@ function runWithVars(values: Record<string, string>): void {
   const pending = queryVars.value
   queryVars.value = null
   if (!pending) return
-  const sql = pending.tab.query.replace(VAR_RE, (_m, name: string) => values[name] ?? '')
+  const sql = pending.source.replace(VAR_RE, (_m, name: string) => values[name] ?? '')
   void tabsStore.run(pending.tab, sql)
 }
 
@@ -210,6 +218,71 @@ async function copyText(text: string): Promise<void> {
     /* clipboard unavailable */
   }
 }
+// Column nullability for the row detail panel's "Set NULL" toggles. Lazily loads
+// the table structure (SQL engines only) the first time a row is opened.
+function nullableMap(tab: Tab): Record<string, boolean> {
+  const map: Record<string, boolean> = {}
+  for (const c of tab.structure?.columns ?? []) map[c.name] = c.nullable
+  return map
+}
+function onSelectRow(tab: Tab, r: number): void {
+  tab.selectedRow = r
+  if (!nonSql.value && !tab.structure) void tabsStore.loadStructure(tab)
+}
+
+// ---- cell value viewer (JSON / long text) ----------------------------------
+const cellViewer = ref<{
+  tab: Tab
+  rowIndex: number
+  column: string
+  value: unknown
+  editable: boolean
+} | null>(null)
+function openCellViewer(tab: Tab, rowIndex: number, colIndex: number): void {
+  const row = tab.result?.rows[rowIndex]
+  const col = tab.result?.columns[colIndex]
+  if (!row || !col) return
+  cellViewer.value = {
+    tab,
+    rowIndex,
+    column: col.name,
+    value: row[colIndex],
+    editable: tabsStore.editsAllowed(tab)
+  }
+}
+function saveCellValue(value: string): void {
+  const cv = cellViewer.value
+  cellViewer.value = null
+  if (cv) tabsStore.editCell(cv.tab, cv.rowIndex, cv.column, value)
+}
+// ---- column stats (right-click a column header) ----------------------------
+const statsTarget = ref<{ table: TableInfo; column: string } | null>(null)
+function onHeaderContext(tab: Tab, column: string, e: MouseEvent): void {
+  if (tab.kind !== 'table' || !tab.table || nonSql.value) return
+  const t = tab.table
+  ctx.value = {
+    x: e.clientX,
+    y: e.clientY,
+    items: [
+      { label: 'Column stats…', action: () => (statsTarget.value = { table: t, column }) },
+      { label: 'Copy column name', action: () => copyText(column) }
+    ]
+  }
+}
+
+/** True when a cell value reads as JSON (object/array). */
+function looksJson(v: unknown): boolean {
+  if (typeof v !== 'string') return false
+  const s = v.trim()
+  if (s.length < 2 || (s[0] !== '{' && s[0] !== '[')) return false
+  try {
+    const d = JSON.parse(s)
+    return d !== null && typeof d === 'object'
+  } catch {
+    return false
+  }
+}
+
 function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: number): void {
   const result = tab.result
   if (!result || !result.columns.length) return
@@ -217,13 +290,36 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
   if (!row) return
   const table = tab.kind === 'table' && tab.table ? tab.table.name : 'table'
   const items: MenuItem[] = []
-  // Copy the raw value of the specific cell that was right-clicked.
+  // Cell-specific actions for the column that was right-clicked.
   if (colIndex != null && colIndex >= 0 && colIndex < row.length) {
     const cell = row[colIndex]
-    items.push(
-      { label: 'Copy cell value', action: () => copyText(cell == null ? '' : String(cell)) },
-      { sep: true }
-    )
+    const column = result.columns[colIndex].name
+    items.push({ label: 'Copy cell value', action: () => copyText(cell == null ? '' : String(cell)) })
+    items.push({
+      label: looksJson(cell) ? 'View JSON…' : 'View value…',
+      action: () => openCellViewer(tab, rowIndex, colIndex)
+    })
+    // Set to NULL — editable table tabs, only when the cell isn't already NULL.
+    if (tabsStore.editsAllowed(tab) && cell != null) {
+      items.push({ label: 'Set to NULL', action: () => tabsStore.setCellNull(tab, rowIndex, column) })
+    }
+    // Filter by this value — reloadable table tabs on SQL engines.
+    if (tab.kind === 'table' && tab.table && !nonSql.value) {
+      if (cell == null) {
+        items.push(
+          { label: 'Filter: is NULL', action: () => addCellFilter(tab, column, 'is null') },
+          { label: 'Filter: is not NULL', action: () => addCellFilter(tab, column, 'not null') }
+        )
+      } else {
+        const disp = String(cell)
+        const short = disp.length > 24 ? `${disp.slice(0, 24)}…` : disp
+        items.push(
+          { label: `Filter: = ${short}`, action: () => addCellFilter(tab, column, '=', disp) },
+          { label: `Filter: ≠ ${short}`, action: () => addCellFilter(tab, column, '!=', disp) }
+        )
+      }
+    }
+    items.push({ sep: true })
   }
   // View the full Redis value (handles every type, including non-strings).
   if (isRedis.value && tab.kind === 'table') {
@@ -547,6 +643,10 @@ const isProduction = computed(() => !!activeConn.value?.production)
 const explainable = computed(() =>
   ['postgres', 'mysql', 'sqlite'].includes(sqlDialect(activeConn.value?.driver ?? ''))
 )
+// Engines that can abort an in-flight query (SQLite runs synchronously, can't).
+const cancellable = computed(
+  () => !nonSql.value && ['postgres', 'mysql', 'mssql'].includes(sqlDialect(activeConn.value?.driver ?? ''))
+)
 // Visual EXPLAIN — only engines that expose a structured plan. Of the pg-wire
 // family only real Postgres + TimescaleDB support `EXPLAIN (FORMAT JSON)`.
 const visualExplainable = computed(() =>
@@ -653,11 +753,17 @@ async function disconnect(): Promise<void> {
 // pagination helpers
 const pageInfo = (tab: Tab): string => {
   const n = tab.result?.rows.length ?? 0
-  if (n === 0) return tab.offset > 0 ? `from ${tab.offset + 1}` : '0 rows'
-  return `${tab.offset + 1}–${tab.offset + n}`
+  // Append the true total once it's known (e.g. "1–200 of 12,345").
+  const total = tab.totalRows !== null ? ` of ${tab.totalRows.toLocaleString()}` : ''
+  if (n === 0) return tab.offset > 0 ? `from ${tab.offset + 1}${total}` : `0 rows${total}`
+  return `${tab.offset + 1}–${tab.offset + n}${total}`
 }
 function onApplyFilters(tab: Tab, filters: FilterSpec[]): void {
   tabsStore.setFilters(tab, filters)
+}
+/** Append a filter built from a right-clicked cell, then reload the table. */
+function addCellFilter(tab: Tab, column: string, op: FilterOp, value?: string): void {
+  tabsStore.setFilters(tab, [...tab.filters, { column, op, value }])
 }
 
 // databases panel
@@ -824,10 +930,21 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Query tab -->
           <div v-else-if="active.kind === 'query'" class="editor-pane">
             <div class="toolbar">
-              <button class="btn btn-primary" :disabled="active.running" @click="runActive(active)">
+              <button
+                class="btn btn-primary"
+                :disabled="active.running"
+                title="Run all statements (⌘⇧↵). ⌘↵ runs the selection or the statement at the cursor."
+                @click="runActive(active)"
+              >
                 {{ active.running ? 'Running…' : '▶ Run' }}
               </button>
-              <span class="hint">{{ isMongo ? 'MongoDB' : isInflux ? 'Flux' : 'SQL' }} · ⌘↵</span>
+              <button
+                v-if="active.running && cancellable"
+                class="btn btn-ghost cancel-btn"
+                title="Cancel the running query"
+                @click="tabsStore.cancel(active)"
+              >■ Cancel</button>
+              <span class="hint">{{ isMongo ? 'MongoDB' : isInflux ? 'Flux' : 'SQL' }} · ⌘↵ selection · ⌘⇧↵ all</span>
               <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Show query plan (EXPLAIN)" @click="tabsStore.explain(active)">◔ Explain</button>
               <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)">◧ {{ planLoading ? 'Plan…' : 'Plan' }}</button>
               <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive">⧉ Format</button>
@@ -852,7 +969,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 v-model="active.query"
                 :schema="ws.schemas[active.connectionId]"
                 :placeholder="isMongo ? 'db.collection.find({ })' : isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
-                @run="runActive(active)"
+                @run="(sql) => runActive(active!, sql)"
               />
             </div>
             <div v-if="activeLints.length" class="lints" :class="{ open: lintsOpen }">
@@ -890,7 +1007,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <ChartRender :type="qChartType" :result="active.result" instant />
                 </div>
                 <div v-else class="grid-host">
-                  <ResultsGrid :result="active.result" @row-context="(r, e, c) => onRowContext(active!, r, e, c)" />
+                  <ResultsGrid :result="active.result" @row-context="(r, e, c) => onRowContext(active!, r, e, c)" @view-cell="(r, c) => openCellViewer(active!, r, c)" />
                 </div>
               </template>
             </div>
@@ -989,7 +1106,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   :selected-rows="active.selection"
                   :fk-columns="activeFkColumns"
                   @fk-navigate="onFkNavigate"
-                  @select-row="(r) => (active!.selectedRow = r)"
+                  @select-row="(r) => onSelectRow(active!, r)"
                   @toggle-select="(r) => tabsStore.toggleRowSelection(active!, r)"
                   @toggle-select-all="tabsStore.toggleSelectAll(active!)"
                   @sort="(c) => tabsStore.toggleSort(active!, c)"
@@ -997,6 +1114,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   @edit-insert="(i, col, v) => tabsStore.editInsert(active!, i, col, v)"
                   @remove-insert="(i) => tabsStore.removeInsert(active!, i)"
                   @row-context="(r, e, c) => onRowContext(active!, r, e, c)"
+                @view-cell="(r, c) => openCellViewer(active!, r, c)"
+                @header-context="(col, e) => onHeaderContext(active!, col, e)"
                 />
               </div>
               <RowDetailPanel
@@ -1008,7 +1127,9 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 :primary-keys="active.primaryKeys"
                 :editable="tabsStore.editsAllowed(active)"
                 :dirty-count="tabsStore.dirtyCount(active)"
+                :nullable="nullableMap(active)"
                 @edit-cell="(r, col, v) => tabsStore.editCell(active!, r, col, v)"
+                @set-null="(r, col) => tabsStore.setCellNull(active!, r, col)"
                 @commit="tabsStore.commit(active!)"
                 @discard="tabsStore.discardEdits(active!)"
                 @close="active!.selectedRow = null"
@@ -1262,6 +1383,22 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :driver="activeConn.driver"
         @confirm="performTruncate"
         @close="truncateTargets = null"
+      />
+      <CellValueModal
+        v-if="cellViewer"
+        :value="cellViewer.value"
+        :column="cellViewer.column"
+        :editable="cellViewer.editable"
+        @save="saveCellValue"
+        @close="cellViewer = null"
+      />
+      <ColumnStatsModal
+        v-if="statsTarget"
+        :conn-id="activeConn.id"
+        :driver="activeConn.driver"
+        :table="statsTarget.table"
+        :column="statsTarget.column"
+        @close="statsTarget = null"
       />
       <ExportModal
         v-if="exportTableTarget"
@@ -1972,6 +2109,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .btn.is-saved {
   color: var(--accent);
+}
+.cancel-btn {
+  color: var(--danger);
+}
+.cancel-btn:hover {
+  background: rgba(229, 97, 106, 0.14);
 }
 .ai-btn {
   color: var(--accent);

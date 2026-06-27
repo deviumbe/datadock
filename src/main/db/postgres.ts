@@ -24,6 +24,8 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, (v) => v)
 export class PostgresAdapter implements DbAdapter {
   private pool?: pg.Pool
   private txn?: pg.PoolClient
+  // Backend PIDs of in-flight queries, so cancelQuery can target them.
+  private activePids = new Set<number>()
   constructor(public readonly config: ConnectionConfig) {}
 
   async beginTransaction(): Promise<void> {
@@ -200,6 +202,15 @@ export class PostgresAdapter implements DbAdapter {
     }
   }
 
+  async countRows(table: TableInfo, opts: TableQueryOptions): Promise<number> {
+    const { where, params } = buildClauses(opts, quoteIdent, (i) => `$${i}`)
+    const res = await this.pool!.query({
+      text: `select count(*) as cnt from ${this.ident(table)}${where}`,
+      values: params
+    })
+    return Number(res.rows[0]?.cnt ?? 0)
+  }
+
   async primaryKeys(table: TableInfo): Promise<string[]> {
     const res = await this.pool!.query(
       `select a.attname as col
@@ -274,11 +285,7 @@ export class PostgresAdapter implements DbAdapter {
     }
   }
 
-  async query(sql: string): Promise<QueryResult> {
-    const start = now()
-    const runner = this.txn ?? this.pool!
-    const res = await runner.query({ text: sql, rowMode: 'array' })
-    const durationMs = now() - start
+  private shape(res: pg.QueryArrayResult, durationMs: number): QueryResult {
     const columns = (res.fields ?? []).map((f) => ({ name: f.name }))
     const rows = (res.rows ?? []) as unknown[][]
     return {
@@ -287,6 +294,39 @@ export class PostgresAdapter implements DbAdapter {
       rowCount: res.rowCount ?? rows.length,
       durationMs,
       command: res.command
+    }
+  }
+
+  async query(sql: string): Promise<QueryResult> {
+    const start = now()
+    // Inside an explicit transaction, run on the pinned client (no cancel tracking).
+    if (this.txn) {
+      const res = await this.txn.query({ text: sql, rowMode: 'array' })
+      return this.shape(res, now() - start)
+    }
+    // Otherwise check out a client so we know its backend PID — that lets
+    // cancelQuery() issue pg_cancel_backend against exactly this statement.
+    const client = await this.pool!.connect()
+    // processID (the backend PID) exists at runtime but isn't in pg's typings.
+    const pid = (client as unknown as { processID?: number }).processID
+    if (pid) this.activePids.add(pid)
+    try {
+      const res = await client.query({ text: sql, rowMode: 'array' })
+      return this.shape(res, now() - start)
+    } finally {
+      if (pid) this.activePids.delete(pid)
+      client.release()
+    }
+  }
+
+  async cancelQuery(): Promise<void> {
+    const pids = [...this.activePids]
+    if (!pids.length || !this.pool) return
+    const client = await this.pool.connect()
+    try {
+      for (const pid of pids) await client.query('select pg_cancel_backend($1)', [pid])
+    } finally {
+      client.release()
     }
   }
 

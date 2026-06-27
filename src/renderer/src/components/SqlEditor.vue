@@ -25,10 +25,26 @@ const props = defineProps<{
   placeholder?: string
   schema?: Record<string, string[]>
 }>()
-const emit = defineEmits<{ 'update:modelValue': [v: string]; run: [] }>()
+const emit = defineEmits<{ 'update:modelValue': [v: string]; run: [sql?: string] }>()
 
 const host = ref<HTMLDivElement>()
 let view: EditorView | undefined
+
+/**
+ * The SQL to run for ⌘↵: the current selection, or — when nothing is selected —
+ * the statement under the cursor (delimited by semicolons). Returns undefined
+ * when that resolves to nothing, so the caller falls back to running everything.
+ */
+function statementAtCursor(state: EditorState): string | undefined {
+  const sel = state.selection.main
+  if (!sel.empty) return state.sliceDoc(sel.from, sel.to).trim() || undefined
+  const doc = state.doc.toString()
+  const before = doc.lastIndexOf(';', sel.head - 1)
+  const start = before === -1 ? 0 : before + 1
+  const afterIdx = doc.indexOf(';', sel.head)
+  const end = afterIdx === -1 ? doc.length : afterIdx
+  return doc.slice(start, end).trim() || undefined
+}
 
 // The SQL language (with schema-aware autocomplete) lives in a compartment so it
 // can be reconfigured when the active connection's schema loads/changes.
@@ -69,7 +85,17 @@ const theme = EditorView.theme(
 onMounted(() => {
   const runKey = keymap.of([
     {
+      // Run the selection, or the statement under the cursor.
       key: 'Mod-Enter',
+      preventDefault: true,
+      run: (v) => {
+        emit('run', statementAtCursor(v.state))
+        return true
+      }
+    },
+    {
+      // Run the entire buffer.
+      key: 'Mod-Shift-Enter',
       preventDefault: true,
       run: () => {
         emit('run')

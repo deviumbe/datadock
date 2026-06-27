@@ -21,6 +21,8 @@ const q = (ident: string): string => `[${ident.replace(/]/g, ']]')}]`
 export class MSSQLAdapter implements DbAdapter {
   private pool?: sql.ConnectionPool
   private txn?: sql.Transaction
+  // Requests currently executing, so cancelQuery can abort them.
+  private activeRequests = new Set<sql.Request>()
 
   async beginTransaction(): Promise<void> {
     this.txn = new sql.Transaction(this.pool)
@@ -187,6 +189,14 @@ export class MSSQLAdapter implements DbAdapter {
     return this.shape(res, now() - start)
   }
 
+  async countRows(table: TableInfo, opts: TableQueryOptions): Promise<number> {
+    const { where, params } = buildClauses(opts, q, (i) => `@p${i - 1}`)
+    const req = this.pool!.request()
+    params.forEach((v, i) => req.input(`p${i}`, v))
+    const res = await req.query(`select count(*) as cnt from ${this.ident(table)}${where}`)
+    return Number((res.recordset[0] as { cnt: number })?.cnt ?? 0)
+  }
+
   private shape(res: sql.IResult<Record<string, unknown>>, durationMs: number): QueryResult {
     const recordset = res.recordset
     if (recordset && recordset.columns) {
@@ -279,8 +289,18 @@ export class MSSQLAdapter implements DbAdapter {
 
   async query(sqlText: string): Promise<QueryResult> {
     const start = now()
-    const res = await this.request().query(sqlText)
-    return this.shape(res, now() - start)
+    const req = this.request()
+    this.activeRequests.add(req)
+    try {
+      const res = await req.query(sqlText)
+      return this.shape(res, now() - start)
+    } finally {
+      this.activeRequests.delete(req)
+    }
+  }
+
+  async cancelQuery(): Promise<void> {
+    for (const req of this.activeRequests) req.cancel()
   }
 
   async tableSizes(): Promise<TableSizeInfo[]> {

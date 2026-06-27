@@ -107,6 +107,10 @@ export function registerIpc(): void {
     db.getAdapter(id).tableData(table, opts)
   )
   handle('db:query', (id: string, sql: string) => db.getAdapter(id).query(sql))
+  handle('db:cancelQuery', (id: string) => db.cancelQuery(id))
+  handle('db:countRows', (id: string, table: TableInfo, opts: TableQueryOptions) =>
+    db.capability(id, 'countRows')(table, opts)
+  )
   handle('db:explainPlan', (id: string, sql: string) => db.explainPlan(id, sql))
   handle('db:txnBegin', (id: string) => db.capability(id, 'beginTransaction')())
   handle('db:txnCommit', (id: string) => db.capability(id, 'commitTransaction')())

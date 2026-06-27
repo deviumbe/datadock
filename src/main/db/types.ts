@@ -27,7 +27,11 @@ export interface DbAdapter {
   disconnect(): Promise<void>
   listTables(): Promise<TableInfo[]>
   tableData(table: TableInfo, opts: TableQueryOptions): Promise<QueryResult>
+  /** Total row count for a table (honoring filters), for the pagination header. */
+  countRows?(table: TableInfo, opts: TableQueryOptions): Promise<number>
   query(sql: string): Promise<QueryResult>
+  /** Cancel any in-flight query on this connection (engines that support it). */
+  cancelQuery?(): Promise<void>
 
   // Explicit transaction mode (queries run inside it until commit/rollback).
   beginTransaction?(): Promise<void>

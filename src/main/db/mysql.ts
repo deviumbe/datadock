@@ -20,6 +20,8 @@ const q = (ident: string): string => `\`${ident.replace(/`/g, '``')}\``
 
 export class MySQLAdapter implements DbAdapter {
   private conn?: mysql.Connection
+  // Number of queries currently executing on the (serialized) connection.
+  private inFlight = 0
   constructor(public readonly config: ConnectionConfig) {}
 
   private connectOpts(): mysql.ConnectionOptions {
@@ -91,6 +93,15 @@ export class MySQLAdapter implements DbAdapter {
     }
   }
 
+  async countRows(table: TableInfo, opts: TableQueryOptions): Promise<number> {
+    const { where, params } = buildClauses(opts, q, () => '?')
+    const [rows] = await this.conn!.query({
+      sql: `select count(*) as cnt from ${q(table.name)}${where}`,
+      values: params
+    })
+    return Number((rows as { cnt: number }[])[0]?.cnt ?? 0)
+  }
+
   async primaryKeys(table: TableInfo): Promise<string[]> {
     const [rows] = await this.conn!.query(
       `select column_name as name from information_schema.key_column_usage
@@ -159,27 +170,44 @@ export class MySQLAdapter implements DbAdapter {
 
   async query(sql: string): Promise<QueryResult> {
     const start = now()
-    const [result, fields] = await this.conn!.query({ sql, rowsAsArray: true })
-    const durationMs = now() - start
+    this.inFlight++
+    try {
+      const [result, fields] = await this.conn!.query({ sql, rowsAsArray: true })
+      const durationMs = now() - start
 
-    // SELECT-like queries return an array of row-arrays plus field metadata.
-    if (Array.isArray(fields) && fields.length > 0) {
-      const rows = result as unknown[][]
+      // SELECT-like queries return an array of row-arrays plus field metadata.
+      if (Array.isArray(fields) && fields.length > 0) {
+        const rows = result as unknown[][]
+        return {
+          columns: fields.map((f) => ({ name: f.name })),
+          rows: normalizeRows(rows),
+          rowCount: rows.length,
+          durationMs
+        }
+      }
+      // INSERT/UPDATE/DELETE return an OkPacket.
+      const ok = result as mysql.ResultSetHeader
       return {
-        columns: fields.map((f) => ({ name: f.name })),
-        rows: normalizeRows(rows),
-        rowCount: rows.length,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        affectedRows: ok?.affectedRows ?? 0,
         durationMs
       }
+    } finally {
+      this.inFlight--
     }
-    // INSERT/UPDATE/DELETE return an OkPacket.
-    const ok = result as mysql.ResultSetHeader
-    return {
-      columns: [],
-      rows: [],
-      rowCount: 0,
-      affectedRows: ok?.affectedRows ?? 0,
-      durationMs
+  }
+
+  async cancelQuery(): Promise<void> {
+    const threadId = this.conn?.threadId
+    if (!threadId || this.inFlight === 0) return
+    // The connection is busy running the query, so KILL it from a fresh one.
+    const killer = await mysql.createConnection(this.connectOpts())
+    try {
+      await killer.query(`KILL QUERY ${threadId}`)
+    } finally {
+      await killer.end()
     }
   }
 

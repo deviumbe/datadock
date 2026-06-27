@@ -88,6 +88,9 @@ const api = {
     tableData: (id: string, table: TableInfo, opts: TableQueryOptions) =>
       invoke<QueryResult>('db:tableData', id, table, opts),
     query: (id: string, sql: string) => invoke<QueryResult>('db:query', id, sql),
+    cancelQuery: (id: string) => invoke<void>('db:cancelQuery', id),
+    countRows: (id: string, table: TableInfo, opts: TableQueryOptions) =>
+      invoke<number>('db:countRows', id, table, opts),
     explainPlan: (id: string, sql: string) =>
       invoke<PlanNode | null>('db:explainPlan', id, sql),
     txnBegin: (id: string) => invoke<void>('db:txnBegin', id),

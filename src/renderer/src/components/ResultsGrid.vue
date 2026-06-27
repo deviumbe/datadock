@@ -35,8 +35,23 @@ const emit = defineEmits<{
   sort: [column: string]
   action: [row: unknown[]]
   rowContext: [rowIndex: number, e: MouseEvent, colIndex?: number]
+  viewCell: [rowIndex: number, colIndex: number]
+  headerContext: [column: string, e: MouseEvent]
   fkNavigate: [column: string, value: unknown]
 }>()
+
+// A cell worth opening in the value viewer rather than the inline editor: JSON,
+// or anything too long to read in the truncated grid cell.
+function isExpandable(v: unknown): boolean {
+  if (typeof v !== 'string') return false
+  if (v.length > 200) return true
+  const s = v.trim()
+  return s.length > 1 && (s[0] === '{' || s[0] === '[')
+}
+function onCellDblClick(r: number, c: number): void {
+  if (isExpandable(cellValue(r, c))) emit('viewCell', r, c)
+  else startEdit('data', r, c)
+}
 
 const hasRows = computed(() => !!props.result && props.result.columns.length > 0)
 const allSelected = computed(
@@ -157,11 +172,111 @@ function onWheel(e: WheelEvent): void {
 }
 onMounted(() => wrap.value?.addEventListener('wheel', onWheel, { passive: false }))
 onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
+
+// ---- rectangular cell selection (drag to select a block, ⌘C / ⌘⇧C to copy) --
+const cellSel = ref<{ a: { r: number; c: number }; f: { r: number; c: number } } | null>(null)
+const dragging = ref(false)
+let anchorCell: { r: number; c: number } | null = null // persists for shift-extend
+let dragAnchor: { r: number; c: number } | null = null // active drag only
+let dragged = false
+
+function onCellMouseDown(r: number, c: number, e: MouseEvent): void {
+  if (e.button !== 0 || isEditing('data', r, c)) return
+  if (e.shiftKey && anchorCell) {
+    // Shift-click extends the block from the last anchor cell.
+    cellSel.value = { a: anchorCell, f: { r, c } }
+    dragged = true
+    e.preventDefault()
+    return
+  }
+  anchorCell = { r, c }
+  dragAnchor = { r, c }
+  dragged = false
+}
+function onCellMouseEnter(r: number, c: number): void {
+  if (!dragAnchor) return
+  if (r === dragAnchor.r && c === dragAnchor.c && !cellSel.value) return
+  dragged = true
+  dragging.value = true
+  cellSel.value = { a: dragAnchor, f: { r, c } }
+}
+function endDrag(): void {
+  dragAnchor = null
+  dragging.value = false
+}
+function onRowClick(r: number): void {
+  // A click that concluded a drag/shift-extend must not collapse the block.
+  if (dragged) {
+    dragged = false
+    return
+  }
+  cellSel.value = null
+  emit('selectRow', r)
+}
+function selBounds(): { r0: number; r1: number; c0: number; c1: number } | null {
+  const s = cellSel.value
+  if (!s) return null
+  return {
+    r0: Math.min(s.a.r, s.f.r),
+    r1: Math.max(s.a.r, s.f.r),
+    c0: Math.min(s.a.c, s.f.c),
+    c1: Math.max(s.a.c, s.f.c)
+  }
+}
+function inCellSel(r: number, c: number): boolean {
+  const b = selBounds()
+  return !!b && r >= b.r0 && r <= b.r1 && c >= b.c0 && c <= b.c1
+}
+function cellText(v: unknown): string {
+  return v === null || v === undefined ? '' : String(v)
+}
+async function copyBlock(format: 'tsv' | 'md'): Promise<void> {
+  const b = selBounds()
+  if (!b || !props.result) return
+  const headers: string[] = []
+  for (let c = b.c0; c <= b.c1; c++) headers.push(colName(c))
+  const rows: string[][] = []
+  for (let r = b.r0; r <= b.r1; r++) {
+    const row: string[] = []
+    for (let c = b.c0; c <= b.c1; c++) row.push(cellText(cellValue(r, c)))
+    rows.push(row)
+  }
+  let text: string
+  if (format === 'md') {
+    const esc = (s: string): string => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+    const line = (cells: string[]): string => `| ${cells.map(esc).join(' | ')} |`
+    text = [line(headers), `| ${headers.map(() => '---').join(' | ')} |`, ...rows.map(line)].join('\n')
+  } else {
+    text = rows.map((row) => row.map((v) => v.replace(/\t/g, ' ')).join('\t')).join('\n')
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    /* clipboard unavailable */
+  }
+}
+function onKeyDown(e: KeyboardEvent): void {
+  if (!cellSel.value || editing.value) return
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+    e.preventDefault()
+    void copyBlock(e.shiftKey ? 'md' : 'tsv')
+  } else if (e.key === 'Escape') {
+    cellSel.value = null
+  }
+}
+onMounted(() => {
+  window.addEventListener('mouseup', endDrag)
+  window.addEventListener('keydown', onKeyDown)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('mouseup', endDrag)
+  window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <template>
   <div ref="wrap" class="grid-wrap">
-    <table v-if="hasRows" class="grid" :class="{ selectable }">
+    <table v-if="hasRows" class="grid" :class="{ selectable, dragging }">
       <thead>
         <tr>
           <th v-if="selectable" class="selcol">
@@ -174,6 +289,7 @@ onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
             :key="i"
             :class="{ sortable }"
             @click="sortable && emit('sort', col.name)"
+            @contextmenu.prevent="emit('headerContext', col.name, $event)"
           >
             <span>{{ col.name }}</span>
             <span v-if="sort?.column === col.name" class="sort-ind">{{ sort.dir === 'asc' ? '▲' : '▼' }}</span>
@@ -186,7 +302,7 @@ onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
           v-for="(row, r) in result!.rows"
           :key="r"
           :class="{ selected: selectedRow === r, 'multi-selected': isSelected(r), deleted: isDeleted(r) }"
-          @click="emit('selectRow', r)"
+          @click="onRowClick(r)"
           @contextmenu.prevent="emit('rowContext', r, $event)"
         >
           <td v-if="selectable" class="selcol" @click.stop>
@@ -199,9 +315,11 @@ onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
           <td
             v-for="(_, c) in row"
             :key="c"
-            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c) }"
+            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c), 'cell-sel': inCellSel(r, c) }"
             :title="fkOf(c) && !isNull(cellValue(r, c)) ? `Go to ${fkOf(c)!.toTable} where ${fkOf(c)!.toColumn} = ${display(cellValue(r, c))}` : display(cellValue(r, c))"
-            @dblclick="startEdit('data', r, c)"
+            @mousedown="onCellMouseDown(r, c, $event)"
+            @mouseenter="onCellMouseEnter(r, c)"
+            @dblclick="onCellDblClick(r, c)"
             @contextmenu.prevent.stop="emit('rowContext', r, $event, c)"
           >
             <input
@@ -337,6 +455,14 @@ tbody tr.selected td {
 }
 tbody tr.multi-selected td {
   background: var(--accent-soft);
+}
+/* Rectangular cell-block selection (drag + ⌘C). Wins over row backgrounds. */
+.grid.dragging {
+  user-select: none;
+}
+tbody td.cell-sel {
+  background: rgba(45, 212, 191, 0.22) !important;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.5);
 }
 .selcol {
   position: sticky;

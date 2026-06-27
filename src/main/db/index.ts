@@ -96,6 +96,11 @@ export function isConnected(id: string): boolean {
   return live.has(id)
 }
 
+/** Cancel any in-flight query on a connection (no-op if unsupported/idle). */
+export async function cancelQuery(id: string): Promise<void> {
+  await live.get(id)?.adapter.cancelQuery?.()
+}
+
 export function getAdapter(id: string): DbAdapter {
   const conn = live.get(id)
   if (!conn) throw new Error('Connection is not open')

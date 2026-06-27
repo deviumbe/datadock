@@ -9,10 +9,13 @@ const props = defineProps<{
   primaryKeys: string[]
   editable: boolean
   dirtyCount: number
+  /** Column name -> whether it accepts NULL (from the table structure). */
+  nullable?: Record<string, boolean>
 }>()
 
 const emit = defineEmits<{
   editCell: [rowIndex: number, column: string, value: unknown]
+  setNull: [rowIndex: number, column: string]
   commit: []
   discard: []
   close: []
@@ -36,6 +39,15 @@ function onInput(col: ColumnMeta, ev: Event): void {
 }
 function isPk(name: string): boolean {
   return props.primaryKeys.includes(name)
+}
+/** Show a NULL toggle only for editable, nullable, non-PK columns. */
+function canNull(col: ColumnMeta): boolean {
+  return props.editable && !isPk(col.name) && props.nullable?.[col.name] === true
+}
+function toggleNull(col: ColumnMeta, i: number): void {
+  // Null → restore the original value; otherwise set an explicit NULL.
+  if (isNull(col, i)) emit('editCell', props.rowIndex, col.name, props.row[i])
+  else emit('setNull', props.rowIndex, col.name)
 }
 </script>
 
@@ -62,6 +74,16 @@ function isPk(name: string): boolean {
           :readonly="!editable"
           @input="onInput(col, $event)"
         />
+        <button
+          v-if="canNull(col)"
+          type="button"
+          class="null-toggle"
+          :class="{ on: isNull(col, i) }"
+          :title="isNull(col, i) ? 'Restore the original value' : 'Set this field to NULL'"
+          @click="toggleNull(col, i)"
+        >
+          {{ isNull(col, i) ? '✓ NULL' : 'Set NULL' }}
+        </button>
       </div>
     </div>
 
@@ -151,6 +173,23 @@ function isPk(name: string): boolean {
 .input.is-null {
   color: var(--text-faint);
   font-style: italic;
+}
+.null-toggle {
+  align-self: flex-start;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+}
+.null-toggle:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.null-toggle.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .detail-foot {
   display: flex;

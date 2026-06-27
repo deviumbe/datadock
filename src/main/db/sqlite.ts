@@ -78,6 +78,14 @@ export class SQLiteAdapter implements DbAdapter {
     return { columns, rows, rowCount: rows.length, durationMs: now() - start }
   }
 
+  async countRows(table: TableInfo, opts: TableQueryOptions): Promise<number> {
+    const { where, params } = buildClauses(opts, q, () => '?')
+    const row = this.db!
+      .prepare(`select count(*) as cnt from ${q(table.name)}${where}`)
+      .get(...(params as never[])) as { cnt: number } | undefined
+    return Number(row?.cnt ?? 0)
+  }
+
   async primaryKeys(table: TableInfo): Promise<string[]> {
     const rows = this.db!.prepare(`pragma table_info(${q(table.name)})`).all() as {
       name: string

@@ -85,6 +85,10 @@ export interface Tab {
   selection: number[]
   viewMode: 'data' | 'structure'
   structure: TableStructure | null
+  /** Cached total row count for the current filters (null = not yet known). */
+  totalRows: number | null
+  /** Filter signature the cached count corresponds to. */
+  totalRowsKey: string
   history: DraftSnapshot[]
   future: DraftSnapshot[]
 }
@@ -175,6 +179,8 @@ export const useTabs = defineStore('tabs', () => {
       selection: [],
       viewMode: 'data',
       structure: null,
+      totalRows: null,
+      totalRowsKey: '',
       history: [],
       future: []
     }
@@ -493,6 +499,31 @@ export const useTabs = defineStore('tabs', () => {
     await reloadTable(tab)
   }
 
+  /**
+   * Fetch the true total row count for the current filters (background, best-effort).
+   * Skips the query when paging/sorting — the count only depends on the filters —
+   * and silently does nothing for engines without a countRows capability.
+   */
+  async function countRowsFor(tab: Tab): Promise<void> {
+    if (!tab.table) return
+    const activeFilters = tab.filters.filter((f) => f.column)
+    const key = JSON.stringify(activeFilters)
+    if (tab.totalRowsKey === key && tab.totalRows !== null) return
+    tab.totalRows = null
+    tab.totalRowsKey = key
+    try {
+      const n = await window.api.db.countRows(tab.connectionId, plainTable(tab.table), {
+        limit: 0,
+        offset: 0,
+        filters: activeFilters.map((f) => ({ column: f.column, op: f.op, value: f.value }))
+      })
+      // Only apply if the filters haven't changed since we started counting.
+      if (tab.totalRowsKey === key) tab.totalRows = n
+    } catch {
+      /* engine has no count capability, or the count failed — leave it unknown */
+    }
+  }
+
   async function reloadTable(tab: Tab): Promise<void> {
     if (!tab.table) return
     tab.running = true
@@ -516,11 +547,17 @@ export const useTabs = defineStore('tabs', () => {
       tab.future = []
       tab.selectedRow = null
       tab.selection = []
+      void countRowsFor(tab) // background — total only changes when filters change
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
     } finally {
       tab.running = false
     }
+  }
+
+  /** Ask the engine to cancel this tab's in-flight query (pg/mysql/mssql). */
+  function cancel(tab: Tab): void {
+    void window.api.db.cancelQuery(tab.connectionId)
   }
 
   async function run(tab: Tab, sqlOverride?: string): Promise<void> {
@@ -703,6 +740,26 @@ export const useTabs = defineStore('tabs', () => {
       delete current[column] // back to original -> not dirty
     } else {
       current[column] = value
+    }
+    if (Object.keys(current).length) tab.edits = { ...tab.edits, [rowIndex]: current }
+    else {
+      const copy = { ...tab.edits }
+      delete copy[rowIndex]
+      tab.edits = copy
+    }
+  }
+
+  /** Explicitly set a data cell to SQL NULL (distinct from an empty string). */
+  function setCellNull(tab: Tab, rowIndex: number, column: string): void {
+    if (!editsAllowed(tab) || !tab.result) return
+    record(tab)
+    const colIdx = tab.result.columns.findIndex((c) => c.name === column)
+    const original = colIdx >= 0 ? tab.result.rows[rowIndex]?.[colIdx] : undefined
+    const current = { ...(tab.edits[rowIndex] ?? {}) }
+    if (original === null || original === undefined) {
+      delete current[column] // already NULL -> not dirty
+    } else {
+      current[column] = null
     }
     if (Object.keys(current).length) tab.edits = { ...tab.edits, [rowIndex]: current }
     else {
@@ -1029,6 +1086,7 @@ export const useTabs = defineStore('tabs', () => {
     closeTab,
     closeForConnection,
     run,
+    cancel,
     reloadTable,
     setViewMode,
     loadStructure,
@@ -1051,6 +1109,7 @@ export const useTabs = defineStore('tabs', () => {
     removeInsert,
     toggleDelete,
     deleteSelectedRows,
+    setCellNull,
     isDeleted,
     discardEdits,
     undo,
