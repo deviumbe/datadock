@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import Icon from './Icon.vue'
 import type { AnalyticsDataset, AnalyticsMetric } from '@shared/types'
 import { buildChartSql } from '../lib/analyticsSql'
 import { kpiValue, formatMetric } from '../lib/chartOption'
@@ -43,8 +44,8 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
       <span v-if="metric.icon" class="m-chip">{{ metric.icon }}</span>
       <span class="m-label">{{ metric.name }}</span>
       <div class="m-actions">
-        <button class="ic" title="Edit" @click="emit('edit', metric)">✎</button>
-        <button class="ic" title="Delete" @click="emit('remove', metric)">🗑</button>
+        <button class="ic" title="Edit" @click="emit('edit', metric)"><Icon name="pencil" :size="14" /></button>
+        <button class="ic" title="Delete" @click="emit('remove', metric)"><Icon name="trash" :size="14" /></button>
       </div>
     </div>
     <span class="m-value" :class="{ err: !!error }" :title="error || ''">{{ error ? 'Error' : text }}</span>
@@ -56,14 +57,17 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 15px 16px;
-  border: 1px solid var(--border);
+  padding: 16px 17px;
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
-  background: var(--bg-input);
-  transition: border-color 0.15s;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.08s;
 }
 .mcard:hover {
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
 }
 .mcard:hover .m-actions {
   opacity: 1;
@@ -116,9 +120,11 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   transition: opacity 0.15s;
 }
 .ic {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-faint);
-  padding: 3px 6px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
 .ic:hover {

@@ -6,6 +6,7 @@ import { kpiValue, formatMetric, pivotModel, pivotToTable } from '../lib/chartOp
 import type { CardSnapshot } from '../lib/reportHtml'
 import { useAnalytics } from '../stores/analytics'
 import ChartRender from './ChartRender.vue'
+import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 
 const props = defineProps<{
@@ -150,22 +151,22 @@ defineExpose({ snapshot })
       <span class="card-meta">{{ chart.type }}</span>
       <div class="card-actions">
         <div class="exp">
-          <button class="ic" title="Export data" @click="exportOpen = !exportOpen">⤓</button>
+          <button class="ic" title="Export data" @click="exportOpen = !exportOpen"><Icon name="download" :size="14" /></button>
           <div v-if="exportOpen" class="exp-menu" @mouseleave="exportOpen = false">
             <button @click="exportData('xlsx')">Excel (.xlsx)</button>
             <button @click="exportData('csv')">CSV</button>
             <button @click="exportData('json')">JSON</button>
           </div>
         </div>
-        <button class="ic" title="Refresh" @click="load">⟳</button>
-        <button class="ic" title="Edit" @click="emit('edit', chart)">✎</button>
+        <button class="ic" title="Refresh" @click="load"><Icon name="refresh" :size="14" /></button>
+        <button class="ic" title="Edit" @click="emit('edit', chart)"><Icon name="pencil" :size="14" /></button>
         <button
           v-if="removable"
           class="ic"
           title="Remove from dashboard"
           @click="emit('removeFromDashboard', chart)"
-        >✕</button>
-        <button v-else class="ic" title="Delete" @click="emit('remove', chart)">🗑</button>
+        ><Icon name="x" :size="14" /></button>
+        <button v-else class="ic" title="Delete" @click="emit('remove', chart)"><Icon name="trash" :size="14" /></button>
       </div>
     </div>
     <div class="card-body">
@@ -218,15 +219,18 @@ defineExpose({ snapshot })
 .card {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-input);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
   overflow: hidden;
   min-height: 260px;
-  transition: border-color 0.15s;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.08s;
 }
 .card:hover {
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
 }
 .card:hover .card-actions {
   opacity: 1;
@@ -292,9 +296,11 @@ defineExpose({ snapshot })
   background: var(--bg-hover);
 }
 .ic {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-faint);
-  padding: 3px 6px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
 .ic:hover {

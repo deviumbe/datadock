@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import type { ColumnMeta } from '@shared/types'
 
 const props = defineProps<{
@@ -56,7 +57,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
     <header class="detail-head">
       <span class="title">Row {{ rowIndex + 1 }}</span>
       <div class="spacer" />
-      <button class="btn-ghost close" @click="emit('close')">✕</button>
+      <button class="btn-ghost close" @click="emit('close')"><Icon name="x" :size="14" /></button>
     </header>
 
     <div class="fields">
@@ -101,7 +102,9 @@ function toggleNull(col: ColumnMeta, i: number): void {
 .detail {
   width: 320px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   background: var(--bg-panel);
   display: flex;
   flex-direction: column;
@@ -111,7 +114,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
   display: flex;
   align-items: center;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
 }
 .title {
   font-weight: 600;
@@ -120,6 +123,9 @@ function toggleNull(col: ColumnMeta, i: number): void {
   flex: 1;
 }
 .close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 24px;
   border-radius: 4px;
@@ -196,7 +202,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-soft);
 }
 .detail-foot.readonly {
   color: var(--text-faint);

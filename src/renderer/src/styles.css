@@ -31,9 +31,24 @@
 
   --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.55);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* Soft card elevation — lifts surfaces off the canvas by depth, not hard lines */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18), 0 10px 28px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 1px 2px rgba(0, 0, 0, 0.22), 0 14px 36px rgba(0, 0, 0, 0.28);
+
+  /* Hairline separators (calmer than --border) + faint zebra stripe for rows */
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --bg-zebra: rgba(255, 255, 255, 0.022);
 
   --radius: 10px;
   --radius-sm: 7px;
+  --radius-lg: 14px;
+
+  /* Type scale — a documented 5-step ramp instead of ad-hoc pixel sizes */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 15px;
+  --fs-lg: 20px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
   --font-display: 'Space Grotesk', 'Inter', -apple-system, sans-serif;
@@ -85,6 +100,11 @@
 
   --shadow-modal: 0 24px 60px rgba(15, 30, 60, 0.18);
   --shadow-pop: 0 10px 30px rgba(15, 30, 60, 0.12);
+  --shadow-card: 0 1px 2px rgba(15, 30, 60, 0.06), 0 8px 22px rgba(15, 30, 60, 0.08);
+  --shadow-card-hover: 0 1px 2px rgba(15, 30, 60, 0.08), 0 12px 30px rgba(15, 30, 60, 0.12);
+
+  --border-soft: rgba(15, 30, 60, 0.07);
+  --bg-zebra: rgba(15, 30, 60, 0.022);
 }
 
 * {
@@ -108,7 +128,7 @@ body,
 
 body {
   font-family: var(--font);
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
   background: var(--bg-app);
   -webkit-font-smoothing: antialiased;
@@ -123,6 +143,35 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+}
+
+/* Keyboard focus ring — only for keyboard users (:focus-visible), so mouse
+   clicks stay clean. Inputs keep their own accent focus style below. */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Indeterminate sweep for loading bars + a soft shimmer for skeleton states. */
+@keyframes ddsweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+@keyframes ddshimmer {
+  0% {
+    background-position: -480px 0;
+  }
+  100% {
+    background-position: 480px 0;
+  }
 }
 
 input,

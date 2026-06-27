@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import Icon from './Icon.vue'
 import type { ColumnMeta, FilterOp, FilterSpec } from '@shared/types'
 
 const props = defineProps<{ columns: ColumnMeta[]; filters: FilterSpec[] }>()
@@ -31,7 +32,7 @@ function apply(): void {
 
 <template>
   <div class="filter-bar">
-    <button class="btn btn-ghost add" @click="add">＋ Filter</button>
+    <button class="btn btn-ghost add" @click="add"><Icon name="filter" :size="13" /> Filter</button>
     <div v-for="(f, i) in local" :key="i" class="filter">
       <select class="select sm" v-model="f.column" @change="apply">
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
@@ -47,7 +48,7 @@ function apply(): void {
         @keydown.enter="apply"
         @blur="apply"
       />
-      <button class="btn-ghost rm" @click="remove(i)">✕</button>
+      <button class="btn-ghost rm" @click="remove(i)"><Icon name="x" :size="13" /></button>
     </div>
     <span v-if="local.length === 0" class="hint">No filters</span>
   </div>
@@ -58,8 +59,8 @@ function apply(): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-soft);
   flex-wrap: wrap;
   background: var(--bg-app);
 }
@@ -72,6 +73,7 @@ function apply(): void {
   align-items: center;
   gap: 3px;
   background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: 3px;
 }
@@ -89,6 +91,9 @@ function apply(): void {
   width: 110px;
 }
 .rm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-faint);
   width: 20px;
   height: 20px;

@@ -6,6 +6,22 @@ export const useUi = defineStore('ui', () => {
   const tablesCollapsed = ref(false)
   const autoCollapsedOnce = ref(false)
 
+  // User-resizable panel widths (persisted). Clamped to sane ranges on set.
+  const num = (key: string, fallback: number): number => {
+    const v = Number(localStorage.getItem(key))
+    return Number.isFinite(v) && v > 0 ? v : fallback
+  }
+  const tablesWidth = ref(num('datadock-tables-w', 210))
+  const detailWidth = ref(num('datadock-detail-w', 320))
+  function setTablesWidth(px: number): void {
+    tablesWidth.value = Math.max(160, Math.min(440, Math.round(px)))
+    localStorage.setItem('datadock-tables-w', String(tablesWidth.value))
+  }
+  function setDetailWidth(px: number): void {
+    detailWidth.value = Math.max(240, Math.min(640, Math.round(px)))
+    localStorage.setItem('datadock-detail-w', String(detailWidth.value))
+  }
+
   // Menu-triggered modals (rendered by MainPanel).
   const importOpen = ref(false)
   const exportDbOpen = ref(false)
@@ -57,6 +73,10 @@ export const useUi = defineStore('ui', () => {
   return {
     sidebarCollapsed,
     tablesCollapsed,
+    tablesWidth,
+    detailWidth,
+    setTablesWidth,
+    setDetailWidth,
     importOpen,
     exportDbOpen,
     tableSizesOpen,

@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
           <th
             v-for="(col, i) in result!.columns"
             :key="i"
-            :class="{ sortable }"
+            :class="{ sortable, frozen: i === 0 && !actionLabel }"
             @click="sortable && emit('sort', col.name)"
             @contextmenu.prevent="emit('headerContext', col.name, $event)"
           >
@@ -315,7 +315,7 @@ onBeforeUnmount(() => {
           <td
             v-for="(_, c) in row"
             :key="c"
-            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c), 'cell-sel': inCellSel(r, c) }"
+            :class="{ null: isNull(cellValue(r, c)), dirty: isDirty(r, c), editing: isEditing('data', r, c), 'find-match': isFindMatch(r, c), 'find-current': isFindCurrent(r, c), fk: !!fkOf(c), 'cell-sel': inCellSel(r, c), frozen: c === 0 && !actionLabel }"
             :title="fkOf(c) && !isNull(cellValue(r, c)) ? `Go to ${fkOf(c)!.toTable} where ${fkOf(c)!.toColumn} = ${display(cellValue(r, c))}` : display(cellValue(r, c))"
             @mousedown="onCellMouseDown(r, c, $event)"
             @mouseenter="onCellMouseEnter(r, c)"
@@ -413,11 +413,11 @@ thead th {
   z-index: 2;
   background: var(--bg-elevated);
   text-align: left;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 11.5px;
   color: var(--text-dim);
   padding: 11px 14px;
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
   user-select: none;
 }
@@ -439,13 +439,18 @@ thead th.sortable:hover {
 }
 tbody td {
   padding: 7px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   white-space: nowrap;
   max-width: 480px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--mono);
   font-size: 12.5px;
+  color: var(--text);
+}
+/* Faint zebra striping — lets the eye track across wide rows without hard lines. */
+tbody tr:nth-child(even) td {
+  background: var(--bg-zebra);
 }
 tbody tr:hover td {
   background: var(--bg-hover);
@@ -559,8 +564,47 @@ td.editing {
   text-align: center;
   font-family: var(--mono);
   user-select: none;
+  width: 48px;
   min-width: 48px;
+  max-width: 48px;
   border-right: 1px solid var(--border);
+}
+/* Freeze the first data column so the key/id stays visible while scrolling a
+   wide table sideways — it extends the sticky left gutter. (Skipped when an
+   action column is present, so the offset stays exact.) */
+thead th.frozen,
+tbody td.frozen {
+  position: sticky;
+  z-index: 1;
+  left: 48px;
+}
+.grid.selectable thead th.frozen,
+.grid.selectable tbody td.frozen {
+  left: 84px;
+}
+.grid tbody td.frozen {
+  background: var(--bg-panel);
+  box-shadow: inset -1px 0 0 var(--border-soft);
+}
+.grid thead th.frozen {
+  background: var(--bg-elevated);
+  box-shadow: inset -1px 0 0 var(--border-soft);
+}
+thead th.frozen {
+  z-index: 3;
+}
+.grid tbody tr:hover td.frozen {
+  background: var(--bg-hover);
+}
+.grid tbody tr.selected td.frozen,
+.grid tbody tr.multi-selected td.frozen {
+  background: var(--accent-soft);
+}
+.grid tbody tr.deleted td.frozen {
+  background: rgba(248, 113, 113, 0.16);
+}
+.grid tbody tr.insert-row td.frozen {
+  background: rgba(74, 222, 128, 0.1);
 }
 thead .rownum {
   z-index: 3;

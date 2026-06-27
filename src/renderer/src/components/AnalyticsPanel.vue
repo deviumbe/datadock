@@ -10,6 +10,7 @@ import type {
 } from '@shared/types'
 import { useAnalytics } from '../stores/analytics'
 import { useWorkspace } from '../stores/workspace'
+import Icon from './Icon.vue'
 import Modal from './Modal.vue'
 import ChartCard from './ChartCard.vue'
 import MetricCard from './MetricCard.vue'
@@ -232,12 +233,12 @@ function sourceLabel(src: DatasetSource): string {
         <span class="asub">Build charts and dashboards on your data</span>
       </div>
       <div class="aactions">
-        <button class="btn btn-ghost" :disabled="!isSql" @click="newDataset">＋ Dataset</button>
-        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newMetric">＋ Metric</button>
-        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newChart()">＋ Chart</button>
-        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newChart('kpi')">＋ KPI card</button>
-        <button class="btn btn-ghost" :disabled="!isSql || !dashboardList.length" @click="newReport">＋ Schedule</button>
-        <button class="btn btn-primary" :disabled="!isSql" @click="newDashboard">＋ Dashboard</button>
+        <button class="btn btn-ghost" :disabled="!isSql" @click="newDataset"><Icon name="plus" /> Dataset</button>
+        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newMetric"><Icon name="plus" /> Metric</button>
+        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newChart()"><Icon name="plus" /> Chart</button>
+        <button class="btn btn-ghost" :disabled="!isSql || !datasets.length" @click="newChart('kpi')"><Icon name="plus" /> KPI card</button>
+        <button class="btn btn-ghost" :disabled="!isSql || !dashboardList.length" @click="newReport"><Icon name="plus" /> Schedule</button>
+        <button class="btn btn-primary" :disabled="!isSql" @click="newDashboard"><Icon name="plus" /> Dashboard</button>
       </div>
     </header>
 
@@ -247,7 +248,7 @@ function sourceLabel(src: DatasetSource): string {
       <!-- AI dashboard builder -->
       <section class="ai-card">
         <div class="ai-row">
-          <span class="ai-ic">✨</span>
+          <span class="ai-ic"><Icon name="sparkles" :size="18" /></span>
           <input
             v-model="aiPrompt"
             class="ai-input"
@@ -274,8 +275,8 @@ function sourceLabel(src: DatasetSource): string {
           <div v-for="d in dashboardList" :key="d.id" class="ds dash-row" @click="openDashboardId = d.id">
             <span class="ds-name">{{ d.name }}</span>
             <span class="ds-src">{{ d.widgets.length }} chart{{ d.widgets.length === 1 ? '' : 's' }}</span>
-            <button class="ic" title="Open" @click.stop="openDashboardId = d.id">↗</button>
-            <button class="ic" title="Delete" @click.stop="deleteDashboard(d.id, d.name)">🗑</button>
+            <button class="ic" title="Open" @click.stop="openDashboardId = d.id"><Icon name="external" :size="14" /></button>
+            <button class="ic" title="Delete" @click.stop="deleteDashboard(d.id, d.name)"><Icon name="trash" :size="14" /></button>
           </div>
         </div>
       </section>
@@ -289,20 +290,21 @@ function sourceLabel(src: DatasetSource): string {
               class="ic toggle"
               :title="r.enabled ? 'Enabled — click to pause' : 'Paused — click to enable'"
               @click="toggleReport(r)"
-            >{{ r.enabled ? '⏸' : '▶' }}</button>
+            ><Icon :name="r.enabled ? 'pause' : 'play'" :size="13" /></button>
             <span class="ds-name">{{ r.name }}</span>
             <span class="ds-src">
               {{ dashName(r.dashboardId) }} · Excel · {{ cadence(r.everyMinutes) }}
               <template v-if="r.enabled"> · next {{ whenText(r.nextRunAt) }}</template>
             </span>
             <span v-if="r.lastStatus" class="rstatus" :class="{ err: r.lastStatus.startsWith('Error') }">
-              {{ r.lastStatus.startsWith('Error') ? '⚠ ' + whenText(r.lastRunAt) : '✓ ' + whenText(r.lastRunAt) }}
+              <Icon :name="r.lastStatus.startsWith('Error') ? 'warn' : 'check'" :size="12" /> {{ whenText(r.lastRunAt) }}
             </span>
             <button class="ic" title="Run now" :disabled="runningReport === r.id" @click="runReportNow(r)">
-              {{ runningReport === r.id ? '…' : '⤓' }}
+              <span v-if="runningReport === r.id">…</span>
+              <Icon v-else name="download" :size="14" />
             </button>
-            <button class="ic" title="Edit" @click="editReport(r)">✎</button>
-            <button class="ic" title="Delete" @click="removeReport(r)">🗑</button>
+            <button class="ic" title="Edit" @click="editReport(r)"><Icon name="pencil" :size="14" /></button>
+            <button class="ic" title="Delete" @click="removeReport(r)"><Icon name="trash" :size="14" /></button>
           </div>
         </div>
       </section>
@@ -337,7 +339,7 @@ function sourceLabel(src: DatasetSource): string {
           <div v-for="d in datasets" :key="d.id" class="ds">
             <span class="ds-name">{{ d.name }}</span>
             <span class="ds-src">{{ sourceLabel(d.source) }}</span>
-            <button class="ic" title="Delete" @click="removeDataset(d.id, d.name)">🗑</button>
+            <button class="ic" title="Delete" @click="removeDataset(d.id, d.name)"><Icon name="trash" :size="14" /></button>
           </div>
         </div>
       </section>
@@ -447,6 +449,8 @@ function sourceLabel(src: DatasetSource): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
@@ -463,7 +467,8 @@ function sourceLabel(src: DatasetSource): string {
 }
 .aactions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 .state {
   margin: auto;
@@ -474,14 +479,17 @@ function sourceLabel(src: DatasetSource): string {
 .abody {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 18px 40px;
+  padding: 22px 22px 52px;
 }
 .ai-card {
-  margin-bottom: 22px;
-  padding: 12px 14px;
-  border: 1px solid var(--accent-soft);
+  margin-bottom: 30px;
+  padding: 16px 16px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg-panel);
+  background:
+    linear-gradient(180deg, var(--accent-soft), transparent 60%),
+    var(--bg-elevated);
+  box-shadow: var(--shadow-card);
 }
 .ai-row {
   display: flex;
@@ -517,29 +525,35 @@ function sourceLabel(src: DatasetSource): string {
   color: var(--accent);
 }
 .sect {
-  margin-bottom: 22px;
+  margin-bottom: 30px;
 }
 .sect h3 {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-faint);
-  margin: 0 0 10px;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin: 0 0 14px;
 }
 .count {
+  font-size: 11px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0 7px;
-  margin-left: 4px;
+  padding: 1px 8px;
   color: var(--text-dim);
 }
 .empty {
   font-size: 12.5px;
+  line-height: 1.5;
   color: var(--text-dim);
-  padding: 14px;
-  border: 1px dashed var(--border);
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
+  background: var(--bg-panel);
 }
 .ds-list {
   display: flex;
@@ -550,16 +564,17 @@ function sourceLabel(src: DatasetSource): string {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  background: var(--bg-panel);
+  background: var(--bg-elevated);
+  transition: border-color 0.15s, background 0.15s, transform 0.06s;
 }
 .dash-row {
   cursor: pointer;
 }
 .dash-row:hover {
-  border-color: var(--accent-soft);
+  border-color: var(--accent);
   background: var(--bg-hover);
 }
 .report-row.off {
@@ -570,9 +585,18 @@ function sourceLabel(src: DatasetSource): string {
   margin-left: 0;
 }
 .rstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-faint);
   margin-left: 8px;
+}
+.rstatus :deep(.dd-icon) {
+  color: var(--ok);
+}
+.rstatus.err :deep(.dd-icon) {
+  color: var(--danger);
 }
 .rstatus.err {
   color: var(--danger);
@@ -588,11 +612,19 @@ function sourceLabel(src: DatasetSource): string {
   font-family: var(--mono);
 }
 .ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
   font-size: 12px;
   color: var(--text-faint);
-  padding: 3px 6px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
+}
+/* Only the first trailing icon button pushes to the right edge; the rest sit
+   next to it. */
+.ic ~ .ic {
+  margin-left: 0;
 }
 .ic:hover {
   background: var(--bg-hover);
