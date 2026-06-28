@@ -498,6 +498,23 @@ export interface TableDumpSpec {
   mode: TableDumpMode
 }
 
+/** A saved restore point — a full structure+data SQL dump of a connection. */
+export interface Snapshot {
+  id: string
+  connectionId: string
+  label: string
+  createdAt: string
+  /** Absolute path of the dump file (kept in userData; not shown to the user). */
+  file: string
+  sizeBytes: number
+  tableCount: number
+}
+
+export interface RestoreResult {
+  statements: number
+  errors: string[]
+}
+
 /** A result set handed from the renderer to the export writer. */
 export interface ExportPayload {
   columns: ColumnMeta[]

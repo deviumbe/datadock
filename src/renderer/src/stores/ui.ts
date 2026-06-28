@@ -27,6 +27,7 @@ export const useUi = defineStore('ui', () => {
   const exportDbOpen = ref(false)
   const tableSizesOpen = ref(false)
   const columnSearchOpen = ref(false)
+  const snapshotsOpen = ref(false)
   const settingsOpen = ref(false)
 
   // AI chat dock (slide-out panel on the right; works without a query tab)
@@ -81,6 +82,7 @@ export const useUi = defineStore('ui', () => {
     exportDbOpen,
     tableSizesOpen,
     columnSearchOpen,
+    snapshotsOpen,
     settingsOpen,
     chatDockOpen,
     openChatDock,

@@ -55,6 +55,22 @@ export const useWorkspace = defineStore('workspace', () => {
   // table -> columns, per connection, for SQL editor autocomplete
   const schemas = reactive<Record<string, Record<string, string[]>>>({})
 
+  // table -> note text, per connection (local-only documentation)
+  const tableNotes = reactive<Record<string, Record<string, string>>>({})
+  function tableNote(connId: string, table: string): string {
+    return tableNotes[connId]?.[table] ?? ''
+  }
+  async function loadNotes(id: string): Promise<void> {
+    try {
+      tableNotes[id] = await window.api.notes.list(id)
+    } catch {
+      tableNotes[id] = {}
+    }
+  }
+  async function setTableNote(connId: string, table: string, text: string): Promise<void> {
+    tableNotes[connId] = await window.api.notes.set(connId, table, text)
+  }
+
   // Temporary write-unlock for read-only connections: connId -> expiry epoch ms.
   // A ticking `now` ref drives countdowns and auto-relock reactively.
   const writeUnlocks = reactive<Record<string, number>>({})
@@ -210,6 +226,7 @@ export const useWorkspace = defineStore('workspace', () => {
       }
     }
     void loadSchema(id)
+    void loadNotes(id)
     // Eagerly cache the FK graph so the grid's inline navigation arrows are
     // ready as soon as a table opens (best-effort; absent on non-SQL drivers).
     void loadErModel(id).catch(() => {})
@@ -258,6 +275,9 @@ export const useWorkspace = defineStore('workspace', () => {
     tables,
     error,
     schemas,
+    tableNotes,
+    tableNote,
+    setTableNote,
     load,
     toggleProject,
     toggleEnv,

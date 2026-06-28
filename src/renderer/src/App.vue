@@ -88,6 +88,9 @@ function handleMenu(action: string): void {
     case 'tableSizes':
       ui.tableSizesOpen = true
       break
+    case 'snapshots':
+      ui.snapshotsOpen = true
+      break
     case 'columnSearch':
       ui.columnSearchOpen = true
       break
@@ -111,6 +114,9 @@ function handleMenu(action: string): void {
       break
     case 'diagram':
       tabs.openDiagram(id)
+      break
+    case 'visualQuery':
+      tabs.openVisualQuery(id)
       break
     case 'chat':
       tabs.openChat(id)

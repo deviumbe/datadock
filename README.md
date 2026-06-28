@@ -286,8 +286,9 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
 | 📊 **Analytics** | Dedicated analytics area · reusable datasets (table / view / saved SQL) · no-SQL visual chart builder (aggregations · time bucketing · series) · bar / line / area / pie / donut / table / **pivot** + **KPI cards with icons** via ECharts · **reusable saved metrics** (bind cards/charts to one definition) · **drag-and-drop resizable dashboards** · **dashboard filters** (text / equals / date-range, column-aware) · **drill-through to underlying rows** · **realtime auto-refresh** · **chart data → Excel/CSV/JSON**, **dashboard → PDF** and **scheduled Excel reports** · instant one-click charts from any query result · **AI that builds *and edits* dashboards/charts/metrics in place** from plain English |
 | 📨 **Redis & queues** | Prefix-grouped key browsing · value viewer (string · hash · list · set · zset · stream) · raw-command editor · realtime queue dashboard with framework auto-detect (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
-| 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) |
+| 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) · **per-table notes / comments** (right-click a table → Add note; shown in the list & above the data) — stored locally |
 | 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
+| 🛟 **Safety** | **Database snapshots** — one-click labeled restore points (full structure + data dump per connection) · restore replays the snapshot with a type-the-connection-name confirmation · blocked on read-only connections |
 | 🎭 **Data masking** | Anonymize columns with faker on export (deterministic) — safely copy production into local databases |
 | 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) · in-app auto-update from GitHub Releases |
 
@@ -296,11 +297,11 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | Area | Planned |
 |---|---|
 | 🔏 **Signed installers** | Code-signing & notarization for macOS and Windows so installers run **without security warnings** (and macOS auto-updates install in place) — **in progress** |
-| 🎯 **Next up** | Database snapshots — save a restore point before risky changes |
+| 🎯 **Next up** | Per-connection query bookmarks · multiple result tabs per run |
 | 🛡️ **Production safety** | Dangerous-query confirmation flow |
 | ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
 | 📈 **Performance** | Query-plan regression alerts |
-| 👥 **Team** | Shared query library · connection bundles · per-table comments / notes · workspace sync · connection templates |
+| 🗂️ **Organize** | Connection templates / presets — stored locally, no cloud |
 | 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |
 | 🪄 **Wow** | Time-travel row history · clone prod schema → local SQLite |
 | 🗃️ **Data management** | Soft-delete recovery viewer |

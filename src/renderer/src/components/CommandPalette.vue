@@ -164,6 +164,13 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     {
+      label: 'Visual Query Builder',
+      icon: '🔍',
+      handler: () => {
+        if (connId) tabsStore.openVisualQuery(connId)
+      }
+    },
+    {
       label: 'Analytics',
       icon: '📈',
       handler: () => {

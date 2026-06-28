@@ -22,6 +22,8 @@ import * as io from './io'
 import * as history from './history'
 import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
+import * as snapshots from './snapshots'
+import * as notes from './notes'
 import * as analytics from './analytics'
 import { runReport } from './scheduler'
 import * as ai from './ai'
@@ -219,6 +221,24 @@ export function registerIpc(): void {
     snippets.removeSnippet(id)
     return true
   })
+
+  // Database snapshots (restore points)
+  handle('snapshots:list', (connId: string) => snapshots.listSnapshots(connId))
+  handle('snapshots:create', (connId: string, label: string) =>
+    snapshots.createSnapshot(connId, label)
+  )
+  handle('snapshots:remove', (connId: string, id: string) =>
+    snapshots.deleteSnapshot(connId, id)
+  )
+  handle('snapshots:restore', (connId: string, id: string) =>
+    snapshots.restoreSnapshot(connId, id)
+  )
+
+  // Per-table notes (local)
+  handle('notes:list', (connId: string) => notes.listNotes(connId))
+  handle('notes:set', (connId: string, table: string, text: string) =>
+    notes.setNote(connId, table, text)
+  )
 
   // Analytics module: datasets + saved charts (persisted per connection)
   handle('analytics:listDatasets', (connId: string) => analytics.listDatasets(connId))

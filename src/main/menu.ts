@@ -94,6 +94,7 @@ export function buildMenu(): void {
           ]
         },
         { type: 'separator' },
+        { label: 'Snapshots…', click: () => send('snapshots') },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },
         { type: 'separator' },
@@ -126,6 +127,7 @@ export function buildMenu(): void {
           ]
         },
         { type: 'separator' },
+        { label: 'Visual Query Builder', click: () => send('visualQuery') },
         { label: 'Analytics', accelerator: 'CmdOrCtrl+Shift+A', click: () => send('analytics') },
         { label: 'Performance', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('performance') },
         { label: 'Redis Queues', click: () => send('redisQueues') }

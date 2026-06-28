@@ -23,7 +23,7 @@ import { getAdapter } from '../db'
 import type { DbAdapter } from '../db/types'
 import * as store from '../storage'
 import type { Workspace } from '@shared/types'
-import { buildCsv, buildInserts, buildJson, buildXlsx, csvCell, jsonObject, type Dialect } from './format'
+import { buildCsv, buildInserts, buildJson, buildXlsx, csvCell, jsonObject, quoteIdent, type Dialect } from './format'
 
 const EXT: Record<ExportFormat, string> = { csv: 'csv', json: 'json', xlsx: 'xlsx', sql: 'sql' }
 const PAGE = 2000
@@ -171,7 +171,8 @@ async function streamDump(
   adapter: DbAdapter,
   specs: TableDumpSpec[],
   filePath: string,
-  maskConfig?: MaskConfig
+  maskConfig?: MaskConfig,
+  dropFirst = false
 ): Promise<void> {
   const dialect = sqlDialect(adapter.config.driver)
   const out = createWriteStream(filePath, { encoding: 'utf-8' })
@@ -186,6 +187,7 @@ async function streamDump(
       const table: TableInfo = { schema: spec.schema, name: spec.name, type: 'table' }
       await write(`-- ----------------------------\n-- ${spec.name}\n-- ----------------------------\n`)
       if ((spec.mode === 'structure' || spec.mode === 'both') && adapter.tableDDL) {
+        if (dropFirst) await write(`DROP TABLE IF EXISTS ${quoteIdent(spec.name, dialect)};\n`)
         await write((await adapter.tableDDL(table)) + '\n\n')
       }
       if (spec.mode === 'data' || spec.mode === 'both') {
@@ -235,6 +237,40 @@ export async function exportDatabase(
     await streamDump(adapter, specs, filePath, maskConfig)
   }
   return { canceled: false, path: filePath }
+}
+
+// ---- snapshots (full dump to a managed path + replay) -----------------------
+
+/** Dump every base table (structure + data) to a path, with DROP IF EXISTS so
+    the script can be replayed onto an existing database. Returns table count. */
+export async function dumpDatabaseToFile(
+  connId: string,
+  filePath: string,
+  dropFirst = false
+): Promise<{ tableCount: number }> {
+  const adapter = getAdapter(connId)
+  const tables = (await adapter.listTables()).filter((t) => t.type === 'table')
+  const specs: TableDumpSpec[] = tables.map((t) => ({ schema: t.schema, name: t.name, mode: 'both' }))
+  await streamDump(adapter, specs, filePath, undefined, dropFirst)
+  return { tableCount: tables.length }
+}
+
+/** Run every statement in a .sql file against a connection (used by restore). */
+export async function runSqlFile(connId: string, filePath: string): Promise<ImportResult> {
+  const adapter = getAdapter(connId)
+  const text = await readFile(filePath, 'utf-8')
+  const statements = splitStatements(text)
+  let ran = 0
+  const errors: string[] = []
+  for (const stmt of statements) {
+    try {
+      await adapter.query(stmt)
+      ran++
+    } catch (e) {
+      errors.push(`${e instanceof Error ? e.message : String(e)} — near: ${stmt.slice(0, 60)}…`)
+    }
+  }
+  return { statements: ran, errors }
 }
 
 // ---- share connections ------------------------------------------------------

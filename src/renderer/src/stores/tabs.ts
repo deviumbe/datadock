@@ -37,6 +37,7 @@ export type TabKind =
   | 'search'
   | 'envDiff'
   | 'redisQueues'
+  | 'visualQuery'
 
 /** One stop in the record explorer: a single row identified by column = value. */
 export interface ExplorerFocus {
@@ -347,6 +348,16 @@ export const useTabs = defineStore('tabs', () => {
     const tab = existing ?? push(base(connId, 'diagram', 'ER Diagram'))
     if (existing) setActive(connId, existing.id)
     void run(tab)
+    return tab
+  }
+
+  function openVisualQuery(connId: string): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'visualQuery')
+    if (existing) {
+      setActive(connId, existing.id)
+      return existing
+    }
+    const tab = push(base(connId, 'visualQuery', 'Query Builder'))
     return tab
   }
 
@@ -942,7 +953,8 @@ export const useTabs = defineStore('tabs', () => {
     'performance',
     'docs',
     'history',
-    'snippets'
+    'snippets',
+    'visualQuery'
   ])
   const TABS_KEY = 'datadock-open-tabs'
   // Connections opened (and thus authoritative) during this session — only
@@ -1075,6 +1087,7 @@ export const useTabs = defineStore('tabs', () => {
     openSearch,
     openAnalytics,
     openEnvDiff,
+    openVisualQuery,
     openRedisQueues,
     openSchemaDiff,
     openDataDiff,

@@ -39,6 +39,8 @@ import type {
   RedisServerStats,
   SizeSnapshot,
   Snippet,
+  Snapshot,
+  RestoreResult,
   QueryResult,
   RowChangeSet,
   TableDumpSpec,
@@ -172,6 +174,19 @@ const api = {
     save: (input: Partial<Snippet> & { name: string; sql: string }) =>
       invoke<Snippet>('snippets:save', input),
     remove: (id: string) => invoke<boolean>('snippets:remove', id)
+  },
+  snapshots: {
+    list: (connId: string) => invoke<Snapshot[]>('snapshots:list', connId),
+    create: (connId: string, label: string) =>
+      invoke<Snapshot>('snapshots:create', connId, label),
+    remove: (connId: string, id: string) => invoke<boolean>('snapshots:remove', connId, id),
+    restore: (connId: string, id: string) =>
+      invoke<RestoreResult>('snapshots:restore', connId, id)
+  },
+  notes: {
+    list: (connId: string) => invoke<Record<string, string>>('notes:list', connId),
+    set: (connId: string, table: string, text: string) =>
+      invoke<Record<string, string>>('notes:set', connId, table, text)
   },
   analytics: {
     listDatasets: (connId: string) =>

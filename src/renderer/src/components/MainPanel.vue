@@ -34,6 +34,7 @@ import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import DataDiffPanel from './DataDiffPanel.vue'
 import RedisQueuePanel from './RedisQueuePanel.vue'
 import RedisKeyModal from './RedisKeyModal.vue'
+import VisualQueryBuilder from './VisualQueryBuilder.vue'
 import DataGeneratorModal from './DataGeneratorModal.vue'
 import AiAssistantModal from './AiAssistantModal.vue'
 import QueryVarsModal from './QueryVarsModal.vue'
@@ -42,6 +43,8 @@ import BulkEditModal from './BulkEditModal.vue'
 import DependenciesModal from './DependenciesModal.vue'
 import TableSizesModal from './TableSizesModal.vue'
 import ColumnSearchModal from './ColumnSearchModal.vue'
+import SnapshotsModal from './SnapshotsModal.vue'
+import TableNoteModal from './TableNoteModal.vue'
 import type { ChartType, DropTableOptions, PlanNode, TruncateOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
@@ -438,6 +441,7 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
   const items: MenuItem[] = [
     { label: 'Open', action: () => openTable(t) },
     { label: 'Edit structure', action: () => tabsStore.setViewMode(tabsStore.openTable(id, t), 'structure') },
+    { label: ws.tableNote(id, t.name) ? 'Edit note…' : 'Add note…', action: () => (noteTarget.value = t) },
     { label: 'Export table…', action: () => (exportTableTarget.value = { schema: t.schema, name: t.name, type: t.type }) }
   ]
   if (!nonSql.value) {
@@ -463,6 +467,15 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
     )
   }
   ctx.value = { x: e.clientX, y: e.clientY, items }
+}
+
+// ---- per-table notes (local) -----------------------------------------------
+const noteTarget = ref<TableInfo | null>(null)
+async function saveNote(text: string): Promise<void> {
+  if (noteTarget.value && activeConn.value) {
+    await ws.setTableNote(activeConn.value.id, noteTarget.value.name, text)
+  }
+  noteTarget.value = null
 }
 
 // ---- dependency explorer ---------------------------------------------------
@@ -872,13 +885,13 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <button class="btn btn-ghost txn-rollback" @click="ws.rollbackTxn(activeConn.id)">Rollback</button>
           </template>
           <button v-else class="btn btn-ghost" title="Begin transaction" @click="ws.beginTxn(activeConn.id)"><Icon name="swap" /> Begin Tx</button>
-        </template>
-        <button
+        </template>            <button
           class="btn btn-ghost ai-btn"
           :class="{ on: ui.chatDockOpen }"
           title="Chat with your data"
           @click="ui.toggleChatDock()"
         ><Icon name="sparkles" /> Chat</button>
+        <button class="btn btn-ghost" title="Visual Query Builder" @click="tabsStore.openVisualQuery(activeConn.id)"><Icon name="diagram" /> Builder</button>
         <button class="btn btn-ghost" title="Analytics — charts & dashboards (⌘⇧A)" @click="tabsStore.openAnalytics(activeConn.id)"><Icon name="chart" /> Analytics</button>
         <button class="btn btn-ghost" @click="newQuery"><Icon name="plus" /> Query</button>
         <button class="btn" @click="disconnect">Disconnect</button>
@@ -921,6 +934,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             >
               <span class="ticon"><Icon :name="t.type === 'view' ? 'view' : 'table'" :size="14" /></span>
               <span class="tname">{{ t.name }}</span>
+              <span
+                v-if="activeConn && ws.tableNote(activeConn.id, t.name)"
+                class="tnote"
+                :title="ws.tableNote(activeConn.id, t.name)"
+              ><Icon name="note" :size="12" /></span>
             </div>
             <div v-if="filteredTables.length === 0" class="no-tables">No tables</div>
           </div>
@@ -1126,12 +1144,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 
             <!-- Data view -->
             <template v-else>
-            <FilterBar
-              v-if="active.result"
-              :columns="active.result.columns"
-              :filters="active.filters"
-              @apply="(f) => onApplyFilters(active!, f)"
-            />
+            <div class="data-head">
+              <div v-if="active.table && ws.tableNote(activeConn.id, active.table.name)" class="table-note">
+                <Icon name="note" :size="13" />
+                <span class="table-note-text">{{ ws.tableNote(activeConn.id, active.table.name) }}</span>
+                <button class="table-note-edit" title="Edit note" @click="noteTarget = active.table">Edit</button>
+              </div>
+              <FilterBar
+                v-if="active.result"
+                :columns="active.result.columns"
+                :filters="active.filters"
+                @apply="(f) => onApplyFilters(active!, f)"
+              />
+            </div>
 
             <div class="table-body">
               <div class="grid-host">
@@ -1368,6 +1393,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <div v-else-if="active.kind === 'redisQueues'" class="explorer-pane">
             <RedisQueuePanel :conn-id="activeConn.id" />
           </div>
+
+          <!-- Visual Query Builder tab -->
+          <div v-else-if="active.kind === 'visualQuery'" class="explorer-pane">
+            <VisualQueryBuilder :conn-id="activeConn.id" />
+          </div>
         </div>
       </div>
 
@@ -1532,6 +1562,24 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :conn-id="activeConn.id"
         @open="(n) => { openRelatedTable(n); ui.columnSearchOpen = false }"
         @close="ui.columnSearchOpen = false"
+      />
+
+      <SnapshotsModal
+        v-if="ui.snapshotsOpen && activeConn"
+        :conn-id="activeConn.id"
+        :conn-name="activeConn.name"
+        :driver="activeConn.driver"
+        :read-only="readOnly"
+        @restored="ws.refreshTables(activeConn.id)"
+        @close="ui.snapshotsOpen = false"
+      />
+
+      <TableNoteModal
+        v-if="noteTarget && activeConn"
+        :table="noteTarget.name"
+        :initial="ws.tableNote(activeConn.id, noteTarget.name)"
+        @save="saveNote"
+        @close="noteTarget = null"
       />
 
       <!-- Slide-out AI chat dock — usable without a query tab open. -->
@@ -1981,9 +2029,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   color: var(--accent);
 }
 .tname {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tnote {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex: none;
+}
+.table-item:hover .tnote {
+  color: var(--accent);
 }
 .no-tables {
   color: var(--text-faint);
@@ -2052,7 +2110,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .tab-kind.query,
 .tab-kind.snippets,
-.tab-kind.history {
+.tab-kind.history,
+.tab-kind.visualQuery {
   background: var(--chart-2);
 }
 .tab-kind.chat,
@@ -2063,7 +2122,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .tab-kind.redisQueues,
 .tab-kind.envDiff,
 .tab-kind.schemaDiff,
-.tab-kind.dataDiff {
+.tab-kind.dataDiff,
+.tab-kind.visualQuery {
   background: var(--chart-4);
 }
 .tab-kind.databases,
@@ -2130,6 +2190,38 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: grid;
   grid-template-rows: auto auto 1fr;
   overflow: hidden;
+}
+.table-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 7px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+  color: var(--text);
+}
+.table-note > :deep(.dd-icon) {
+  color: var(--accent);
+  flex: none;
+}
+.table-note-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-note-edit {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.table-note-edit:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .table-body {
   display: flex;
