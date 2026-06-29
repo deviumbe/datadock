@@ -24,6 +24,7 @@ async function scrollDown(): Promise<void> {
 }
 watch(() => messages.value.length, scrollDown)
 watch(busy, scrollDown)
+watch(() => props.tab.chatStream, scrollDown)
 
 async function send(): Promise<void> {
   const text = input.value.trim()
@@ -84,7 +85,10 @@ function useSuggestion(s: string): void {
 
         <div v-if="busy" class="msg assistant">
           <div class="avatar">✨</div>
-          <div class="bubble"><div class="typing"><span /><span /><span /></div></div>
+          <div class="bubble">
+            <div v-if="tab.chatStream" class="content">{{ tab.chatStream }}<span class="cursor" /></div>
+            <div v-else class="typing"><span /><span /><span /></div>
+          </div>
         </div>
       </div>
 
@@ -217,6 +221,21 @@ function useSuggestion(s: string): void {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+/* Blinking caret shown at the end of streaming text. */
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: cursorBlink 1s step-end infinite;
+}
+@keyframes cursorBlink {
+  50% {
+    opacity: 0;
+  }
 }
 .steps {
   margin-top: 8px;

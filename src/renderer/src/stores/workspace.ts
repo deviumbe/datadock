@@ -6,6 +6,7 @@ import type {
   ErModel,
   Project,
   TableInfo,
+  Topology,
   Workspace
 } from '@shared/types'
 import { useTabs } from './tabs'
@@ -19,6 +20,7 @@ export const useWorkspace = defineStore('workspace', () => {
 
   const activeConnectionId = ref<string | null>(null)
   const error = ref<string | null>(null)
+  const topologies = ref<Topology[]>([])
 
   async function beginTxn(id: string): Promise<void> {
     try {
@@ -126,6 +128,7 @@ export const useWorkspace = defineStore('workspace', () => {
 
   function applyWorkspace(ws: Workspace): void {
     projects.value = ws.projects
+    topologies.value = ws.topologies ?? []
     // Expand everything the first time so the tree is visible.
     if (expandedProjects.size === 0 && expandedEnvs.size === 0) {
       for (const p of ws.projects) {
@@ -138,6 +141,11 @@ export const useWorkspace = defineStore('workspace', () => {
   async function load(): Promise<void> {
     applyWorkspace(await window.api.workspace.get())
   }
+
+  const saveTopology = async (t: Topology): Promise<void> =>
+    applyWorkspace(await window.api.workspace.saveTopology(t))
+  const deleteTopology = async (id: string): Promise<void> =>
+    applyWorkspace(await window.api.workspace.deleteTopology(id))
 
   function toggleProject(id: string): void {
     expandedProjects.has(id) ? expandedProjects.delete(id) : expandedProjects.add(id)
@@ -181,6 +189,19 @@ export const useWorkspace = defineStore('workspace', () => {
     applyWorkspace(await window.api.workspace.duplicateConnection(id))
 
   // ---- connecting -----------------------------------------------------------
+  /** Connect a node for background monitoring — no tab/active-connection changes. */
+  async function ensureConnected(id: string): Promise<void> {
+    if (connStates[id] === 'connected') return
+    connStates[id] = 'connecting'
+    try {
+      await window.api.db.connect(id)
+      connStates[id] = 'connected'
+    } catch (e) {
+      connStates[id] = 'error'
+      throw e
+    }
+  }
+
   async function connectAndOpen(id: string): Promise<void> {
     error.value = null
     activeConnectionId.value = id
@@ -292,9 +313,13 @@ export const useWorkspace = defineStore('workspace', () => {
     deleteConnection,
     duplicateConnection,
     connectAndOpen,
+    ensureConnected,
     disconnect,
     refreshTables,
     exportConnections,
-    importConnections
+    importConnections,
+    topologies,
+    saveTopology,
+    deleteTopology
   }
 })

@@ -1,6 +1,7 @@
-import { app, ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow } from 'electron'
 import type {
   AlterOp,
+  CloneOptions,
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
@@ -12,9 +13,10 @@ import type {
   TableDumpSpec,
   TableInfo,
   TableQueryOptions,
+  Topology,
   TruncateOptions
 } from '@shared/types'
-import type { HistoryEntry, Snippet, QueueAction, QueueJobState } from '@shared/types'
+import type { HistoryEntry, RowVersionInput, Snippet, QueueAction, QueueJobState } from '@shared/types'
 import type { MaskConfig } from '@shared/mask'
 import * as store from './storage'
 import * as db from './db'
@@ -23,7 +25,11 @@ import * as history from './history'
 import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
 import * as snapshots from './snapshots'
+import { cloneToSqlite } from './clone'
+import * as planBaselines from './planBaselines'
+import * as rowHistory from './rowHistory'
 import * as notes from './notes'
+import * as bookmarks from './bookmarks'
 import * as analytics from './analytics'
 import { runReport } from './scheduler'
 import * as ai from './ai'
@@ -89,6 +95,8 @@ export function registerIpc(): void {
   )
   handle('workspace:deleteConnection', (id: string) => store.deleteConnection(id))
   handle('workspace:duplicateConnection', (id: string) => store.duplicateConnection(id))
+  handle('workspace:saveTopology', (topology: Topology) => store.saveTopology(topology))
+  handle('workspace:deleteTopology', (id: string) => store.deleteTopology(id))
 
   // Database operations
   handle('db:test', async (config: ConnectionConfig) => {
@@ -114,6 +122,7 @@ export function registerIpc(): void {
     db.capability(id, 'countRows')(table, opts)
   )
   handle('db:explainPlan', (id: string, sql: string) => db.explainPlan(id, sql))
+  handle('db:replicationStatus', (id: string) => db.capability(id, 'replicationStatus')())
   handle('db:txnBegin', (id: string) => db.capability(id, 'beginTransaction')())
   handle('db:txnCommit', (id: string) => db.capability(id, 'commitTransaction')())
   handle('db:txnRollback', (id: string) => db.capability(id, 'rollbackTransaction')())
@@ -198,6 +207,27 @@ export function registerIpc(): void {
   )
   handle('io:pickFolder', () => io.pickFolder())
 
+  // Clone a connection's schema/data into a local SQLite file
+  handle('clone:toSqlite', (id: string, opts: CloneOptions) => cloneToSqlite(id, opts))
+
+  // Query-plan baselines (regression alerts)
+  handle('planBaselines:get', (id: string, sql: string) => planBaselines.getBaseline(id, sql))
+  handle('planBaselines:set', (id: string, sql: string, cost: number, rows?: number) =>
+    planBaselines.setBaseline(id, sql, cost, rows)
+  )
+  handle('planBaselines:remove', (id: string, sql: string) =>
+    planBaselines.removeBaseline(id, sql)
+  )
+
+  // Time-travel row history (local edit journal)
+  handle('rowHistory:record', (id: string, entries: RowVersionInput[]) =>
+    rowHistory.record(id, entries)
+  )
+  handle('rowHistory:list', (id: string, table: string, pk: Record<string, unknown>) =>
+    rowHistory.list(id, table, pk)
+  )
+  handle('rowHistory:clear', (id: string, table?: string) => rowHistory.clear(id, table))
+
   // Query history
   handle('history:add', (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => history.addHistory(entry))
   handle('history:list', () => history.listHistory())
@@ -238,6 +268,15 @@ export function registerIpc(): void {
   handle('notes:list', (connId: string) => notes.listNotes(connId))
   handle('notes:set', (connId: string, table: string, text: string) =>
     notes.setNote(connId, table, text)
+  )
+
+  // Per-connection query bookmarks (local)
+  handle('bookmarks:list', (connId: string) => bookmarks.listBookmarks(connId))
+  handle('bookmarks:save', (connId: string, name: string, sql: string) =>
+    bookmarks.saveBookmark(connId, name, sql)
+  )
+  handle('bookmarks:remove', (connId: string, id: string) =>
+    bookmarks.removeBookmark(connId, id)
   )
 
   // Analytics module: datasets + saved charts (persisted per connection)
@@ -291,10 +330,17 @@ export function registerIpc(): void {
   handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
   handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
   handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
+  handle('ai:generateSeedData', (req: ai.AiSeedRequest) => ai.generateSeedData(req))
+  handle('ai:describeSchema', (req: ai.AiDescribeRequest) => ai.describeSchema(req))
   handle('ai:generateAnalytics', (req: ai.AiAnalyticsRequest) => ai.generateAnalytics(req))
-  handle('ai:chat', (connId: string, req: ai.AiChatRequest) =>
-    ai.chat(req, makeRunSql(connId, req.driver))
-  )
+  handle('ai:chat', (connId: string, req: ai.AiChatRequest) => {
+    const wc = BrowserWindow.getAllWindows()[0]?.webContents
+    const onDelta =
+      req.streamId && wc
+        ? (delta: string) => wc.send('ai:chatDelta', { id: req.streamId, delta })
+        : undefined
+    return ai.chat(req, makeRunSql(connId, req.driver), onDelta)
+  })
 
   // Settings (AI providers + appearance; keys encrypted, never returned raw)
   handle('settings:get', () => settings.getSettings())

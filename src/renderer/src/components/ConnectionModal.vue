@@ -43,14 +43,22 @@ const hadSshPassword = ref(!!props.config?.hasSshPassword)
 const hadSshPassphrase = ref(!!props.config?.hasSshPassphrase)
 
 const isNetwork = computed(() =>
-  ['mysql', 'mssql', 'redis', ...PG_FAMILY].includes(form.driver)
+  ['mysql', 'mssql', 'oracle', 'redis', 'clickhouse', ...PG_FAMILY].includes(form.driver)
 )
 const isRedis = computed(() => form.driver === 'redis')
-const canTunnel = computed(() => !['sqlite', 'mongodb'].includes(form.driver))
+const isOracle = computed(() => form.driver === 'oracle')
+const canTunnel = computed(
+  () => !['sqlite', 'duckdb', 'mongodb', 'snowflake', 'bigquery'].includes(form.driver)
+)
 
 async function pickKey(): Promise<void> {
   const path = await window.api.pickFile()
   if (path) form.sshKeyPath = path
+}
+
+async function pickDbFile(): Promise<void> {
+  const path = await window.api.pickFile()
+  if (path) form.filePath = path
 }
 
 watch(
@@ -80,11 +88,35 @@ async function test(): Promise<void> {
 
 const canSave = computed(() => {
   if (!form.name.trim()) return false
-  if (form.driver === 'sqlite') return !!form.filePath
+  if (form.driver === 'sqlite' || form.driver === 'duckdb') return !!form.filePath
   if (form.driver === 'influxdb') return !!form.url && !!form.org
   if (form.driver === 'mongodb') return !!form.url
+  if (form.driver === 'snowflake') return !!form.account && !!form.user
+  if (form.driver === 'bigquery') return !!form.projectId && !!form.database
   return !!form.host
 })
+
+// One-click presets that fill the form with sensible local defaults per engine.
+const PRESETS: { label: string; config: Partial<ConnectionConfig> }[] = [
+  { label: 'PostgreSQL', config: { driver: 'postgres', host: 'localhost', port: 5432, user: 'postgres', database: 'postgres' } },
+  { label: 'MySQL / MariaDB', config: { driver: 'mysql', host: 'localhost', port: 3306, user: 'root' } },
+  { label: 'SQL Server', config: { driver: 'mssql', host: 'localhost', port: 1433, user: 'sa' } },
+  { label: 'Oracle', config: { driver: 'oracle', host: 'localhost', port: 1521, user: 'system', database: 'XEPDB1' } },
+  { label: 'MongoDB', config: { driver: 'mongodb', url: 'mongodb://localhost:27017' } },
+  { label: 'Redis', config: { driver: 'redis', host: 'localhost', port: 6379 } },
+  { label: 'SQLite', config: { driver: 'sqlite' } },
+  { label: 'DuckDB', config: { driver: 'duckdb' } },
+  { label: 'ClickHouse', config: { driver: 'clickhouse', host: 'localhost', port: 8123, user: 'default', database: 'default' } },
+  { label: 'Snowflake', config: { driver: 'snowflake', user: '' } },
+  { label: 'BigQuery', config: { driver: 'bigquery' } }
+]
+function applyPreset(p: (typeof PRESETS)[number]): void {
+  const keepName = form.name
+  const keepColor = form.color
+  Object.assign(form, blank(), p.config)
+  form.color = keepColor
+  form.name = keepName.trim() || `Local ${p.label}`
+}
 
 function save(): void {
   emit('save', props.environmentId, { ...form })
@@ -94,6 +126,13 @@ function save(): void {
 <template>
   <Modal :title="isEdit ? 'Edit Connection' : 'New Connection'" wide @close="emit('close')">
     <div class="form-grid">
+      <div v-if="!isEdit" class="presets span2">
+        <span class="presets-label">Start from a preset</span>
+        <div class="preset-chips">
+          <button v-for="p in PRESETS" :key="p.label" type="button" class="preset-chip" @click="applyPreset(p)">{{ p.label }}</button>
+        </div>
+      </div>
+
       <div class="field span2">
         <label>Display name</label>
         <input class="input" v-model="form.name" placeholder="e.g. Production primary" />
@@ -144,12 +183,12 @@ function save(): void {
           <input class="input" type="number" v-model.number="form.port" />
         </div>
         <div class="field">
-          <label>{{ isRedis ? 'Database (index)' : 'Database' }}</label>
+          <label>{{ isRedis ? 'Database (index)' : isOracle ? 'Service name' : 'Database' }}</label>
           <input
             class="input"
             v-model="form.database"
             :type="isRedis ? 'number' : 'text'"
-            :placeholder="isRedis ? '0' : 'optional'"
+            :placeholder="isRedis ? '0' : isOracle ? 'e.g. ORCLPDB1 / XEPDB1' : 'optional'"
           />
         </div>
         <div class="field">
@@ -172,12 +211,80 @@ function save(): void {
         </label>
       </template>
 
-      <!-- SQLite -->
-      <template v-else-if="form.driver === 'sqlite'">
+      <!-- SQLite / DuckDB (local file engines) -->
+      <template v-else-if="form.driver === 'sqlite' || form.driver === 'duckdb'">
         <div class="field span2">
           <label>Database file path</label>
-          <input class="input" v-model="form.filePath" placeholder="/path/to/database.sqlite" />
-          <small class="hint">Absolute path to the .sqlite / .db file. It will be created if missing.</small>
+          <div class="key-row">
+            <input
+              class="input"
+              v-model="form.filePath"
+              :placeholder="form.driver === 'duckdb' ? '/path/to/database.duckdb' : '/path/to/database.sqlite'"
+            />
+            <button type="button" class="btn" @click="pickDbFile">Browse…</button>
+          </div>
+          <small class="hint">
+            Absolute path to the {{ form.driver === 'duckdb' ? '.duckdb / .db' : '.sqlite / .db' }} file. It will be created if missing.
+          </small>
+        </div>
+      </template>
+
+      <!-- Snowflake -->
+      <template v-else-if="form.driver === 'snowflake'">
+        <div class="field span2">
+          <label>Account</label>
+          <input class="input" v-model="form.account" placeholder="e.g. xy12345.eu-west-1 or orgname-account_name" />
+          <small class="hint">Your Snowflake account identifier (the part before <code>.snowflakecomputing.com</code>).</small>
+        </div>
+        <div class="field">
+          <label>User</label>
+          <input class="input" v-model="form.user" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input
+            class="input"
+            type="password"
+            v-model="form.password"
+            autocomplete="new-password"
+            :placeholder="hadPassword ? '•••••• (unchanged)' : ''"
+          />
+        </div>
+        <div class="field">
+          <label>Warehouse</label>
+          <input class="input" v-model="form.warehouse" placeholder="e.g. COMPUTE_WH" />
+        </div>
+        <div class="field">
+          <label>Role</label>
+          <input class="input" v-model="form.role" placeholder="optional, e.g. SYSADMIN" />
+        </div>
+        <div class="field">
+          <label>Database</label>
+          <input class="input" v-model="form.database" placeholder="optional" />
+        </div>
+        <div class="field">
+          <label>Schema</label>
+          <input class="input" v-model="form.schema" placeholder="optional, e.g. PUBLIC" />
+        </div>
+      </template>
+
+      <!-- BigQuery -->
+      <template v-else-if="form.driver === 'bigquery'">
+        <div class="field">
+          <label>Project ID</label>
+          <input class="input" v-model="form.projectId" placeholder="my-gcp-project" />
+        </div>
+        <div class="field">
+          <label>Dataset</label>
+          <input class="input" v-model="form.database" placeholder="my_dataset" />
+        </div>
+        <div class="field span2">
+          <label>Service-account key file</label>
+          <div class="key-row">
+            <input class="input" v-model="form.filePath" placeholder="/path/to/service-account.json" />
+            <button type="button" class="btn" @click="pickDbFile">Browse…</button>
+          </div>
+          <small class="hint">A JSON key with BigQuery access. Leave empty to use Application Default Credentials.</small>
         </div>
       </template>
 
@@ -320,6 +427,39 @@ function save(): void {
 }
 .span2 {
   grid-column: 1 / -1;
+}
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.presets-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.preset-chip {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.preset-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .span2-host {
   grid-column: 1 / 2;

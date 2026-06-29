@@ -7,6 +7,11 @@ import { MSSQLAdapter } from './mssql'
 import { MongoAdapter } from './mongodb'
 import { InfluxAdapter } from './influxdb'
 import { RedisAdapter } from './redis'
+import { OracleAdapter } from './oracle'
+import { DuckDBAdapter } from './duckdb'
+import { ClickHouseAdapter } from './clickhouse'
+import { SnowflakeAdapter } from './snowflake'
+import { BigQueryAdapter } from './bigquery'
 import { openTunnel, type Tunnel } from './tunnel'
 
 interface LiveConnection {
@@ -31,6 +36,16 @@ export function createAdapter(config: ConnectionConfig): DbAdapter {
       return new SQLiteAdapter(config)
     case 'mssql':
       return new MSSQLAdapter(config)
+    case 'oracle':
+      return new OracleAdapter(config)
+    case 'duckdb':
+      return new DuckDBAdapter(config)
+    case 'clickhouse':
+      return new ClickHouseAdapter(config)
+    case 'snowflake':
+      return new SnowflakeAdapter(config)
+    case 'bigquery':
+      return new BigQueryAdapter(config)
     case 'mongodb':
       return new MongoAdapter(config)
     case 'redis':

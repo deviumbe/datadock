@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+/** Options for the in-app confirm modal (dangerous-query guard, etc.). */
+export interface ConfirmOpts {
+  title: string
+  message: string
+  confirmLabel?: string
+  danger?: boolean
+}
+
 export const useUi = defineStore('ui', () => {
   const sidebarCollapsed = ref(false)
   const tablesCollapsed = ref(false)
@@ -28,12 +36,32 @@ export const useUi = defineStore('ui', () => {
   const tableSizesOpen = ref(false)
   const columnSearchOpen = ref(false)
   const snapshotsOpen = ref(false)
+  const recoverOpen = ref(false)
+  const cloneSqliteOpen = ref(false)
   const settingsOpen = ref(false)
+
+  // Replication topology monitor (full-window overlay view).
+  const topologyId = ref<string | null>(null)
+  function openTopology(id: string): void { topologyId.value = id }
+  function closeTopology(): void { topologyId.value = null }
 
   // AI chat dock (slide-out panel on the right; works without a query tab)
   const chatDockOpen = ref(false)
   function openChatDock(): void { chatDockOpen.value = true }
   function toggleChatDock(): void { chatDockOpen.value = !chatDockOpen.value }
+
+  // Reusable confirmation dialog (async). Replaces window.confirm with an
+  // on-brand modal; awaited by callers like the dangerous-query guard.
+  const confirmState = ref<(ConfirmOpts & { resolve: (ok: boolean) => void }) | null>(null)
+  function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      confirmState.value = { ...opts, resolve }
+    })
+  }
+  function resolveConfirm(ok: boolean): void {
+    confirmState.value?.resolve(ok)
+    confirmState.value = null
+  }
 
   // Command palette
   const paletteOpen = ref(false)
@@ -83,10 +111,18 @@ export const useUi = defineStore('ui', () => {
     tableSizesOpen,
     columnSearchOpen,
     snapshotsOpen,
+    recoverOpen,
+    cloneSqliteOpen,
     settingsOpen,
+    topologyId,
+    openTopology,
+    closeTopology,
     chatDockOpen,
     openChatDock,
     toggleChatDock,
+    confirmState,
+    confirmDialog,
+    resolveConfirm,
     paletteOpen,
     openPalette,
     closePalette,

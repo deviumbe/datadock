@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, markRaw, computed, watch } from 'vue'
 import { useWorkspace } from './workspace'
+import { useUi } from './ui'
 import type {
   AlterOp,
   ChatMessage,
@@ -10,11 +11,13 @@ import type {
   QueryResult,
   RowChangeSet,
   RowEdit,
+  RowVersionInput,
   Snippet,
   SortSpec,
   TableInfo,
   TableStructure
 } from '@shared/types'
+import { isSqlDriver } from '@shared/types'
 import { useSettings } from './settings'
 
 export type TabKind =
@@ -56,6 +59,10 @@ export interface Tab {
   query: string
   table?: TableInfo
   result: QueryResult | null
+  /** All result sets from the last multi-statement run (length > 1 → show the strip). */
+  results?: QueryResult[]
+  /** Which entry of `results` is currently shown (mirrored into `result`). */
+  resultIndex?: number
   error: string | null
   running: boolean
   databases?: string[]
@@ -64,6 +71,8 @@ export interface Tab {
   erModel?: ErModel | null
   chatMessages?: ChatMessage[]
   chatBusy?: boolean
+  /** Live answer text while the assistant is streaming its reply. */
+  chatStream?: string
 
   // record-explorer state: a navigation trail + the current position in it
   explorerStack?: ExplorerFocus[]
@@ -124,6 +133,41 @@ function dangerousStatement(sql: string): string | null {
     if (/^drop\s+(table|database|schema)\b/i.test(s)) return `⚠ ${s.slice(0, 60)} — this drops a database object.`
   }
   return null
+}
+
+/** Split a SQL script into statements, respecting quotes and comments. */
+function splitStatements(sql: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inSingle = false
+  let inDouble = false
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]
+    const next = sql[i + 1]
+    if (!inSingle && !inDouble) {
+      if (ch === '-' && next === '-') {
+        while (i < sql.length && sql[i] !== '\n') i++
+        continue
+      }
+      if (ch === '/' && next === '*') {
+        i += 2
+        while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++
+        i++
+        continue
+      }
+    }
+    if (ch === "'" && !inDouble) inSingle = !inSingle
+    else if (ch === '"' && !inSingle) inDouble = !inDouble
+
+    if (ch === ';' && !inSingle && !inDouble) {
+      if (cur.trim()) out.push(cur.trim())
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  if (cur.trim()) out.push(cur.trim())
+  return out
 }
 
 let counter = 0
@@ -380,7 +424,13 @@ export const useTabs = defineStore('tabs', () => {
     if (!conn) return
     tab.chatMessages = [...(tab.chatMessages ?? []), { role: 'user', content: msg }]
     tab.chatBusy = true
+    tab.chatStream = ''
     tab.error = null
+    // Route streamed deltas (by id) into this tab's live answer buffer.
+    const streamId = `${tab.id}-${Date.now()}`
+    const off = window.api.ai.onChatDelta((id, delta) => {
+      if (id === streamId) tab.chatStream = (tab.chatStream ?? '') + delta
+    })
     try {
       const history = (tab.chatMessages ?? []).map((m) => ({ role: m.role, content: m.content }))
       // Deep-clone to strip Vue reactivity — reactive Proxies can't be
@@ -391,7 +441,8 @@ export const useTabs = defineStore('tabs', () => {
       const res = await window.api.ai.chat(tab.connectionId, {
         driver: conn.driver,
         schema,
-        history
+        history,
+        streamId
       })
       tab.chatMessages = [
         ...(tab.chatMessages ?? []),
@@ -403,6 +454,8 @@ export const useTabs = defineStore('tabs', () => {
         { role: 'assistant', content: `⚠ ${e instanceof Error ? e.message : String(e)}` }
       ]
     } finally {
+      off()
+      tab.chatStream = ''
       tab.chatBusy = false
     }
   }
@@ -571,6 +624,20 @@ export const useTabs = defineStore('tabs', () => {
     void window.api.db.cancelQuery(tab.connectionId)
   }
 
+  /** Store a run's result sets and show the first one. */
+  function setResults(tab: Tab, results: QueryResult[]): void {
+    tab.results = results
+    tab.resultIndex = 0
+    tab.result = results[0] ?? null
+  }
+
+  /** Switch the visible result set (multi-statement runs). */
+  function selectResult(tab: Tab, index: number): void {
+    if (!tab.results || index < 0 || index >= tab.results.length) return
+    tab.resultIndex = index
+    tab.result = tab.results[index]
+  }
+
   async function run(tab: Tab, sqlOverride?: string): Promise<void> {
     if (tab.kind === 'table') return reloadTable(tab)
     if (tab.kind === 'query' && !tab.query.trim()) return
@@ -586,20 +653,44 @@ export const useTabs = defineStore('tabs', () => {
           return
         }
         const danger = dangerousStatement(sql)
-        if (danger && !window.confirm(`${danger}\n\nRun it anyway?`)) return
-        try {
-          const res = await window.api.db.query(tab.connectionId, sql)
-          tab.result = markRaw(res)
-          void window.api.history.add({
-            connectionId: tab.connectionId,
-            sql,
-            durationMs: res.durationMs,
-            rowCount: res.rowCount
+        if (danger) {
+          const ok = await useUi().confirmDialog({
+            title: 'Run this statement?',
+            message: `${danger}\n\nThis can't be undone. Run it anyway?`,
+            confirmLabel: 'Run anyway',
+            danger: true
           })
+          if (!ok) return
+        }
+        // Split SQL scripts into individual statements so each result set gets
+        // its own tab. Non-SQL engines (mongo/influx/redis) run as a single unit.
+        const statements = driver && isSqlDriver(driver) ? splitStatements(sql) : [sql]
+        const results: QueryResult[] = []
+        try {
+          for (const stmt of statements) {
+            const res = await window.api.db.query(tab.connectionId, stmt)
+            results.push(markRaw(res))
+            void window.api.history.add({
+              connectionId: tab.connectionId,
+              sql: stmt,
+              durationMs: res.durationMs,
+              rowCount: res.rowCount
+            })
+          }
+          setResults(tab, results)
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
-          tab.error = msg
-          void window.api.history.add({ connectionId: tab.connectionId, sql, error: msg })
+          // Surface any result sets that succeeded before the failing statement.
+          setResults(tab, results)
+          tab.error =
+            results.length && statements.length > 1
+              ? `Statement ${results.length + 1} failed: ${msg}`
+              : msg
+          void window.api.history.add({
+            connectionId: tab.connectionId,
+            sql: statements[results.length] ?? sql,
+            error: msg
+          })
         }
       } else if (tab.kind === 'users') {
         tab.result = markRaw(await window.api.db.listUsers(tab.connectionId))
@@ -636,7 +727,7 @@ export const useTabs = defineStore('tabs', () => {
     tab.running = true
     tab.error = null
     try {
-      tab.result = markRaw(await window.api.db.query(tab.connectionId, prefix + tab.query))
+      setResults(tab, [markRaw(await window.api.db.query(tab.connectionId, prefix + tab.query))])
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
     } finally {
@@ -912,10 +1003,34 @@ export const useTabs = defineStore('tabs', () => {
 
     const changeset: RowChangeSet = { updates, inserts, deletes }
 
+    // Capture before/after snapshots for the time-travel row history. Inserts are
+    // skipped — their primary key isn't known until the row is re-read.
+    const rowOf = (rowIdx: number): Record<string, unknown> => {
+      const row = tab.result!.rows[rowIdx]
+      const obj: Record<string, unknown> = {}
+      tab.result!.columns.forEach((c, i) => (obj[c.name] = row[i]))
+      return obj
+    }
+    const versions: RowVersionInput[] = []
+    for (const [rowIdx, changes] of Object.entries(tab.edits)) {
+      if (tab.deletes.includes(Number(rowIdx))) continue
+      const before = rowOf(Number(rowIdx))
+      const pk: Record<string, unknown> = {}
+      for (const k of tab.primaryKeys) pk[k] = before[k]
+      versions.push({ table: tab.table.name, pk, op: 'update', before, after: { ...before, ...changes } })
+    }
+    for (const rowIdx of tab.deletes) {
+      const before = rowOf(rowIdx)
+      const pk: Record<string, unknown> = {}
+      for (const k of tab.primaryKeys) pk[k] = before[k]
+      versions.push({ table: tab.table.name, pk, op: 'delete', before, after: null })
+    }
+
     tab.running = true
     tab.error = null
     try {
       await window.api.db.applyChanges(tab.connectionId, plainTable(tab.table), changeset)
+      if (versions.length) void window.api.rowHistory.record(tab.connectionId, versions)
       await reloadTable(tab)
     } catch (e) {
       tab.error = e instanceof Error ? e.message : String(e)
@@ -1099,6 +1214,7 @@ export const useTabs = defineStore('tabs', () => {
     closeTab,
     closeForConnection,
     run,
+    selectResult,
     cancel,
     reloadTable,
     setViewMode,

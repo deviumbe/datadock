@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useWorkspace } from '../stores/workspace'
-import type { ConnectionConfig, Environment, Project } from '@shared/types'
+import { useUi } from '../stores/ui'
+import type { ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 import logoUrl from '../assets/logo.png'
 
 const ws = useWorkspace()
+const ui = useUi()
 
 const emit = defineEmits<{
   newProject: []
@@ -17,6 +19,9 @@ const emit = defineEmits<{
   editConnection: [conn: ConnectionConfig, environmentId: string]
   deleteConnection: [conn: ConnectionConfig]
   duplicateConnection: [conn: ConnectionConfig]
+  newTopology: []
+  editTopology: [topology: Topology]
+  deleteTopology: [topology: Topology]
 }>()
 
 const empty = computed(() => ws.projects.length === 0)
@@ -30,6 +35,7 @@ const DRIVER_LABEL: Record<string, string> = {
   mysql: 'SQL',
   sqlite: 'LITE',
   mssql: 'MS',
+  oracle: 'ORA',
   mongodb: 'MDB',
   influxdb: 'IFX'
 }
@@ -106,6 +112,32 @@ const DRIVER_LABEL: Record<string, string> = {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Replication topologies (Phase 1: live monitoring) -->
+    <div class="topo-section">
+      <div class="topo-head">
+        <span class="topo-title">Topologies</span>
+        <button class="btn-ghost icon" title="New topology" @click="emit('newTopology')">＋</button>
+      </div>
+      <div
+        v-for="t in ws.topologies"
+        :key="t.id"
+        class="row topo-row"
+        :class="{ active: ui.topologyId === t.id }"
+        @click="ui.openTopology(t.id)"
+      >
+        <span class="topo-dot">◇</span>
+        <span class="topo-name">{{ t.name }}</span>
+        <span class="topo-count">{{ t.nodes.length }}</span>
+        <div class="row-actions" @click.stop>
+          <button class="btn-ghost icon" title="Edit" @click="emit('editTopology', t)">✎</button>
+          <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteTopology', t)">🗑</button>
+        </div>
+      </div>
+      <p v-if="!ws.topologies.length" class="topo-empty">
+        Group replicas into a set to watch live lag & health.
+      </p>
     </div>
   </aside>
 </template>
@@ -279,6 +311,68 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .hint-row {
   padding: 2px 8px 4px 26px;
+}
+/* ---- topologies footer section ---- */
+.topo-section {
+  border-top: 1px solid var(--border);
+  padding: 6px 6px 10px;
+  max-height: 40%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.topo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 6px;
+}
+.topo-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.topo-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.topo-row:hover {
+  background: var(--bg-hover);
+}
+.topo-row.active {
+  background: var(--accent-soft);
+}
+.topo-dot {
+  color: var(--accent);
+  font-size: 11px;
+}
+.topo-name {
+  flex: 1;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topo-count {
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--bg-elevated);
+  border-radius: 9px;
+  padding: 0 6px;
+}
+.topo-row:hover .topo-count {
+  display: none;
+}
+.topo-empty {
+  padding: 2px 10px 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
 }
 .link {
   color: var(--text-faint);

@@ -90,6 +90,86 @@ export async function generateSql(req: AiSqlRequest): Promise<AiSqlResult> {
   return parseSql(await complete({ system, user }))
 }
 
+// ---- AI test-data generation ------------------------------------------------
+
+export interface AiSeedRequest {
+  driver: string
+  table: string
+  columns: { name: string; type?: string }[]
+  count: number
+  hint?: string
+}
+export interface AiSeedResult {
+  rows: Record<string, unknown>[]
+}
+
+export async function generateSeedData(req: AiSeedRequest): Promise<AiSeedResult> {
+  const d = dialect(req.driver)
+  const colList = req.columns
+    .map((c) => `- ${c.name}${c.type ? ` (${c.type})` : ''}`)
+    .join('\n')
+  const n = Math.max(1, Math.min(100, Math.floor(req.count) || 1))
+  const system =
+    `You generate realistic, internally-consistent sample data for seeding a ${d} table. ` +
+    `Return ONLY a JSON array of exactly ${n} row objects, each keyed by the given column names. ` +
+    `Make values plausible and varied — real-looking names, emails, companies, addresses, prices, ` +
+    `and ISO-8601 strings for dates/timestamps. Respect each column's type. Use null only where a ` +
+    `value is genuinely optional. Do not include any column not listed. No markdown, no commentary.`
+  const user =
+    `Table: ${req.table}\nColumns:\n${colList}\n\nGenerate ${n} rows as a JSON array.` +
+    (req.hint ? `\nExtra guidance: ${req.hint}` : '')
+  return { rows: parseRows(await complete({ system, user })) }
+}
+
+// ---- AI schema docs (one-line purpose per table) ----------------------------
+
+export interface AiDescribeRequest {
+  driver: string
+  tables: { name: string; columns: string[] }[]
+}
+
+export async function describeSchema(req: AiDescribeRequest): Promise<Record<string, string>> {
+  const d = dialect(req.driver)
+  const list = req.tables.map((t) => `${t.name}(${t.columns.join(', ')})`).join('\n')
+  const system =
+    `You document ${d} database schemas. For each table, infer its purpose from its name and ` +
+    `columns (and relationships between tables) and write ONE concise, plain-English sentence ` +
+    `describing what it stores. Don't restate the column list. ` +
+    `Respond with ONLY a JSON object mapping each table name to its description string. No markdown.`
+  const user = `Tables:\n${list}`
+  const text = await complete({ system, user })
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  try {
+    const obj = JSON.parse(cleaned)
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(obj)) if (typeof v === 'string') out[k] = v.trim()
+      return out
+    }
+  } catch {
+    /* ignore — return nothing rather than break the docs */
+  }
+  return {}
+}
+
+function parseRows(text: string): Record<string, unknown>[] {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  const tryParse = (s: string): Record<string, unknown>[] | null => {
+    try {
+      const data = JSON.parse(s)
+      if (Array.isArray(data)) return data.filter((r) => r && typeof r === 'object')
+    } catch {
+      /* fall through */
+    }
+    return null
+  }
+  const direct = tryParse(cleaned)
+  if (direct) return direct
+  // Models sometimes add prose around the array — extract the first [...] block.
+  const m = cleaned.match(/\[[\s\S]*\]/)
+  return (m && tryParse(m[0])) || []
+}
+
 export interface AiExplainRequest {
   driver: string
   schema: Record<string, string[]>
@@ -403,6 +483,8 @@ export interface AiChatRequest {
   driver: string
   schema: Record<string, string[]>
   history: ChatTurn[]
+  /** Opaque id echoed back with streamed deltas so the renderer can route them. */
+  streamId?: string
 }
 export interface AiChatResult {
   answer: string
@@ -412,9 +494,14 @@ export interface AiChatResult {
 /**
  * Answer questions about the live database. The caller supplies `runSql`, a
  * read-only query runner bound to the active connection; the model may call it
- * to inspect real data before replying.
+ * to inspect real data before replying. `onDelta` (optional) receives answer
+ * text as it streams.
  */
-export async function chat(req: AiChatRequest, runSql: RunSql): Promise<AiChatResult> {
+export async function chat(
+  req: AiChatRequest,
+  runSql: RunSql,
+  onDelta?: (text: string) => void
+): Promise<AiChatResult> {
   const d = dialect(req.driver)
   const system =
     `You are a helpful data analyst embedded in a database client, connected to a ${d} database. ` +
@@ -423,5 +510,5 @@ export async function chat(req: AiChatRequest, runSql: RunSql): Promise<AiChatRe
     `do this whenever a question depends on the actual data. Never try to modify data. ` +
     `When you state figures, base them on query results, not guesses. Keep answers concise and ` +
     `include small result tables or numbers where helpful.\n\nDatabase schema:\n${schemaText(req.schema)}`
-  return chatWithData({ system, history: req.history, runSql })
+  return chatWithData({ system, history: req.history, runSql, onDelta })
 }

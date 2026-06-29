@@ -67,6 +67,9 @@ export interface DbAdapter {
   /** Empty one or more tables (TRUNCATE / DELETE), honoring FK options. */
   truncateTables?(tables: TableInfo[], opts: TruncateOptions): Promise<void>
 
+  /** Live replication status for the topology monitor (engines with replication). */
+  replicationStatus?(): Promise<import('@shared/types').ReplicationStatus>
+
   // Optional server-level capabilities (see DRIVER_CAPS).
   listDatabases?(): Promise<string[]>
   createDatabase?(name: string): Promise<void>

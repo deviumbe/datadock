@@ -272,6 +272,74 @@ onBeforeUnmount(() => {
   window.removeEventListener('mouseup', endDrag)
   window.removeEventListener('keydown', onKeyDown)
 })
+
+// ---- row virtualization (windowing) ----------------------------------------
+// Rendering every row of a large result (50K+) builds hundreds of thousands of
+// reactive cells synchronously and freezes the app. Instead we render only the
+// rows in (and just around) the viewport, with spacer rows reserving the height
+// of everything above and below so the scrollbar still spans the full result.
+const OVERSCAN = 12
+const scrollTop = ref(0)
+const viewportH = ref(600)
+const rowH = ref(32) // measured from a real row after mount; sensible default
+
+const totalRows = computed(() => props.result?.rows.length ?? 0)
+const winStart = computed(() => Math.max(0, Math.floor(scrollTop.value / rowH.value) - OVERSCAN))
+const winCount = computed(() => Math.ceil(viewportH.value / rowH.value) + OVERSCAN * 2)
+const winEnd = computed(() => Math.min(totalRows.value, winStart.value + winCount.value))
+const topPad = computed(() => winStart.value * rowH.value)
+const bottomPad = computed(() => Math.max(0, (totalRows.value - winEnd.value) * rowH.value))
+
+// Visible window paired with each row's absolute index in result.rows.
+const visibleRows = computed(() => {
+  const rows = props.result?.rows ?? []
+  const out: { row: unknown[]; r: number }[] = []
+  for (let i = winStart.value; i < winEnd.value; i++) out.push({ row: rows[i] as unknown[], r: i })
+  return out
+})
+
+// Columns a full-width spacer row must span (data cols + gutter columns).
+const spanCols = computed(() => {
+  let n = (props.result?.columns.length ?? 0) + 1 // + row-number column
+  if (props.selectable) n++
+  if (props.actionLabel) n++
+  return n
+})
+
+function onScroll(): void {
+  if (wrap.value) scrollTop.value = wrap.value.scrollTop
+}
+function measure(): void {
+  const el = wrap.value
+  if (!el) return
+  viewportH.value = el.clientHeight || 600
+  const row = el.querySelector('tbody tr.data-row') as HTMLElement | null
+  if (row && row.offsetHeight > 0) rowH.value = row.offsetHeight
+}
+
+let resizeObs: ResizeObserver | undefined
+onMounted(() => {
+  wrap.value?.addEventListener('scroll', onScroll, { passive: true })
+  nextTick(measure)
+  if (wrap.value && 'ResizeObserver' in window) {
+    resizeObs = new ResizeObserver(() => measure())
+    resizeObs.observe(wrap.value)
+  }
+})
+onBeforeUnmount(() => {
+  wrap.value?.removeEventListener('scroll', onScroll)
+  resizeObs?.disconnect()
+})
+
+// A new result set resets the scroll position and re-measures the row height.
+watch(
+  () => props.result,
+  () => {
+    scrollTop.value = 0
+    if (wrap.value) wrap.value.scrollTop = 0
+    nextTick(measure)
+  }
+)
 </script>
 
 <template>
@@ -297,11 +365,17 @@ onBeforeUnmount(() => {
         </tr>
       </thead>
       <tbody>
-        <!-- existing rows -->
+        <!-- spacer reserving the height of the rows scrolled off the top -->
+        <tr v-if="topPad > 0" class="spacer" aria-hidden="true">
+          <td :colspan="spanCols" :style="{ height: topPad + 'px', padding: 0, border: 0 }"></td>
+        </tr>
+
+        <!-- existing rows (only the visible window is rendered) -->
         <tr
-          v-for="(row, r) in result!.rows"
+          v-for="{ row, r } in visibleRows"
           :key="r"
-          :class="{ selected: selectedRow === r, 'multi-selected': isSelected(r), deleted: isDeleted(r) }"
+          class="data-row"
+          :class="{ zebra: r % 2 === 1, selected: selectedRow === r, 'multi-selected': isSelected(r), deleted: isDeleted(r) }"
           @click="onRowClick(r)"
           @contextmenu.prevent="emit('rowContext', r, $event)"
         >
@@ -342,6 +416,11 @@ onBeforeUnmount(() => {
               >→</button>
             </template>
           </td>
+        </tr>
+
+        <!-- spacer reserving the height of the rows scrolled off the bottom -->
+        <tr v-if="bottomPad > 0" class="spacer" aria-hidden="true">
+          <td :colspan="spanCols" :style="{ height: bottomPad + 'px', padding: 0, border: 0 }"></td>
         </tr>
 
         <!-- pending new rows -->
@@ -448,9 +527,16 @@ tbody td {
   font-size: 12.5px;
   color: var(--text);
 }
-/* Faint zebra striping — lets the eye track across wide rows without hard lines. */
-tbody tr:nth-child(even) td {
+/* Faint zebra striping — lets the eye track across wide rows without hard lines.
+   Keyed off the absolute row index (not :nth-child) so the stripes stay stable
+   as virtualized spacer rows shift DOM-position parity during scrolling. */
+tbody tr.zebra td {
   background: var(--bg-zebra);
+}
+/* Spacer rows just reserve scroll height — never paint or react to hover. */
+tbody tr.spacer td,
+tbody tr.spacer:hover td {
+  background: transparent;
 }
 tbody tr:hover td {
   background: var(--bg-hover);

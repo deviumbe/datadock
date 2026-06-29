@@ -44,8 +44,12 @@ import DependenciesModal from './DependenciesModal.vue'
 import TableSizesModal from './TableSizesModal.vue'
 import ColumnSearchModal from './ColumnSearchModal.vue'
 import SnapshotsModal from './SnapshotsModal.vue'
+import RecoverDeletedModal from './RecoverDeletedModal.vue'
+import CloneSqliteModal from './CloneSqliteModal.vue'
+import RowHistoryModal from './RowHistoryModal.vue'
 import TableNoteModal from './TableNoteModal.vue'
-import type { ChartType, DropTableOptions, PlanNode, TruncateOptions } from '@shared/types'
+import BookmarksMenu from './BookmarksMenu.vue'
+import type { ChartType, DropTableOptions, PlanBaseline, PlanNode, QueryResult, TruncateOptions } from '@shared/types'
 
 type MenuItem = { label?: string; danger?: boolean; sep?: boolean; shortcut?: string; action?: () => void }
 import { sqlDialect, type FilterOp, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
@@ -70,6 +74,14 @@ function showChartView(): void {
   if (active.value?.result) qChartType.value = autoDetect(active.value.result).type
   qResultView.value = 'chart'
 }
+// Label for a result-set sub-tab: row count for selects, command for writes.
+function resultLabel(r: QueryResult, i: number): string {
+  const n = `Result ${i + 1}`
+  if (r.columns.length) return `${n} · ${r.rowCount} ${r.rowCount === 1 ? 'row' : 'rows'}`
+  if (r.command) return `${n} · ${r.command}${r.affectedRows != null ? ` ${r.affectedRows}` : ''}`
+  return n
+}
+
 const saveSnippetOpen = ref(false)
 const createTableOpen = ref(false)
 const exportTableTarget = ref<TableInfo | null>(null)
@@ -114,13 +126,39 @@ function openAi(mode: 'generate' | 'explain' | 'fix'): void {
 // Visual EXPLAIN — fetch the structured plan and show it as an interactive tree.
 const planRoot = ref<PlanNode | null>(null)
 const planLoading = ref(false)
+// Regression alerts: compare this plan's top-node cost to a saved baseline.
+const planBaseline = ref<PlanBaseline | null>(null)
+const planCost = ref<number | null>(null)
+const planBaselineJustSaved = ref(false)
+const planTab = ref<Tab | null>(null)
 async function openPlan(tab: Tab): Promise<void> {
   if (tab.kind !== 'query' || !tab.query.trim() || planLoading.value) return
   planLoading.value = true
+  planTab.value = tab
+  planBaseline.value = null
+  planCost.value = null
+  planBaselineJustSaved.value = false
   try {
     const root = await window.api.db.explainPlan(tab.connectionId, tab.query)
     if (root) {
       planRoot.value = root
+      // Only cost-bearing plans (Postgres/Timescale) support regression alerts.
+      if (typeof root.cost === 'number') {
+        planCost.value = root.cost
+        const existing = await window.api.planBaselines.get(tab.connectionId, tab.query)
+        if (existing) {
+          planBaseline.value = existing
+        } else {
+          // First view of this query: silently capture a baseline to compare against later.
+          planBaseline.value = await window.api.planBaselines.set(
+            tab.connectionId,
+            tab.query,
+            root.cost,
+            root.rows
+          )
+          planBaselineJustSaved.value = true
+        }
+      }
     } else {
       // Engine has no structured plan — fall back to the flat textual EXPLAIN.
       void tabsStore.explain(tab)
@@ -130,6 +168,19 @@ async function openPlan(tab: Tab): Promise<void> {
   } finally {
     planLoading.value = false
   }
+}
+
+// Re-capture the baseline for the plan currently shown (after a regression is intentional).
+async function updatePlanBaseline(): Promise<void> {
+  const tab = planTab.value
+  if (!tab || planCost.value == null) return
+  planBaseline.value = await window.api.planBaselines.set(
+    tab.connectionId,
+    tab.query,
+    planCost.value,
+    planRoot.value?.rows
+  )
+  planBaselineJustSaved.value = true
 }
 
 // Export the current result set into a brand-new table (SQL engines only).
@@ -232,6 +283,47 @@ function nullableMap(tab: Tab): Record<string, boolean> {
 function onSelectRow(tab: Tab, r: number): void {
   tab.selectedRow = r
   if (!nonSql.value && !tab.structure) void tabsStore.loadStructure(tab)
+}
+
+// ---- time-travel row history -----------------------------------------------
+const rowHistoryTarget = ref<{ connId: string; table: string; pk: Record<string, unknown>; label: string } | null>(null)
+function openRowHistory(tab: Tab, rowIndex: number): void {
+  if (tab.kind !== 'table' || !tab.table || !tab.result || !tab.primaryKeys.length) return
+  const row = tab.result.rows[rowIndex] as unknown[]
+  const pk: Record<string, unknown> = {}
+  for (const k of tab.primaryKeys) {
+    const i = tab.result.columns.findIndex((c) => c.name === k)
+    if (i >= 0) pk[k] = row[i]
+  }
+  rowHistoryTarget.value = {
+    connId: tab.connectionId,
+    table: tab.table.name,
+    pk,
+    label: `${tab.table.name} #${Object.values(pk).map(String).join(', ')}`
+  }
+}
+/** Restore a row to an earlier set of column values (a single staged update). */
+function revertRow(values: Record<string, unknown>): void {
+  const tab = active.value
+  const target = rowHistoryTarget.value
+  if (!tab || tab.kind !== 'table' || !target || !tab.result) return
+  // Find the live row matching the target PK.
+  const rowIndex = tab.result.rows.findIndex((row) =>
+    tab.primaryKeys.every((k) => {
+      const i = tab.result!.columns.findIndex((c) => c.name === k)
+      return i >= 0 && String((row as unknown[])[i]) === String(target.pk[k])
+    })
+  )
+  if (rowIndex < 0) {
+    ws.error = 'That row is no longer in the current page — reload to revert it.'
+    rowHistoryTarget.value = null
+    return
+  }
+  for (const c of tab.result.columns) {
+    if (tab.primaryKeys.includes(c.name)) continue
+    if (c.name in values) tabsStore.editCell(tab, rowIndex, c.name, values[c.name])
+  }
+  rowHistoryTarget.value = null
 }
 
 // ---- cell value viewer (JSON / long text) ----------------------------------
@@ -364,6 +456,7 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
               label: `${tableName} #${String(value)}`
             })
         },
+        { label: '🕘 Row history…', action: () => openRowHistory(tab, rowIndex) },
         { sep: true }
       )
     }
@@ -654,12 +747,18 @@ function relockWrites(): void {
   if (activeConn.value) ws.relockWrites(activeConn.value.id)
 }
 const isProduction = computed(() => !!activeConn.value?.production)
+// Oracle maps to the postgres dialect for quoting, but its EXPLAIN / cancel
+// syntax differs — exclude it from the dialect-based gating below.
+const isOracle = computed(() => activeConn.value?.driver === 'oracle')
 const explainable = computed(() =>
-  ['postgres', 'mysql', 'sqlite'].includes(sqlDialect(activeConn.value?.driver ?? ''))
+  !isOracle.value && ['postgres', 'mysql', 'sqlite'].includes(sqlDialect(activeConn.value?.driver ?? ''))
 )
 // Engines that can abort an in-flight query (SQLite runs synchronously, can't).
 const cancellable = computed(
-  () => !nonSql.value && ['postgres', 'mysql', 'mssql'].includes(sqlDialect(activeConn.value?.driver ?? ''))
+  () =>
+    !nonSql.value &&
+    !isOracle.value &&
+    ['postgres', 'mysql', 'mssql'].includes(sqlDialect(activeConn.value?.driver ?? ''))
 )
 // Visual EXPLAIN — only engines that expose a structured plan. Of the pg-wire
 // family only real Postgres + TimescaleDB support `EXPLAIN (FORMAT JSON)`.
@@ -836,6 +935,22 @@ function relTime(iso: string): string {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
   return d.toLocaleDateString()
 }
+// ---- execution-time history (visual durations) -----------------------------
+const histTimes = computed(() =>
+  (active.value?.entries ?? []).filter((h) => !h.error && h.durationMs != null).map((h) => h.durationMs as number)
+)
+const histMaxMs = computed(() => Math.max(1, ...histTimes.value))
+const histAvgMs = computed(() =>
+  histTimes.value.length ? Math.round(histTimes.value.reduce((a, b) => a + b, 0) / histTimes.value.length) : 0
+)
+function durPct(ms?: number): number {
+  return ms ? Math.max(2, Math.round((ms / histMaxMs.value) * 100)) : 0
+}
+/** fast (<100ms) · mid (<1s) · slow (≥1s) — for colour-coding the bar. */
+function durClass(ms?: number): string {
+  if (ms == null) return ''
+  return ms < 100 ? 'fast' : ms < 1000 ? 'mid' : 'slow'
+}
 
 async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   const pid = row[0]
@@ -1004,6 +1119,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               </div>
               <div class="spacer" />
               <div class="tb-group">
+                <BookmarksMenu
+                  v-if="!nonSql"
+                  :conn-id="active.connectionId"
+                  :current-sql="active.query"
+                  @load="(sql) => { if (active) active.query = sql }"
+                />
                 <button
                   class="btn btn-ghost"
                   :class="{ 'is-saved': activeSaved }"
@@ -1020,6 +1141,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <SqlEditor
                 v-model="active.query"
                 :schema="ws.schemas[active.connectionId]"
+                :snippets="nonSql ? [] : tabsStore.savedSnippets"
                 :placeholder="isMongo ? 'db.collection.find({ })' : isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
                 @run="(sql) => runActive(active!, sql)"
               />
@@ -1044,7 +1166,17 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
                 </div>
               </div>
-              <template v-else>
+              <!-- One sub-tab per result set when a script returns several -->
+              <div v-if="(active.results?.length ?? 0) > 1" class="result-tabs">
+                <button
+                  v-for="(r, i) in active.results"
+                  :key="i"
+                  class="rt"
+                  :class="{ on: active.resultIndex === i }"
+                  @click="tabsStore.selectResult(active!, i)"
+                >{{ resultLabel(r, i) }}</button>
+              </div>
+              <template v-if="active.result">
                 <!-- Instant Visualization: chart any result with one click -->
                 <div v-if="canChart(active.result)" class="result-view">
                   <div class="rv-toggle">
@@ -1265,6 +1397,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <div class="toolbar">
               <strong>Query History</strong>
               <div class="spacer" />
+              <span v-if="histTimes.length" class="status-mini">avg {{ histAvgMs }} ms · slowest {{ Math.round(histMaxMs) }} ms</span>
               <span class="status-mini">{{ active.entries?.length || 0 }} entries</span>
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
               <button class="btn btn-ghost btn-danger" @click="tabsStore.clearHistory(active)">Clear</button>
@@ -1280,9 +1413,13 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               >
                 <pre class="history-sql">{{ h.sql }}</pre>
                 <div class="history-meta">
-                  <span>{{ relTime(h.ranAt) }}</span>
+                  <span class="hist-when">{{ relTime(h.ranAt) }}</span>
                   <span v-if="h.error" class="err">error</span>
-                  <span v-else-if="h.rowCount !== undefined">{{ h.rowCount }} rows · {{ Math.round(h.durationMs || 0) }} ms</span>
+                  <template v-else-if="h.rowCount !== undefined">
+                    <span class="hist-rows">{{ h.rowCount }} rows</span>
+                    <span class="dur-meter"><i class="dur-fill" :class="durClass(h.durationMs)" :style="{ width: durPct(h.durationMs) + '%' }" /></span>
+                    <span class="dur-ms" :class="durClass(h.durationMs)">{{ Math.round(h.durationMs || 0) }} ms</span>
+                  </template>
                 </div>
               </div>
               <div v-if="!active.entries || active.entries.length === 0" class="no-tables">No queries yet.</div>
@@ -1532,7 +1669,15 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         @close="queryVars = null"
       />
 
-      <PlanTreeModal v-if="planRoot" :root="planRoot" @close="planRoot = null" />
+      <PlanTreeModal
+        v-if="planRoot"
+        :root="planRoot"
+        :current-cost="planCost"
+        :baseline="planBaseline"
+        :just-saved="planBaselineJustSaved"
+        @update-baseline="updatePlanBaseline"
+        @close="planRoot = null"
+      />
 
       <BulkEditModal
         v-if="bulkOpen && active && active.kind === 'table' && active.result"
@@ -1572,6 +1717,34 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :read-only="readOnly"
         @restored="ws.refreshTables(activeConn.id)"
         @close="ui.snapshotsOpen = false"
+      />
+
+      <RowHistoryModal
+        v-if="rowHistoryTarget"
+        :conn-id="rowHistoryTarget.connId"
+        :table="rowHistoryTarget.table"
+        :pk="rowHistoryTarget.pk"
+        :label="rowHistoryTarget.label"
+        :can-revert="!!active && tabsStore.editsAllowed(active)"
+        @revert="revertRow"
+        @close="rowHistoryTarget = null"
+      />
+
+      <CloneSqliteModal
+        v-if="ui.cloneSqliteOpen && activeConn"
+        :conn-id="activeConn.id"
+        :conn-name="activeConn.name"
+        :driver="activeConn.driver"
+        @close="ui.cloneSqliteOpen = false"
+      />
+
+      <RecoverDeletedModal
+        v-if="ui.recoverOpen && activeConn"
+        :conn-id="activeConn.id"
+        :driver="activeConn.driver"
+        :read-only="readOnly"
+        @changed="(t) => { if (active?.kind === 'table' && active.table?.name === t) tabsStore.reloadTable(active) }"
+        @close="ui.recoverOpen = false"
       />
 
       <TableNoteModal
@@ -2529,6 +2702,34 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   flex: 1;
   min-height: 0;
 }
+.result-tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 4px 8px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+.result-tabs .rt {
+  flex: none;
+  font-size: 11.5px;
+  padding: 4px 11px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.result-tabs .rt:hover {
+  color: var(--text);
+}
+.result-tabs .rt.on {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--accent);
+  font-weight: 600;
+}
 .instant-chart {
   padding: 8px 10px 10px;
 }
@@ -2610,12 +2811,57 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .history-meta {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   margin-top: 5px;
   font-size: 11px;
   color: var(--text-faint);
+  font-family: var(--mono);
 }
 .history-meta .err {
+  color: var(--danger);
+}
+.hist-when {
+  min-width: 64px;
+}
+.hist-rows {
+  min-width: 60px;
+}
+/* Relative execution-time bar, coloured fast → slow. */
+.dur-meter {
+  flex: 1;
+  max-width: 160px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.dur-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--text-faint);
+}
+.dur-fill.fast {
+  background: var(--ok);
+}
+.dur-fill.mid {
+  background: var(--warn);
+}
+.dur-fill.slow {
+  background: var(--danger);
+}
+.dur-ms {
+  min-width: 54px;
+  text-align: right;
+}
+.dur-ms.fast {
+  color: var(--ok);
+}
+.dur-ms.mid {
+  color: var(--warn);
+}
+.dur-ms.slow {
   color: var(--danger);
 }
 .snippet-head {

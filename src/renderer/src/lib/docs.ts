@@ -20,6 +20,8 @@ export interface DocTable {
   indexes: IndexDef[]
   rows: number | null
   bytes: number | null
+  /** Optional AI-written one-line summary of the table's purpose. */
+  description?: string
 }
 
 export interface DocModel {
@@ -72,6 +74,10 @@ export function buildMarkdown(m: DocModel): string {
     if (t.bytes != null) bits.push(fmtBytes(t.bytes))
     if (bits.length) {
       out.push(`_${bits.join(' · ')}_`)
+      out.push('')
+    }
+    if (t.description) {
+      out.push(t.description)
       out.push('')
     }
 

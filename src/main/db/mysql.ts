@@ -14,7 +14,7 @@ import type {
 } from '@shared/types'
 import { DbAdapter, now, toNum, assertIdent } from './types'
 import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
-import type { ErModel, SchemaSnapshot } from '@shared/types'
+import type { ErModel, ReplicaLink, ReplicationStatus, SchemaSnapshot } from '@shared/types'
 
 const q = (ident: string): string => `\`${ident.replace(/`/g, '``')}\``
 
@@ -64,6 +64,68 @@ export class MySQLAdapter implements DbAdapter {
   }
   async rollbackTransaction(): Promise<void> {
     await this.conn!.rollback()
+  }
+
+  async replicationStatus(): Promise<ReplicationStatus> {
+    // Run a SHOW that may not exist on this server version; treat errors as "no rows".
+    const tryRows = async (sql: string): Promise<Record<string, unknown>[]> => {
+      try {
+        const [rows] = await this.conn!.query(sql)
+        return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+      } catch {
+        return []
+      }
+    }
+    try {
+      // ---- replica side (8.0.22+ REPLICA wording, with legacy SLAVE fallback) ----
+      let rep = await tryRows('SHOW REPLICA STATUS')
+      if (!rep.length) rep = await tryRows('SHOW SLAVE STATUS')
+      if (rep.length) {
+        const r = rep[0]
+        const lag = r.Seconds_Behind_Source ?? r.Seconds_Behind_Master
+        const io = r.Replica_IO_Running ?? r.Slave_IO_Running
+        const sql = r.Replica_SQL_Running ?? r.Slave_SQL_Running
+        const host = r.Source_Host ?? r.Master_Host
+        const file = r.Source_Log_File ?? r.Master_Log_File
+        const pos = r.Read_Source_Log_Pos ?? r.Read_Master_Log_Pos
+        const detail = [`Upstream ${host ?? '?'} · IO ${io ?? '?'} / SQL ${sql ?? '?'}`]
+        // Seconds_Behind_* is NULL when a thread is stopped, and a deceptive 0 on idle.
+        if (lag == null) detail.push('Seconds-behind is NULL — a replication thread is stopped')
+        return {
+          detectedRole: 'replica',
+          isPrimary: false,
+          lagSeconds: lag == null ? null : Number(lag),
+          position: file ? `${file}:${pos ?? ''}` : undefined,
+          detail
+        }
+      }
+      // ---- primary side: connected replicas + binlog position ----
+      let hosts = await tryRows('SHOW REPLICAS')
+      if (!hosts.length) hosts = await tryRows('SHOW SLAVE HOSTS')
+      const replicas: ReplicaLink[] = hosts.map((h) => ({
+        name: String(h.Host ?? h.Replica_UUID ?? h.Server_Id ?? 'replica'),
+        lagSeconds: null
+      }))
+      let master = await tryRows('SHOW BINARY LOG STATUS')
+      if (!master.length) master = await tryRows('SHOW MASTER STATUS')
+      const m = master[0]
+      const position = m ? `${m.File}:${m.Position}` : undefined
+      return {
+        detectedRole: replicas.length ? 'primary' : 'unknown',
+        isPrimary: replicas.length > 0,
+        replicas,
+        position,
+        detail: replicas.length
+          ? undefined
+          : ['No replica status and no connected replicas — standalone, or missing REPLICATION CLIENT privilege']
+      }
+    } catch (err) {
+      return {
+        detectedRole: 'unknown',
+        isPrimary: false,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   async listTables(): Promise<TableInfo[]> {

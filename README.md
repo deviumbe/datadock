@@ -6,7 +6,7 @@
 
 ### The database client that finally organizes itself the way *you* think.
 
-**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, Redis and InfluxDB — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams, a realtime Redis queue viewer and a command palette built in.
+**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB, Redis, InfluxDB — plus DuckDB, ClickHouse, Snowflake and BigQuery — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams, a realtime Redis queue viewer, a live replication-topology monitor and a command palette built in.
 
 <br/>
 
@@ -56,7 +56,8 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | | Area | What you get |
 |:--:|---|---|
 | 🗄️ | **Organized connections** | Projects → environment folders → connections — color-coded, encrypted at rest, shareable, with a read-only safe mode |
-| 🔌 | **Ten engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · CockroachDB · TimescaleDB · Amazon Redshift · MongoDB · Redis · InfluxDB |
+| 🔌 | **Fifteen engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · Oracle · CockroachDB · TimescaleDB · Amazon Redshift · MongoDB · Redis · InfluxDB · **DuckDB · ClickHouse · Snowflake · Google BigQuery** |
+| 🌐 | **Replication topology** | Group connections into a replication set and watch it **live** — primary/replica roles, per-link lag (green/amber/red), node health badges and click-through to any node's workspace |
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
 | 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
@@ -85,7 +86,8 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
 
 #### 🔌 Multi-engine
-- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · MongoDB · Redis · InfluxDB** — all from one app.
+- **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · Oracle Database · MongoDB · Redis · InfluxDB · DuckDB · ClickHouse · Snowflake · Google BigQuery** — all from one app, plus the Postgres-wire engines **CockroachDB · TimescaleDB · Amazon Redshift**.
+- **Cloud & analytical engines** — **Snowflake** (account / warehouse / role auth), **Google BigQuery** (service-account key + dataset), **ClickHouse** (HTTP, with column-aware browsing) and **DuckDB** (a local `.duckdb` file, zero setup) all browse, query and — where the engine supports it — edit with the same grid and tools as everything else. BigQuery is read/browse/query (it has no primary keys, so inline editing is intentionally off).
 - **MongoDB** — browse collections like tables, run shell-style queries (`db.users.find({ active: true }).sort({ name: 1 }).limit(50)`, `.aggregate([…])`, `.countDocuments(…)`), edit documents inline, and get collection/field autocomplete. Documents are flattened to columns with nested values shown as JSON.
 - **Redis** — keys are grouped **by prefix into pseudo-tables** (`user:1`, `user:2` → *user*), shown with type / TTL / size / value. **View any value type** (string · hash · list · set · zset · stream), **run raw commands** in the editor (`HGETALL user:1`, `LRANGE queues:default 0 10`), edit string values & TTLs, delete keys, and inspect connected clients via the Process List. Plus a **realtime queue viewer** (see below).
 
@@ -182,6 +184,14 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - **Per-queue cards** show **pending · active · delayed · failed · completed** counts with a framework badge; click any count to **drill into the jobs** — parsed name, attempts, exception and full payload — and **Remove** a stuck job or **Purge** a whole state.
 - The data side works like any other engine: keys grouped by prefix, a value viewer for every type, raw-command editor, and **read-only safe mode** that blocks mutating commands.
 
+#### 🌐 Replication topology monitor
+- **Group connections into a named replication set** and assign each a role (**primary · replica · arbiter**) — then watch the whole set live from one screen.
+- **Visual topology** — primary on top, replicas below, connected by **animated links colour-coded by lag** (green / amber / red against thresholds you set), with a **health dot** on every node.
+- **Per-engine status, normalized** — DataDock reads each node's own replication view: **PostgreSQL** (`pg_stat_replication` / `pg_last_wal_replay_lsn`), **MySQL** (`SHOW REPLICA STATUS` + connected replicas), **MongoDB** (`replSetGetStatus` optime lag) and **Redis** (`INFO replication`). Replica-side lag, byte/optime distance and the engine-detected role are surfaced per node.
+- **Honest about reality** — nodes you lack privilege on (e.g. missing `pg_monitor` / `REPLICATION CLIENT`) show a clear *"no status"* state rather than a fake green, MySQL's notoriously unreliable seconds-behind is flagged, and a node whose **engine-reported role differs from the one you assigned** gets a ⚠ warning.
+- **Auto-refreshing** (2 s – 30 s, pausable) like the Redis queue dashboard, with **Connect all** to bring the set online and **click any node to jump straight into its full DataDock workspace**.
+- Read-only **monitoring** by design — no promotion/failover buttons (issuing those directly would fight orchestrators like Patroni/RDS); the focus is seeing your topology clearly and safely.
+
 #### 🛠️ Server tools
 - Built-in **Databases** (create/drop), **Users & Roles**, and **Process List** (with kill).
 - **Table sizes** (`⌘K` → *Table Sizes*) — row counts and on-disk size per table, largest-first with inline size bars; click any table to open it.
@@ -202,8 +212,8 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | ![Export](docs/screenshots/05-export.png) | ![SSH](docs/screenshots/06-ssh.png) |
 | **Autocomplete** — schema-aware table & column names | **Analytics** — no-SQL builder, saved metrics & scheduled reports |
 | ![Autocomplete](docs/screenshots/07-autocomplete.png) | ![Analytics](docs/screenshots/08-analytics.png) |
-| **Dashboards** — drag-and-drop KPIs & charts, filters, drill-through, realtime | |
-| ![Dashboard](docs/screenshots/09-dashboard.png) | |
+| **Dashboards** — drag-and-drop KPIs & charts, filters, drill-through, realtime | **Replication topology** — live primary/replica lag & node health |
+| ![Dashboard](docs/screenshots/09-dashboard.png) | ![Topology](docs/screenshots/10-topology.png) |
 
 ---
 
@@ -266,7 +276,7 @@ npm run build
 ## 🧩 Tech stack
 
 **Electron** · **Vue 3** · **TypeScript** · **Pinia** · **CodeMirror 6** · **electron-vite**  
-Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `mongodb`, `ioredis`, `@influxdata/influxdb-client` · Tunneling: `ssh2`  
+Drivers: `pg`, `mysql2`, `better-sqlite3`, `mssql`, `oracledb` (thin mode), `mongodb`, `ioredis`, `@influxdata/influxdb-client`, `@duckdb/node-api`, `@clickhouse/client`, `snowflake-sdk`, `@google-cloud/bigquery` · Tunneling: `ssh2`  
 AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mistral, Grok & Ollama)
 
 ---
@@ -277,18 +287,19 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 | Area | Highlights |
 |---|---|
-| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
-| 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo |
+| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · **one-click engine presets** (Postgres · MySQL/MariaDB · SQL Server · Mongo · Redis · SQLite) · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
+| 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo · **soft-delete recovery** (find & restore rows hidden by `deleted_at` / `archived_at` / `removed_at`) · **time-travel row history** (right-click a row → Row history: a timeline of every edit you've made to it, with before→after diffs and one-click restore of earlier values) |
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · related-records overview (everything linked to one record, drill-down) · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table, with per-connection table exclusions) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |
-| ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · transaction mode |
-| ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock · AI-built analytics dashboards |
+| ⌨️ **Query** | Multi-tab SQL/Flux editor · schema-aware autocomplete · **snippet autocomplete** (type a saved query's name to expand it) · inline SQL lint hints · query variables · history · saved snippets · formatter · EXPLAIN + Visual EXPLAIN · **query-plan regression alerts** (captures a cost baseline the first time you view a query's plan, then flags it when the optimizer's estimate worsens) · transaction mode · **multiple result tabs per run** (a script with several statements shows one result set per statement) · **visual execution-time history** (per-query duration bars, fast→slow colour-coding, avg/slowest summary) · **per-connection query bookmarks** (save schema-specific queries to a connection, from the editor toolbar) |
+| ✨ **AI** | Multi-provider (Claude · Gemini · Mistral · Grok · Ollama) · NL→SQL · explain · fix-with-AI · chat-with-your-data dock · AI-built analytics dashboards · **AI test-data generation** (realistic, coherent rows from a prompt — right-click a table → Generate data) · **AI schema docs** (one-click plain-English purpose for every table in the Documentation generator) · **streaming chat responses** (the assistant's answer renders token-by-token on Claude; other providers reply at once) |
 | 📈 **Insights** | Performance dashboard (slow queries · index hints · index-health scan · pool stats · storage growth over time) · table-size analyzer · column-usage search |
 | 📊 **Analytics** | Dedicated analytics area · reusable datasets (table / view / saved SQL) · no-SQL visual chart builder (aggregations · time bucketing · series) · bar / line / area / pie / donut / table / **pivot** + **KPI cards with icons** via ECharts · **reusable saved metrics** (bind cards/charts to one definition) · **drag-and-drop resizable dashboards** · **dashboard filters** (text / equals / date-range, column-aware) · **drill-through to underlying rows** · **realtime auto-refresh** · **chart data → Excel/CSV/JSON**, **dashboard → PDF** and **scheduled Excel reports** · instant one-click charts from any query result · **AI that builds *and edits* dashboards/charts/metrics in place** from plain English |
 | 📨 **Redis & queues** | Prefix-grouped key browsing · value viewer (string · hash · list · set · zset · stream) · raw-command editor · realtime queue dashboard with framework auto-detect (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
+| 🌐 **Replication topology** | Group connections into a replication set with primary/replica/arbiter roles · **live topology view** with lag-coloured links & node-health badges · normalized per-engine status (Postgres · MySQL · MongoDB · Redis) · privilege-aware "no status" + role-mismatch warnings · auto-refresh · click-through to any node — read-only monitoring (no failover) |
 | 📄 **Docs** | One-click Markdown documentation generator — every table, column, key & index (Database → Documentation, `⌘⇧D`) · **per-table notes / comments** (right-click a table → Add note; shown in the list & above the data) — stored locally |
-| 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV |
-| 🛟 **Safety** | **Database snapshots** — one-click labeled restore points (full structure + data dump per connection) · restore replays the snapshot with a type-the-connection-name confirmation · blocked on read-only connections |
+| 📦 **Import / export** | CSV · Excel · JSON · SQL · whole-DB dump (per-table) · streaming exports · result → new table · import SQL / CSV · **clone schema → local SQLite** (copy any database's structure, optionally with data, into a portable `.sqlite` file) |
+| 🛟 **Safety** | **Database snapshots** — one-click labeled restore points (full structure + data dump per connection) · restore replays the snapshot with a type-the-connection-name confirmation · blocked on read-only connections · **dangerous-query confirmation** (UPDATE/DELETE without WHERE · TRUNCATE · DROP prompts before running) |
 | 🎭 **Data masking** | Anonymize columns with faker on export (deterministic) — safely copy production into local databases |
 | 🔐 **Platform** | SSH tunneling · OS-keychain secrets · dark / light themes · command palette · packaged installers (dmg · exe · AppImage) · in-app auto-update from GitHub Releases |
 
@@ -297,14 +308,6 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | Area | Planned |
 |---|---|
 | 🔏 **Signed installers** | Code-signing & notarization for macOS and Windows so installers run **without security warnings** (and macOS auto-updates install in place) — **in progress** |
-| 🎯 **Next up** | Per-connection query bookmarks · multiple result tabs per run |
-| 🛡️ **Production safety** | Dangerous-query confirmation flow |
-| ⌨️ **Querying** | Query bookmarks per connection · snippet autocomplete · multiple result tabs per run · execution-time history |
-| 📈 **Performance** | Query-plan regression alerts |
-| 🗂️ **Organize** | Connection templates / presets — stored locally, no cloud |
-| 🧪 **Developer / AI** | AI schema docs · AI test-data generation · streaming chat responses |
-| 🪄 **Wow** | Time-travel row history · clone prod schema → local SQLite |
-| 🗃️ **Data management** | Soft-delete recovery viewer |
 
 ### 🗄️ Database engines
 
@@ -312,10 +315,10 @@ Already covers **≈80–90%** of typical use; more on the way.
 
 | Engine | Status |
 |---|:--:|
-| PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · MongoDB · **Redis** · InfluxDB | ✅ Supported |
+| PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · **Oracle Database** · MongoDB · **Redis** · InfluxDB | ✅ Supported |
 | **CockroachDB · TimescaleDB · Amazon Redshift** — ride on PostgreSQL support | ✅ Supported |
-| **Oracle Database** — enterprise reach | ⏳ Planned |
-| Snowflake · ClickHouse · BigQuery · DuckDB | 💡 Exploring |
+| **DuckDB · ClickHouse · Snowflake · Google BigQuery** | ✅ Supported |
+| Apache Cassandra · ScyllaDB · DynamoDB · SurrealDB · Trino · Firebird · libSQL · TiDB | 💡 Exploring |
 
 ---
 

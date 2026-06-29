@@ -9,6 +9,11 @@ const LANGUAGE: Record<DriverType, SqlLanguage | null> = {
   cockroachdb: 'postgresql', // pg-wire compatible
   timescaledb: 'postgresql', // pg-wire compatible
   redshift: 'redshift',
+  oracle: 'plsql',
+  duckdb: 'postgresql', // DuckDB SQL closely follows PostgreSQL
+  clickhouse: 'sql',
+  snowflake: 'snowflake',
+  bigquery: 'bigquery',
   mongodb: null, // document store, not SQL
   redis: null, // key/value, raw commands not SQL
   influxdb: null // Flux, not SQL

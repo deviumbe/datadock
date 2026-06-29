@@ -92,6 +92,8 @@ export async function chatWithData(opts: {
   system: string
   history: ChatTurn[]
   runSql: RunSql
+  /** Called with text deltas as the model streams its answer (Anthropic). */
+  onDelta?: (text: string) => void
 }): Promise<ChatResult> {
   const rp = resolveProvider()
   ensureReady(rp)
@@ -103,7 +105,7 @@ export async function chatWithData(opts: {
 
 async function anthropicChat(
   rp: ResolvedProvider,
-  opts: { system: string; history: ChatTurn[]; runSql: RunSql },
+  opts: { system: string; history: ChatTurn[]; runSql: RunSql; onDelta?: (t: string) => void },
   steps: ChatStep[]
 ): Promise<ChatResult> {
   const client = new Anthropic({ apiKey: rp.apiKey! })
@@ -124,13 +126,15 @@ async function anthropicChat(
   }))
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await client.messages.create({
+    const stream = client.messages.stream({
       model: rp.model,
       max_tokens: 2048,
       system: opts.system,
       tools,
       messages
     })
+    if (opts.onDelta) stream.on('text', (t) => opts.onDelta!(t))
+    const res = await stream.finalMessage()
     if (res.stop_reason !== 'tool_use') return { answer: anthropicText(res), steps }
 
     messages.push({ role: 'assistant', content: res.content })
@@ -152,13 +156,14 @@ async function anthropicChat(
   }
 
   // Out of tool budget — force a final textual answer.
-  const final = await client.messages.create({
+  const stream = client.messages.stream({
     model: rp.model,
     max_tokens: 2048,
     system: opts.system,
     messages
   })
-  return { answer: anthropicText(final), steps }
+  if (opts.onDelta) stream.on('text', (t) => opts.onDelta!(t))
+  return { answer: anthropicText(await stream.finalMessage()), steps }
 }
 
 async function openaiChat(

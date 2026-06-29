@@ -157,6 +157,13 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     {
+      label: 'Clone to SQLite',
+      icon: '🗄',
+      handler: () => {
+        if (connId) ui.cloneSqliteOpen = true
+      }
+    },
+    {
       label: 'ER Diagram',
       icon: '🔗',
       handler: () => {

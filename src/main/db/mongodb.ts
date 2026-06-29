@@ -11,6 +11,9 @@ import type {
   ConnectionConfig,
   FilterSpec,
   QueryResult,
+  ReplicaLink,
+  ReplicationRole,
+  ReplicationStatus,
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
@@ -66,6 +69,57 @@ export class MongoAdapter implements DbAdapter {
   async disconnect(): Promise<void> {
     await this.client?.close()
     this.client = undefined
+  }
+
+  async replicationStatus(): Promise<ReplicationStatus> {
+    if (!this.client) throw new Error('Connection is not open')
+    try {
+      const status = (await this.client.db('admin').command({ replSetGetStatus: 1 })) as {
+        members?: { name: string; stateStr: string; optimeDate?: Date; self?: boolean }[]
+      }
+      const members = status.members ?? []
+      const self = members.find((m) => m.self)
+      const primary = members.find((m) => m.stateStr === 'PRIMARY')
+      const primaryT = primary?.optimeDate ? new Date(primary.optimeDate).getTime() : null
+      const selfIsPrimary = self?.stateStr === 'PRIMARY'
+
+      const replicas: ReplicaLink[] = members
+        .filter((m) => m.stateStr === 'SECONDARY')
+        .map((m) => {
+          const t = m.optimeDate ? new Date(m.optimeDate).getTime() : null
+          return {
+            name: m.name,
+            state: m.stateStr,
+            lagSeconds: primaryT && t ? Math.max(0, (primaryT - t) / 1000) : null
+          }
+        })
+
+      let lagSeconds: number | null = null
+      if (!selfIsPrimary && self?.optimeDate && primaryT) {
+        lagSeconds = Math.max(0, (primaryT - new Date(self.optimeDate).getTime()) / 1000)
+      }
+      const detectedRole: ReplicationRole =
+        self?.stateStr === 'ARBITER' ? 'arbiter' : selfIsPrimary ? 'primary' : 'replica'
+
+      return {
+        detectedRole,
+        isPrimary: selfIsPrimary,
+        lagSeconds: selfIsPrimary ? null : lagSeconds,
+        replicas: selfIsPrimary ? replicas : undefined,
+        detail: [
+          `Replica set members: ${members.length}`,
+          ...(self ? [`This node: ${self.stateStr}`] : [])
+        ]
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const standalone = /--replSet|NoReplicationEnabled|not running with/i.test(msg)
+      return {
+        detectedRole: 'unknown',
+        isPrimary: false,
+        error: standalone ? 'Standalone mongod — not a replica set' : msg
+      }
+    }
   }
 
   async listTables(): Promise<TableInfo[]> {

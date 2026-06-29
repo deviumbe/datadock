@@ -11,6 +11,11 @@ export type DriverType =
   | 'cockroachdb'
   | 'timescaledb'
   | 'redshift'
+  | 'oracle'
+  | 'duckdb'
+  | 'clickhouse'
+  | 'snowflake'
+  | 'bigquery'
 
 export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[] = [
   { type: 'postgres', label: 'PostgreSQL', defaultPort: 5432 },
@@ -20,6 +25,11 @@ export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[
   { type: 'cockroachdb', label: 'CockroachDB', defaultPort: 26257 },
   { type: 'timescaledb', label: 'TimescaleDB', defaultPort: 5432 },
   { type: 'redshift', label: 'Amazon Redshift', defaultPort: 5439 },
+  { type: 'oracle', label: 'Oracle Database', defaultPort: 1521 },
+  { type: 'duckdb', label: 'DuckDB' },
+  { type: 'clickhouse', label: 'ClickHouse', defaultPort: 8123 },
+  { type: 'snowflake', label: 'Snowflake' },
+  { type: 'bigquery', label: 'Google BigQuery' },
   { type: 'mongodb', label: 'MongoDB', defaultPort: 27017 },
   { type: 'redis', label: 'Redis', defaultPort: 6379 },
   { type: 'influxdb', label: 'InfluxDB' }
@@ -32,7 +42,17 @@ export const DRIVERS: { type: DriverType; label: string; defaultPort?: number }[
 export const PG_FAMILY: DriverType[] = ['postgres', 'cockroachdb', 'timescaledb', 'redshift']
 
 /** Engines that speak SQL (vs. the document / key-value / time-series stores). */
-export const SQL_DRIVERS: DriverType[] = [...PG_FAMILY, 'mysql', 'sqlite', 'mssql']
+export const SQL_DRIVERS: DriverType[] = [
+  ...PG_FAMILY,
+  'mysql',
+  'sqlite',
+  'mssql',
+  'oracle',
+  'duckdb',
+  'clickhouse',
+  'snowflake',
+  'bigquery'
+]
 
 export function isSqlDriver(driver: string): boolean {
   return (SQL_DRIVERS as string[]).includes(driver)
@@ -84,6 +104,30 @@ export const COLUMN_TYPES: Record<DriverType, string[]> = {
     'varchar(255)', 'nvarchar(255)', 'char(1)', 'text', 'date', 'datetime',
     'datetime2', 'time', 'uniqueidentifier', 'varbinary(max)'
   ],
+  oracle: [
+    'NUMBER', 'NUMBER(10)', 'NUMBER(10,2)', 'INTEGER', 'FLOAT', 'BINARY_FLOAT',
+    'BINARY_DOUBLE', 'VARCHAR2(255)', 'NVARCHAR2(255)', 'CHAR(1)', 'CLOB', 'NCLOB',
+    'DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE', 'RAW(16)', 'BLOB'
+  ],
+  duckdb: [
+    'INTEGER', 'BIGINT', 'SMALLINT', 'HUGEINT', 'DOUBLE', 'REAL', 'DECIMAL(18,3)',
+    'BOOLEAN', 'VARCHAR', 'TEXT', 'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMPTZ',
+    'UUID', 'JSON', 'BLOB'
+  ],
+  clickhouse: [
+    'UInt8', 'UInt32', 'UInt64', 'Int32', 'Int64', 'Float32', 'Float64',
+    'Decimal(18,4)', 'String', 'FixedString(16)', 'Date', 'DateTime', 'DateTime64(3)',
+    'UUID', 'Bool', 'Nullable(String)'
+  ],
+  snowflake: [
+    'NUMBER', 'NUMBER(38,0)', 'FLOAT', 'VARCHAR', 'VARCHAR(255)', 'STRING', 'CHAR(1)',
+    'BOOLEAN', 'DATE', 'TIME', 'TIMESTAMP_NTZ', 'TIMESTAMP_TZ', 'VARIANT', 'OBJECT',
+    'ARRAY', 'BINARY'
+  ],
+  bigquery: [
+    'STRING', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'BOOL', 'BYTES',
+    'DATE', 'TIME', 'DATETIME', 'TIMESTAMP', 'GEOGRAPHY', 'JSON'
+  ],
   influxdb: []
 }
 
@@ -114,8 +158,17 @@ export interface ConnectionConfig {
   hasPassword?: boolean
   ssl?: boolean
 
-  // SQLite
+  // SQLite / DuckDB (and BigQuery service-account key file)
   filePath?: string
+
+  // Snowflake
+  account?: string
+  warehouse?: string
+  role?: string
+  schema?: string
+
+  // BigQuery (auth via the service-account key file in `filePath`)
+  projectId?: string
 
   // InfluxDB (v2)
   url?: string
@@ -152,11 +205,100 @@ export interface Project {
 
 export interface Workspace {
   projects: Project[]
+  /** Named replication topologies grouping connections by role (Phase 1: monitoring). */
+  topologies?: Topology[]
+}
+
+// ---- replication topology ---------------------------------------------------
+
+/** The role a node plays in a replication set, as assigned by the user. */
+export type ReplicationRole = 'primary' | 'replica' | 'arbiter' | 'unknown'
+
+/** One member of a topology: an existing connection plus its assigned role. */
+export interface TopologyNode {
+  connectionId: string
+  role: ReplicationRole
+}
+
+/** A user-defined replication set: a named group of connections with roles. */
+export interface Topology {
+  id: string
+  name: string
+  nodes: TopologyNode[]
+  /** Replica lag (seconds) at/above which a link is amber, then red. */
+  lagWarnSeconds?: number
+  lagCritSeconds?: number
+}
+
+/** Health rollup for a node, derived from its reported status + lag thresholds. */
+export type NodeHealth = 'healthy' | 'lagging' | 'down' | 'unknown'
+
+/** A downstream replica as seen from a primary's perspective. */
+export interface ReplicaLink {
+  /** How the primary identifies the replica (application_name / host / id). */
+  name: string
+  /** Engine-reported stream state (streaming / online / SYNC / ...). */
+  state?: string
+  lagSeconds?: number | null
+  lagBytes?: number | null
+}
+
+/**
+ * Live replication status for a single node, normalized across engines. This is
+ * read-only observability — no failover/promotion is performed here.
+ */
+export interface ReplicationStatus {
+  /** What the engine reports this node actually is (may differ from assigned role). */
+  detectedRole: ReplicationRole
+  isPrimary: boolean
+  /** Replica-side apply lag in seconds (when this node is a replica). */
+  lagSeconds?: number | null
+  /** Replicas this node feeds (when it is a primary). */
+  replicas?: ReplicaLink[]
+  /** Raw WAL/GTID/optime position string, for display. */
+  position?: string
+  /** Extra human-readable detail lines for the node card. */
+  detail?: string[]
+  /** Set when status couldn't be read (e.g. insufficient privilege / standalone). */
+  error?: string
 }
 
 export interface ColumnMeta {
   name: string
   type?: string
+}
+
+/** One recorded change to a single row, for the time-travel history. */
+export interface RowVersion {
+  id: string
+  connectionId: string
+  table: string
+  /** Stable key identifying the row (primary-key values). */
+  pkKey: string
+  pk: Record<string, unknown>
+  op: 'update' | 'delete' | 'insert'
+  /** Column values before the change (null for inserts). */
+  before: Record<string, unknown> | null
+  /** Column values after the change (null for deletes). */
+  after: Record<string, unknown> | null
+  at: string // ISO timestamp
+}
+
+/** A row-version event submitted by the editor (server fills id/at/pkKey). */
+export type RowVersionInput = Pick<
+  RowVersion,
+  'table' | 'pk' | 'op' | 'before' | 'after'
+>
+
+/** A stored execution-plan baseline for one query, to detect cost regressions. */
+export interface PlanBaseline {
+  /** The query the baseline was captured for (normalized). */
+  sql: string
+  /** Top-node estimated total cost when the baseline was captured. */
+  cost: number
+  /** Estimated row count at the top node, if known. */
+  rows?: number
+  savedAt: string // ISO timestamp
 }
 
 /** A normalized node in a query execution plan (for Visual EXPLAIN). */
@@ -479,6 +621,13 @@ export const DRIVER_CAPS: Record<DriverType, DriverCapabilities> = {
   timescaledb: { databases: true, users: true, processes: true },
   // Redshift lacks pg_stat_activity / pg_roles — keep it to databases only.
   redshift: { databases: true, users: false, processes: false },
+  // Oracle: schemas aren't MySQL-style databases; v$session needs catalog privs,
+  // so keep it to user listing (ALL_USERS is always readable).
+  oracle: { databases: false, users: true, processes: false },
+  duckdb: { databases: false, users: false, processes: false },
+  clickhouse: { databases: true, users: false, processes: false },
+  snowflake: { databases: true, users: false, processes: false },
+  bigquery: { databases: false, users: false, processes: false },
   sqlite: { databases: false, users: false, processes: false },
   mongodb: { databases: false, users: false, processes: false },
   // Redis has no users/createDatabase, but CLIENT LIST/KILL maps onto Processes.
@@ -527,6 +676,24 @@ export interface FileResult {
   path?: string
 }
 
+/** Options for cloning a connection's schema into a local SQLite file. */
+export interface CloneOptions {
+  /** Table names to clone (empty = all base tables). */
+  tables: string[]
+  /** Copy row data too (vs. structure only). */
+  includeData: boolean
+}
+
+/** Outcome of a clone-to-SQLite run. */
+export interface CloneResult {
+  canceled: boolean
+  path?: string
+  tableCount?: number
+  rowCount?: number
+  /** Non-fatal per-table problems (e.g. a table that failed to copy). */
+  errors?: string[]
+}
+
 export interface ImportResult {
   statements?: number
   rowsInserted?: number
@@ -550,6 +717,15 @@ export interface Snippet {
   description?: string
   createdAt: string
   updatedAt: string
+}
+
+/** A query bookmark scoped to one connection (local, schema-specific queries). */
+export interface Bookmark {
+  id: string
+  connectionId: string
+  name: string
+  sql: string
+  createdAt: string
 }
 
 // ---- settings / AI providers ------------------------------------------------

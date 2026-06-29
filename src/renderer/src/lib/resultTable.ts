@@ -15,7 +15,9 @@ const TYPES: Record<SqlDialect, { int: string; real: string; bool: string; text:
 
 /** Engines that can create a table from a result (have createTable + applyChanges). */
 export function canExportToTable(driver: DriverType): boolean {
-  return isSqlDriver(driver)
+  // Oracle maps to the postgres dialect for quoting, but its column types differ
+  // (no bigint/text/boolean) — exclude it so we don't generate invalid DDL.
+  return isSqlDriver(driver) && driver !== 'oracle'
 }
 
 const INT_RE = /^-?\d+$/

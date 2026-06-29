@@ -95,8 +95,10 @@ export function buildMenu(): void {
         },
         { type: 'separator' },
         { label: 'Snapshots…', click: () => send('snapshots') },
+        { label: 'Recover Deleted Rows…', click: () => send('recoverDeleted') },
         { label: 'Import…', click: () => send('import') },
         { label: 'Export Database…', click: () => send('exportDb') },
+        { label: 'Clone to SQLite…', click: () => send('cloneSqlite') },
         { type: 'separator' },
         { label: 'Disconnect', click: () => send('disconnect') }
       ]

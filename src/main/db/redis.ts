@@ -10,6 +10,8 @@ import type {
   RedisKeyType,
   RedisKeyValue,
   RedisServerStats,
+  ReplicaLink,
+  ReplicationStatus,
   RowChangeSet,
   TableInfo,
   TableQueryOptions,
@@ -73,6 +75,64 @@ export class RedisAdapter implements DbAdapter {
   async disconnect(): Promise<void> {
     this.client?.disconnect()
     this.client = undefined
+  }
+
+  async replicationStatus(): Promise<ReplicationStatus> {
+    try {
+      const raw = await this.db.info('replication')
+      const map: Record<string, string> = {}
+      for (const line of raw.split(/\r?\n/)) {
+        if (!line || line.startsWith('#')) continue
+        const i = line.indexOf(':')
+        if (i > 0) map[line.slice(0, i)] = line.slice(i + 1).trim()
+      }
+      if (map.role === 'slave') {
+        const linkUp = map.master_link_status === 'up'
+        const lastIo = map.master_last_io_seconds_ago != null ? Number(map.master_last_io_seconds_ago) : null
+        return {
+          detectedRole: 'replica',
+          isPrimary: false,
+          // No millisecond lag from Redis; seconds-since-last-IO is the best proxy.
+          lagSeconds: linkUp ? Math.max(0, lastIo ?? 0) : null,
+          position: map.slave_repl_offset,
+          detail: [
+            `Upstream ${map.master_host}:${map.master_port} · link ${map.master_link_status ?? '?'}`,
+            ...(map.master_sync_in_progress === '1' ? ['Full resync in progress'] : [])
+          ],
+          error: linkUp ? undefined : 'Replication link is down'
+        }
+      }
+      // master
+      const replicas: ReplicaLink[] = []
+      const n = Number(map.connected_slaves ?? 0)
+      for (let i = 0; i < n; i++) {
+        const entry = map[`slave${i}`]
+        if (!entry) continue
+        const f: Record<string, string> = {}
+        for (const part of entry.split(',')) {
+          const [k, v] = part.split('=')
+          if (k) f[k] = v
+        }
+        replicas.push({
+          name: `${f.ip ?? '?'}:${f.port ?? '?'}`,
+          state: f.state,
+          lagSeconds: f.lag != null ? Number(f.lag) : null
+        })
+      }
+      return {
+        detectedRole: 'primary',
+        isPrimary: true,
+        replicas,
+        position: map.master_repl_offset,
+        detail: replicas.length ? undefined : ['No connected replicas']
+      }
+    } catch (err) {
+      return {
+        detectedRole: 'unknown',
+        isPrimary: false,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   /** SCAN keys matching a pattern, capped to stay responsive. */

@@ -25,11 +25,16 @@ import type {
   SchemaSnapshot,
   ExportFormat,
   ExportPayload,
+  CloneOptions,
+  CloneResult,
   FileResult,
   HistoryEntry,
   ImportResult,
   IpcResult,
+  PlanBaseline,
   PlanNode,
+  RowVersion,
+  RowVersionInput,
   PoolStats,
   QueueAction,
   QueueJob,
@@ -40,6 +45,7 @@ import type {
   SizeSnapshot,
   Snippet,
   Snapshot,
+  Bookmark,
   RestoreResult,
   QueryResult,
   RowChangeSet,
@@ -48,6 +54,8 @@ import type {
   TableQueryOptions,
   TableSizeInfo,
   TableStructure,
+  Topology,
+  ReplicationStatus,
   Workspace
 } from '@shared/types'
 
@@ -79,7 +87,9 @@ const api = {
     saveConnection: (environmentId: string, config: ConnectionConfig) =>
       invoke<Workspace>('workspace:saveConnection', environmentId, config),
     deleteConnection: (id: string) => invoke<Workspace>('workspace:deleteConnection', id),
-    duplicateConnection: (id: string) => invoke<Workspace>('workspace:duplicateConnection', id)
+    duplicateConnection: (id: string) => invoke<Workspace>('workspace:duplicateConnection', id),
+    saveTopology: (topology: Topology) => invoke<Workspace>('workspace:saveTopology', topology),
+    deleteTopology: (id: string) => invoke<Workspace>('workspace:deleteTopology', id)
   },
   db: {
     test: (config: ConnectionConfig) => invoke<boolean>('db:test', config),
@@ -95,6 +105,8 @@ const api = {
       invoke<number>('db:countRows', id, table, opts),
     explainPlan: (id: string, sql: string) =>
       invoke<PlanNode | null>('db:explainPlan', id, sql),
+    replicationStatus: (id: string) =>
+      invoke<ReplicationStatus>('db:replicationStatus', id),
     txnBegin: (id: string) => invoke<void>('db:txnBegin', id),
     txnCommit: (id: string) => invoke<void>('db:txnCommit', id),
     txnRollback: (id: string) => invoke<void>('db:txnRollback', id),
@@ -159,6 +171,24 @@ const api = {
       invoke<FileResult>('io:exportPdf', name, html, landscape),
     pickFolder: () => invoke<FileResult>('io:pickFolder')
   },
+  clone: {
+    toSqlite: (id: string, opts: CloneOptions) =>
+      invoke<CloneResult>('clone:toSqlite', id, opts)
+  },
+  planBaselines: {
+    get: (id: string, sql: string) =>
+      invoke<PlanBaseline | null>('planBaselines:get', id, sql),
+    set: (id: string, sql: string, cost: number, rows?: number) =>
+      invoke<PlanBaseline>('planBaselines:set', id, sql, cost, rows),
+    remove: (id: string, sql: string) => invoke<boolean>('planBaselines:remove', id, sql)
+  },
+  rowHistory: {
+    record: (id: string, entries: RowVersionInput[]) =>
+      invoke<void>('rowHistory:record', id, entries),
+    list: (id: string, table: string, pk: Record<string, unknown>) =>
+      invoke<RowVersion[]>('rowHistory:list', id, table, pk),
+    clear: (id: string, table?: string) => invoke<void>('rowHistory:clear', id, table)
+  },
   history: {
     add: (entry: Omit<HistoryEntry, 'id' | 'ranAt'>) => invoke<HistoryEntry>('history:add', entry),
     list: () => invoke<HistoryEntry[]>('history:list'),
@@ -187,6 +217,12 @@ const api = {
     list: (connId: string) => invoke<Record<string, string>>('notes:list', connId),
     set: (connId: string, table: string, text: string) =>
       invoke<Record<string, string>>('notes:set', connId, table, text)
+  },
+  bookmarks: {
+    list: (connId: string) => invoke<Bookmark[]>('bookmarks:list', connId),
+    save: (connId: string, name: string, sql: string) =>
+      invoke<Bookmark>('bookmarks:save', connId, name, sql),
+    remove: (connId: string, id: string) => invoke<boolean>('bookmarks:remove', connId, id)
   },
   analytics: {
     listDatasets: (connId: string) =>
@@ -238,6 +274,15 @@ const api = {
       sql: string
       error: string
     }) => invoke<{ sql: string; notes: string }>('ai:fixQuery', req),
+    generateSeedData: (req: {
+      driver: string
+      table: string
+      columns: { name: string; type?: string }[]
+      count: number
+      hint?: string
+    }) => invoke<{ rows: Record<string, unknown>[] }>('ai:generateSeedData', req),
+    describeSchema: (req: { driver: string; tables: { name: string; columns: string[] }[] }) =>
+      invoke<Record<string, string>>('ai:describeSchema', req),
     generateAnalytics: (req: {
       driver: string
       schema: Record<string, string[]>
@@ -246,8 +291,14 @@ const api = {
     }) => invoke<AnalyticsPlan>('ai:generateAnalytics', req),
     chat: (
       connId: string,
-      req: { driver: string; schema: Record<string, string[]>; history: ChatMessage[] }
-    ) => invoke<{ answer: string; steps: ChatStep[] }>('ai:chat', connId, req)
+      req: { driver: string; schema: Record<string, string[]>; history: ChatMessage[]; streamId?: string }
+    ) => invoke<{ answer: string; steps: ChatStep[] }>('ai:chat', connId, req),
+    /** Subscribe to streamed answer deltas; returns an unsubscribe function. */
+    onChatDelta: (cb: (id: string, delta: string) => void): (() => void) => {
+      const listener = (_e: unknown, p: { id: string; delta: string }): void => cb(p.id, p.delta)
+      ipcRenderer.on('ai:chatDelta', listener)
+      return () => ipcRenderer.removeListener('ai:chatDelta', listener)
+    }
   },
   settings: {
     get: () => invoke<AppSettings>('settings:get'),
