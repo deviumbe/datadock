@@ -1,6 +1,6 @@
 {
   "name": "datadock",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "DataDock — a project/environment-organized database client",
   "main": "./out/main/index.js",
   "author": "Devium",
