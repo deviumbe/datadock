@@ -89,6 +89,113 @@ function fmtLag(lag: number | null | undefined): string {
   return `${Math.round(lag / 60)}m`
 }
 
+// ---- lag history (in-memory rolling window → the per-node sparkline) ----
+const HISTORY_CAP = 60
+const history = reactive<Record<string, number[]>>({})
+function pushHistory(id: string, lag: number): void {
+  const arr = history[id] ?? (history[id] = [])
+  arr.push(lag)
+  if (arr.length > HISTORY_CAP) arr.shift()
+}
+function hasSpark(id: string): boolean {
+  return (history[id]?.length ?? 0) >= 2
+}
+/** SVG polyline `points` for a node's lag trend, scaled to w×h (red threshold kept in frame). */
+function sparkPoints(id: string, w: number, h: number): string {
+  const arr = history[id]
+  if (!arr || arr.length < 2) return ''
+  const max = Math.max(...arr, crit.value)
+  const span = max || 1
+  const step = w / (arr.length - 1)
+  return arr.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / span) * h).toFixed(1)}`).join(' ')
+}
+
+// ---- managed-cluster badge ----
+function managedOf(node: TopologyNode): string | null {
+  return states[node.connectionId]?.status?.managedBy ?? null
+}
+
+// ---- threshold alerts (edge-triggered desktop notifications) ----
+const alerts = ref(true)
+const prevSeverity: Record<string, string> = {}
+let seeded = false
+
+function severityOf(node: TopologyNode): string {
+  if (states[node.connectionId]?.phase === 'down') return 'down'
+  return nodeView(node).color // green | amber | red | grey
+}
+function notify(title: string, body: string): void {
+  if (!alerts.value || !('Notification' in window)) return
+  if (Notification.permission === 'granted') new Notification(title, { body })
+  else if (Notification.permission !== 'denied')
+    void Notification.requestPermission().then((p) => {
+      if (p === 'granted') new Notification(title, { body })
+    })
+}
+/** Fire one notification per node that newly entered "unreachable" or "critical lag". */
+function checkAlerts(): void {
+  const t = topology.value
+  if (!t) return
+  for (const node of t.nodes) {
+    const id = node.connectionId
+    const sev = severityOf(node)
+    const prev = prevSeverity[id]
+    prevSeverity[id] = sev
+    if (!seeded || prev === undefined || sev === prev) continue
+    if (sev === 'down') notify(t.name, `${connName(id)} is unreachable`)
+    else if (sev === 'red')
+      notify(t.name, `${connName(id)} replication lag is critical (${fmtLag(states[id]?.status?.lagSeconds)})`)
+  }
+  seeded = true
+}
+
+// ---- AI advisor (read-only: diagnoses, recommends; never executes) ----
+const aiReady = ref(false)
+const advisorOpen = ref(false)
+const advice = ref('')
+const advising = ref(false)
+const adviseErr = ref('')
+
+function snapshot() {
+  return (topology.value?.nodes ?? []).map((n) => {
+    const st = states[n.connectionId]
+    const s = st?.status
+    return {
+      name: connName(n.connectionId),
+      driver: connDriver(n.connectionId),
+      assignedRole: n.role,
+      detectedRole: s?.detectedRole,
+      isPrimary: s?.isPrimary,
+      lagSeconds: s?.lagSeconds ?? null,
+      position: s?.position,
+      replicas: s?.replicas?.map((r) => ({ name: r.name, state: r.state, lagSeconds: r.lagSeconds })),
+      managedBy: s?.managedBy ?? null,
+      detail: s?.detail,
+      error: s?.error,
+      unreachable: st?.phase === 'down',
+      notConnected: st?.phase === 'offline'
+    }
+  })
+}
+
+async function runAdvisor(): Promise<void> {
+  advisorOpen.value = true
+  advising.value = true
+  adviseErr.value = ''
+  try {
+    advice.value = await window.api.ai.adviseReplication({
+      topology: topology.value?.name ?? 'Topology',
+      warnSeconds: warn.value,
+      critSeconds: crit.value,
+      nodes: snapshot()
+    })
+  } catch (e) {
+    adviseErr.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    advising.value = false
+  }
+}
+
 // ---- polling ----
 const refreshMs = ref(4000)
 const auto = ref(true)
@@ -107,6 +214,7 @@ async function pollNode(node: TopologyNode): Promise<void> {
   try {
     const status = await window.api.db.replicationStatus(id)
     states[id] = { phase: 'ok', status, at: Date.now() }
+    if (!status.isPrimary && status.lagSeconds != null) pushHistory(id, status.lagSeconds)
   } catch (e) {
     states[id] = { phase: 'down', err: e instanceof Error ? e.message : String(e), at: Date.now() }
   }
@@ -118,6 +226,7 @@ async function refresh(): Promise<void> {
   try {
     await Promise.all(topology.value.nodes.map(pollNode))
     lastAt.value = Date.now()
+    checkAlerts()
   } finally {
     refreshing.value = false
     await nextTick()
@@ -138,7 +247,15 @@ function restartTimer(): void {
   if (auto.value) timer = setInterval(refresh, refreshMs.value)
 }
 watch([auto, refreshMs], restartTimer)
-watch(() => props.topologyId, () => void refresh())
+watch(
+  () => props.topologyId,
+  () => {
+    for (const k of Object.keys(history)) delete history[k]
+    for (const k of Object.keys(prevSeverity)) delete prevSeverity[k]
+    seeded = false
+    void refresh()
+  }
+)
 
 function openNode(id: string): void {
   ws.connectAndOpen(id)
@@ -199,6 +316,7 @@ let resizeObs: ResizeObserver | undefined
 onMounted(() => {
   void refresh()
   restartTimer()
+  void window.api.ai.hasKey().then((r) => (aiReady.value = r))
   if (board.value && 'ResizeObserver' in window) {
     resizeObs = new ResizeObserver(() => recomputeLinks())
     resizeObs.observe(board.value)
@@ -231,6 +349,9 @@ const sinceTimer = setInterval(() => {
         <label class="auto">
           <input type="checkbox" v-model="auto" /> Auto
         </label>
+        <label class="auto" title="Desktop notification when a node goes down or lag turns critical">
+          <input type="checkbox" v-model="alerts" /> Alerts
+        </label>
         <select class="select small" v-model.number="refreshMs">
           <option :value="2000">2s</option>
           <option :value="4000">4s</option>
@@ -238,6 +359,7 @@ const sinceTimer = setInterval(() => {
           <option :value="30000">30s</option>
         </select>
         <button class="btn" :class="{ spin: refreshing }" title="Refresh now" @click="refresh">↻</button>
+        <button v-if="aiReady" class="btn ai" title="Ask AI to diagnose this topology" @click="runAdvisor">✦ Advisor</button>
         <button v-if="topology" class="btn" @click="emit('edit', topology)">Edit</button>
       </div>
     </header>
@@ -272,6 +394,7 @@ const sinceTimer = setInterval(() => {
             <div class="role-row">
               <span class="role primary">PRIMARY</span>
               <span class="status">{{ nodeView(node).badge }}</span>
+              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`">⚙ {{ managedOf(node) }}</span>
             </div>
             <p v-for="(d, i) in nodeView(node).detail" :key="i" class="detail">{{ d }}</p>
             <p v-if="nodeView(node).position" class="pos">@ {{ nodeView(node).position }}</p>
@@ -291,8 +414,12 @@ const sinceTimer = setInterval(() => {
             <div class="role-row">
               <span class="role" :class="node.role">{{ node.role.toUpperCase() }}</span>
               <span class="status">{{ nodeView(node).badge }}</span>
+              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`">⚙ {{ managedOf(node) }}</span>
               <span v-if="nodeView(node).lag != null" class="lag" :class="nodeView(node).color">{{ fmtLag(nodeView(node).lag) }}</span>
             </div>
+            <svg v-if="hasSpark(node.connectionId)" class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
+              <polyline :points="sparkPoints(node.connectionId, 120, 22)" :class="nodeView(node).color" />
+            </svg>
             <p
               v-if="nodeView(node).detected && nodeView(node).detected !== node.role && nodeView(node).detected !== 'unknown'"
               class="detail mismatch"
@@ -303,6 +430,21 @@ const sinceTimer = setInterval(() => {
         </template>
       </div>
     </div>
+
+    <!-- AI advisor drawer (read-only diagnosis) -->
+    <aside v-if="advisorOpen" class="advisor">
+      <header class="adv-head">
+        <span class="adv-title">✦ Replication advisor</span>
+        <button class="btn" :class="{ spin: advising }" title="Re-run" @click="runAdvisor">↻</button>
+        <button class="adv-close" title="Close" @click="advisorOpen = false">✕</button>
+      </header>
+      <div class="adv-body">
+        <div v-if="advising && !advice" class="adv-state">Analyzing the topology…</div>
+        <div v-else-if="adviseErr" class="adv-state err">{{ adviseErr }}</div>
+        <div v-else class="adv-text">{{ advice }}</div>
+      </div>
+      <p class="adv-foot">⚠ Advice only — DataDock executes nothing. Review every command before you run it.</p>
+    </aside>
   </div>
 </template>
 
@@ -508,6 +650,99 @@ const sinceTimer = setInterval(() => {
 .lag.green { color: var(--ok, #3fcf8e); }
 .lag.amber { color: var(--warn, #f0b429); }
 .lag.red { color: var(--danger, #e5616a); }
+.mng {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.spark {
+  width: 100%;
+  height: 22px;
+  margin: 8px 0 2px;
+  display: block;
+  overflow: visible;
+}
+.spark polyline {
+  fill: none;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.spark polyline.green { stroke: var(--ok, #3fcf8e); }
+.spark polyline.amber { stroke: var(--warn, #f0b429); }
+.spark polyline.red { stroke: var(--danger, #e5616a); }
+.spark polyline.grey { stroke: var(--border-strong); }
+/* ---- AI advisor drawer ---- */
+.btn.ai {
+  color: var(--accent);
+  border-color: rgba(45, 212, 191, 0.4);
+}
+.advisor {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.4);
+}
+.adv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.adv-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--accent);
+}
+.adv-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+.adv-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.adv-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+}
+.adv-text {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.adv-state {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.adv-state.err {
+  color: var(--danger);
+}
+.adv-foot {
+  margin: 0;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-faint);
+}
 .detail {
   font-size: 11.5px;
   color: var(--text-faint);

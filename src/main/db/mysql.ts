@@ -66,6 +66,39 @@ export class MySQLAdapter implements DbAdapter {
     await this.conn!.rollback()
   }
 
+  // Detected external cluster manager (memoized — it doesn't change per session).
+  private managedByValue?: string | null
+  private async detectManaged(): Promise<string | null> {
+    if (this.managedByValue !== undefined) return this.managedByValue
+    const count = async (sql: string): Promise<number> => {
+      try {
+        const [rows] = await this.conn!.query(sql)
+        const r = (rows as Record<string, unknown>[])[0]
+        return r ? Number(Object.values(r)[0]) : 0
+      } catch {
+        return 0
+      }
+    }
+    let aurora = 0
+    try {
+      const [rows] = await this.conn!.query('select @@aurora_version as v')
+      aurora = (rows as unknown[]).length ? 1 : 0
+    } catch {
+      aurora = 0
+    }
+    const rds = await count(
+      `select count(*) as c from information_schema.routines
+        where routine_schema = 'mysql' and routine_name like 'rds\\_%'`
+    )
+    const grp = await count('select count(*) as c from performance_schema.replication_group_members')
+    this.managedByValue =
+      aurora > 0 ? 'Amazon Aurora'
+      : rds > 0 ? 'Amazon RDS'
+      : grp > 0 ? 'MySQL Group Replication'
+      : null
+    return this.managedByValue
+  }
+
   async replicationStatus(): Promise<ReplicationStatus> {
     // Run a SHOW that may not exist on this server version; treat errors as "no rows".
     const tryRows = async (sql: string): Promise<Record<string, unknown>[]> => {
@@ -77,6 +110,7 @@ export class MySQLAdapter implements DbAdapter {
       }
     }
     try {
+      const managedBy = await this.detectManaged()
       // ---- replica side (8.0.22+ REPLICA wording, with legacy SLAVE fallback) ----
       let rep = await tryRows('SHOW REPLICA STATUS')
       if (!rep.length) rep = await tryRows('SHOW SLAVE STATUS')
@@ -96,7 +130,8 @@ export class MySQLAdapter implements DbAdapter {
           isPrimary: false,
           lagSeconds: lag == null ? null : Number(lag),
           position: file ? `${file}:${pos ?? ''}` : undefined,
-          detail
+          detail,
+          managedBy
         }
       }
       // ---- primary side: connected replicas + binlog position ----
@@ -117,7 +152,8 @@ export class MySQLAdapter implements DbAdapter {
         position,
         detail: replicas.length
           ? undefined
-          : ['No replica status and no connected replicas — standalone, or missing REPLICATION CLIENT privilege']
+          : ['No replica status and no connected replicas — standalone, or missing REPLICATION CLIENT privilege'],
+        managedBy
       }
     } catch (err) {
       return {

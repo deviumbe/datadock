@@ -268,6 +268,26 @@ const api = {
       invoke<{ sql: string; notes: string }>('ai:generateSql', req),
     explainQuery: (req: { driver: string; schema: Record<string, string[]>; sql: string }) =>
       invoke<string>('ai:explainQuery', req),
+    adviseReplication: (req: {
+      topology: string
+      warnSeconds: number
+      critSeconds: number
+      nodes: {
+        name: string
+        driver: string
+        assignedRole: string
+        detectedRole?: string
+        isPrimary?: boolean
+        lagSeconds?: number | null
+        position?: string
+        replicas?: { name: string; state?: string; lagSeconds?: number | null }[]
+        managedBy?: string | null
+        detail?: string[]
+        error?: string
+        unreachable?: boolean
+        notConnected?: boolean
+      }[]
+    }) => invoke<string>('ai:adviseReplication', req),
     fixQuery: (req: {
       driver: string
       schema: Record<string, string[]>

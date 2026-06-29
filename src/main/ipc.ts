@@ -329,6 +329,7 @@ export function registerIpc(): void {
   handle('ai:clearKey', () => ai.clearAiKey())
   handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
   handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
+  handle('ai:adviseReplication', (req: ai.AiReplicationAdviceRequest) => ai.adviseReplication(req))
   handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
   handle('ai:generateSeedData', (req: ai.AiSeedRequest) => ai.generateSeedData(req))
   handle('ai:describeSchema', (req: ai.AiDescribeRequest) => ai.describeSchema(req))

@@ -101,6 +101,9 @@ export class MongoAdapter implements DbAdapter {
       const detectedRole: ReplicationRole =
         self?.stateStr === 'ARBITER' ? 'arbiter' : selfIsPrimary ? 'primary' : 'replica'
 
+      // Atlas-hosted clusters expose member hostnames under *.mongodb.net.
+      const managedBy = members.some((m) => /\.mongodb\.net(:|$)/i.test(m.name)) ? 'MongoDB Atlas' : null
+
       return {
         detectedRole,
         isPrimary: selfIsPrimary,
@@ -109,7 +112,8 @@ export class MongoAdapter implements DbAdapter {
         detail: [
           `Replica set members: ${members.length}`,
           ...(self ? [`This node: ${self.stateStr}`] : [])
-        ]
+        ],
+        managedBy
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

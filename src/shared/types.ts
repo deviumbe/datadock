@@ -259,6 +259,13 @@ export interface ReplicationStatus {
   position?: string
   /** Extra human-readable detail lines for the node card. */
   detail?: string[]
+  /**
+   * Name of an external cluster manager detected on this node (e.g. "Amazon RDS",
+   * "Amazon Aurora", "MongoDB Atlas", "repmgr"), or null/undefined if none/unknown.
+   * Informational today; the future guard that refuses topology actions on
+   * orchestrated clusters keys off this.
+   */
+  managedBy?: string | null
   /** Set when status couldn't be read (e.g. insufficient privilege / standalone). */
   error?: string
 }
