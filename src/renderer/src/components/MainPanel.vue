@@ -24,6 +24,7 @@ import ChatPanel from './ChatPanel.vue'
 import RecordExplorer from './RecordExplorer.vue'
 import RelatedRecords from './RelatedRecords.vue'
 import PerformanceDashboard from './PerformanceDashboard.vue'
+import InvestigationsPanel from './InvestigationsPanel.vue'
 import DocsPanel from './DocsPanel.vue'
 import SmartSearchPanel from './SmartSearchPanel.vue'
 import AnalyticsPanel from './AnalyticsPanel.vue'
@@ -1007,6 +1008,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           @click="ui.toggleChatDock()"
         ><Icon name="sparkles" /> Chat</button>
         <button class="btn btn-ghost" title="Visual Query Builder" @click="tabsStore.openVisualQuery(activeConn.id)"><Icon name="diagram" /> Builder</button>
+        <button class="btn btn-ghost" title="AI Investigation Suite — slow queries, database health & schema understanding" @click="tabsStore.openInvestigations(activeConn.id)"><Icon name="sparkles" /> Investigate</button>
         <button class="btn btn-ghost" title="Analytics — charts & dashboards (⌘⇧A)" @click="tabsStore.openAnalytics(activeConn.id)"><Icon name="chart" /> Analytics</button>
         <button class="btn btn-ghost" @click="newQuery"><Icon name="plus" /> Query</button>
         <button class="btn" @click="disconnect">Disconnect</button>
@@ -1115,6 +1117,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)"><Icon name="plan" /> {{ planLoading ? 'Plan…' : 'Plan' }}</button>
                 <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive"><Icon name="format" /> Format</button>
                 <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')"><Icon name="sparkles" /> AI</button>
+                <button v-if="!nonSql" class="btn btn-ghost ai-btn" :disabled="!active.query.trim()" title="Investigate why this query is slow (AI, read-only)" @click="tabsStore.openInvestigations(active.connectionId, { type: 'query', sql: active.query })"><Icon name="sparkles" /> Investigate</button>
                 <button class="btn btn-ghost ai-btn" title="Chat with your data" @click="ui.openChatDock()"><Icon name="sparkles" /> Chat</button>
               </div>
               <div class="spacer" />
@@ -1481,6 +1484,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Performance dashboard tab -->
           <div v-else-if="active.kind === 'performance'" class="explorer-pane">
             <PerformanceDashboard :conn-id="activeConn.id" :driver="activeConn.driver" />
+          </div>
+
+          <!-- AI Investigation Suite -->
+          <div v-else-if="active.kind === 'investigations'" class="explorer-pane">
+            <InvestigationsPanel :conn-id="activeConn.id" :init="active.investigateInit" />
           </div>
 
           <!-- Database documentation tab -->

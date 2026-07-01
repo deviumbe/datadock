@@ -31,7 +31,7 @@ export const PROVIDER_META: Record<
   { label: string; needsKey: boolean; defaultModel: string; defaultBaseUrl?: string }
 > = {
   anthropic: { label: 'Anthropic (Claude)', needsKey: true, defaultModel: 'claude-opus-4-8' },
-  google: { label: 'Google (Gemini)', needsKey: true, defaultModel: 'gemini-2.0-flash' },
+  google: { label: 'Google (Gemini)', needsKey: true, defaultModel: 'gemini-2.5-flash' },
   mistral: { label: 'Mistral', needsKey: true, defaultModel: 'mistral-large-latest' },
   xai: { label: 'xAI (Grok)', needsKey: true, defaultModel: 'grok-2-latest' },
   ollama: {

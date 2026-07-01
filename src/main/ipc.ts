@@ -20,6 +20,7 @@ import type { HistoryEntry, RowVersionInput, Snippet, QueueAction, QueueJobState
 import type { MaskConfig } from '@shared/mask'
 import * as store from './storage'
 import * as db from './db'
+import * as investigations from './investigations'
 import * as io from './io'
 import * as history from './history'
 import * as sizeHistory from './sizeHistory'
@@ -36,7 +37,7 @@ import * as ai from './ai'
 import * as settings from './settings'
 import * as mcp from './mcp'
 import { prepareStatement } from './sqlGuard'
-import { testProvider } from './aiProviders'
+import { testProvider, listModels } from './aiProviders'
 import type { RunSql } from './aiProviders'
 import type { AiProvider, AppearanceSettings, McpSettings, QueryResult } from '@shared/types'
 
@@ -330,6 +331,7 @@ export function registerIpc(): void {
   handle('ai:generateSql', (req: ai.AiSqlRequest) => ai.generateSql(req))
   handle('ai:explainQuery', (req: ai.AiExplainRequest) => ai.explainQuery(req))
   handle('ai:adviseReplication', (req: ai.AiReplicationAdviceRequest) => ai.adviseReplication(req))
+  handle('ai:investigate', (req: investigations.InvestigateRequest) => investigations.investigate(req))
   handle('ai:fixQuery', (req: ai.AiFixRequest) => ai.fixQuery(req))
   handle('ai:generateSeedData', (req: ai.AiSeedRequest) => ai.generateSeedData(req))
   handle('ai:describeSchema', (req: ai.AiDescribeRequest) => ai.describeSchema(req))
@@ -356,6 +358,7 @@ export function registerIpc(): void {
     await testProvider(p)
     return true
   })
+  handle('settings:listModels', (p: AiProvider) => listModels(p))
 
   // MCP server (local AI-agent access to the user's databases; off by default)
   handle('mcp:get', () => mcp.getMcpInfo())

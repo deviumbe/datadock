@@ -62,6 +62,9 @@ export const useSettings = defineStore('settings', () => {
   function testProvider(p: AiProvider): Promise<boolean> {
     return window.api.settings.testProvider(p)
   }
+  function listModels(p: AiProvider): Promise<string[]> {
+    return window.api.settings.listModels(p)
+  }
 
   // ---- MCP server -----------------------------------------------------------
   const mcp = ref<McpInfo | null>(null)
@@ -98,6 +101,7 @@ export const useSettings = defineStore('settings', () => {
     setProviderConfig,
     setAppearance,
     testProvider,
+    listModels,
     mcp,
     loadMcp,
     setMcpEnabled,

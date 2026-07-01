@@ -217,6 +217,48 @@ async function openaiChat(
   return { answer: (final.choices[0]?.message?.content ?? '').trim(), steps }
 }
 
+/**
+ * List the chat models a provider currently offers, via its models endpoint
+ * (Anthropic `GET /v1/models`; the OpenAI-compatible providers — Google, Mistral,
+ * xAI, Ollama — `GET .../models`). Filtered to chat-capable ids and de-duped.
+ */
+export async function listModels(provider: AiProvider): Promise<string[]> {
+  const rp = resolveProvider(provider)
+  ensureReady(rp)
+  let ids: string[]
+  if (rp.provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: rp.apiKey! })
+    const page = await client.models.list({ limit: 100 })
+    ids = page.data.map((m) => m.id)
+  } else {
+    const page = await openaiClient(rp).models.list()
+    ids = page.data.map((m) => m.id)
+  }
+  return cleanModels(ids, provider)
+}
+
+/** Keep chat-capable model ids, drop embeddings/audio/image-only, de-dupe & sort. */
+function cleanModels(ids: string[], provider: AiProvider): string[] {
+  const keep: Partial<Record<AiProvider, RegExp>> = {
+    anthropic: /claude/i,
+    google: /gemini|gemma/i,
+    xai: /grok/i
+  }
+  const drop = /embed|whisper|tts|audio|moderation|aqa|imagen|image-generation|rerank|guard|saba|ocr/i
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of ids) {
+    const id = raw.replace(/^models\//, '') // Gemini ids come as "models/gemini-…"
+    const filter = provider !== 'ollama' ? keep[provider] : undefined
+    if (filter && !filter.test(id)) continue
+    if (drop.test(id)) continue
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out.sort()
+}
+
 /** Lightweight connectivity check used by the Settings "Test" button. */
 export async function testProvider(provider: AiProvider): Promise<void> {
   const rp = resolveProvider(provider)

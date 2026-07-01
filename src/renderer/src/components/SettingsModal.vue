@@ -29,6 +29,39 @@ const modelDraft = reactive<Record<string, string>>({})
 const urlDraft = reactive<Record<string, string>>({})
 const testState = reactive<Record<string, 'idle' | 'testing' | 'ok' | 'fail'>>({})
 const testMsg = reactive<Record<string, string>>({})
+// Auto-detected model lists per provider (populated by the "Detect" button).
+const models = reactive<Record<string, string[]>>({})
+const detectState = reactive<Record<string, 'idle' | 'loading' | 'fail'>>({})
+const detectMsg = reactive<Record<string, string>>({})
+
+// Turn raw provider/SDK errors into something a human can act on.
+function humanizeAiError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  if (/\b429\b|rate.?limit|quota|resource.?exhausted/i.test(msg))
+    return 'Rate limit / quota exceeded (429). Wait a moment, or check your plan & quota with the provider.'
+  if (/\b401\b|unauthor|invalid.*key|api key/i.test(msg))
+    return 'Unauthorized (401) — the API key looks invalid or lacks access.'
+  if (/\b403\b|permission|forbidden/i.test(msg))
+    return 'Forbidden (403) — the key is valid but not permitted for this model/endpoint.'
+  if (/\b404\b/.test(msg) || (/not.?found/i.test(msg) && /model/i.test(msg)))
+    return 'Model not found (404) — pick a different model (try Detect).'
+  if (/ECONNREFUSED|fetch failed|ENOTFOUND|network/i.test(msg))
+    return 'Could not reach the provider — check your connection (or that Ollama is running).'
+  return msg
+}
+
+async function detectModels(p: AiProvider): Promise<void> {
+  detectState[p] = 'loading'
+  detectMsg[p] = ''
+  try {
+    models[p] = await settings.listModels(p)
+    detectState[p] = 'idle'
+    if (!models[p].length) detectMsg[p] = 'No models returned for this provider.'
+  } catch (e) {
+    detectState[p] = 'fail'
+    detectMsg[p] = humanizeAiError(e)
+  }
+}
 
 const providers = computed(() => settings.providers)
 
@@ -59,7 +92,7 @@ async function test(p: AiProvider): Promise<void> {
     testMsg[p] = 'Connection OK'
   } catch (e) {
     testState[p] = 'fail'
-    testMsg[p] = e instanceof Error ? e.message : String(e)
+    testMsg[p] = humanizeAiError(e)
   }
 }
 
@@ -190,15 +223,32 @@ async function copy(text: string, what: string): Promise<void> {
                   <div class="row-inputs">
                     <input
                       class="input"
+                      :list="'models-' + p.provider"
                       :value="modelDraft[p.provider] ?? p.model"
                       @input="modelDraft[p.provider] = ($event.target as HTMLInputElement).value"
+                      @change="saveModel(p.provider)"
                       :placeholder="p.defaultModel"
                       @blur="saveModel(p.provider)"
                     />
+                    <datalist :id="'models-' + p.provider">
+                      <option v-for="m in models[p.provider] || []" :key="m" :value="m" />
+                    </datalist>
+                    <button
+                      class="btn"
+                      @click="detectModels(p.provider)"
+                      :disabled="detectState[p.provider] === 'loading'"
+                      title="Fetch the models this provider currently offers"
+                    >
+                      {{ detectState[p.provider] === 'loading' ? 'Detecting…' : 'Detect' }}
+                    </button>
                     <button class="btn" @click="test(p.provider)" :disabled="testState[p.provider] === 'testing'">
                       {{ testState[p.provider] === 'testing' ? 'Testing…' : 'Test' }}
                     </button>
                   </div>
+                  <p v-if="(models[p.provider]?.length ?? 0) > 0" class="hint-models">
+                    {{ models[p.provider].length }} models detected — pick one from the field's dropdown.
+                  </p>
+                  <p v-else-if="detectState[p.provider] === 'fail'" class="test fail">{{ detectMsg[p.provider] }}</p>
                 </div>
 
                 <p
@@ -538,6 +588,11 @@ h2 {
 }
 .test.fail {
   color: var(--danger);
+}
+.hint-models {
+  font-size: 11.5px;
+  margin-top: 4px;
+  color: var(--text-dim);
 }
 .setting {
   display: flex;

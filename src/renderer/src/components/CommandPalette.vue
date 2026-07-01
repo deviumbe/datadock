@@ -192,6 +192,48 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     {
+      label: 'AI Investigations',
+      icon: '✨',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId)
+      }
+    },
+    {
+      label: 'AI Health Check',
+      icon: '🩺',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'health' })
+      }
+    },
+    {
+      label: 'AI Root Cause Analysis',
+      icon: '🎯',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'rootCause' })
+      }
+    },
+    {
+      label: 'AI Data Quality Inspector',
+      icon: '🧹',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'dataQuality' })
+      }
+    },
+    {
+      label: 'AI Security & Privacy Audit',
+      icon: '🔐',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'security' })
+      }
+    },
+    {
+      label: 'AI Explain Database',
+      icon: '📖',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'schema' })
+      }
+    },
+    {
       label: 'Documentation',
       icon: '📄',
       handler: () => {

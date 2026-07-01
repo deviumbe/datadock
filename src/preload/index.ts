@@ -56,6 +56,8 @@ import type {
   TableStructure,
   Topology,
   ReplicationStatus,
+  InvestigationType,
+  InvestigationReport,
   Workspace
 } from '@shared/types'
 
@@ -288,6 +290,8 @@ const api = {
         notConnected?: boolean
       }[]
     }) => invoke<string>('ai:adviseReplication', req),
+    investigate: (req: { connectionId: string; type: InvestigationType; sql?: string; question?: string }) =>
+      invoke<InvestigationReport>('ai:investigate', req),
     fixQuery: (req: {
       driver: string
       schema: Record<string, string[]>
@@ -330,7 +334,8 @@ const api = {
       invoke<AppSettings>('settings:setProviderConfig', p, cfg),
     setAppearance: (a: Partial<AppearanceSettings>) =>
       invoke<AppSettings>('settings:setAppearance', a),
-    testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p)
+    testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p),
+    listModels: (p: AiProvider) => invoke<string[]>('settings:listModels', p)
   },
   mcp: {
     get: () => invoke<McpInfo>('mcp:get'),

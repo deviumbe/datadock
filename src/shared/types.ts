@@ -270,6 +270,45 @@ export interface ReplicationStatus {
   error?: string
 }
 
+// ---- AI Investigation Suite -------------------------------------------------
+
+/** Implemented investigation types (the suite grows by adding more). */
+export type InvestigationType =
+  | 'query'
+  | 'health'
+  | 'schema'
+  | 'rootCause'
+  | 'dataQuality'
+  | 'relationships'
+  | 'security'
+  | 'dashboard'
+  | 'workspace'
+
+export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info'
+
+/** One evidence-based finding produced by an investigation. */
+export interface InvestigationFinding {
+  severity: FindingSeverity
+  title: string
+  detail: string
+  /** Affected table, for a deep-link to open it. */
+  table?: string
+  /** Runnable remediation SQL, for copy / send-to-editor. */
+  sql?: string
+  /** Free-form expected improvement / impact estimate. */
+  estimatedImpact?: string
+}
+
+/** The structured result of an AI investigation (read-only, evidence-based). */
+export interface InvestigationReport {
+  summary: string
+  /** 0–100 overall score (health check only). */
+  score?: number
+  /** One-word rating that accompanies the score (e.g. "Excellent"). */
+  rating?: string
+  findings: InvestigationFinding[]
+}
+
 export interface ColumnMeta {
   name: string
   type?: string

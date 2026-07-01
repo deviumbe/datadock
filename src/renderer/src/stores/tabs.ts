@@ -8,6 +8,7 @@ import type {
   ErModel,
   FilterSpec,
   HistoryEntry,
+  InvestigationType,
   QueryResult,
   RowChangeSet,
   RowEdit,
@@ -41,6 +42,7 @@ export type TabKind =
   | 'envDiff'
   | 'redisQueues'
   | 'visualQuery'
+  | 'investigations'
 
 /** One stop in the record explorer: a single row identified by column = value. */
 export interface ExplorerFocus {
@@ -80,6 +82,9 @@ export interface Tab {
 
   // related-records overview: the root record whose relationships we aggregate
   relatedFocus?: ExplorerFocus
+
+  /** Investigations hub: a pending investigation to auto-run on open. */
+  investigateInit?: { type: InvestigationType; sql?: string; question?: string }
 
   // table-tab state
   primaryKeys: string[]
@@ -323,6 +328,17 @@ export const useTabs = defineStore('tabs', () => {
   function openPerformance(connId: string): Tab {
     const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'performance')
     const tab = existing ?? push(base(connId, 'performance', 'Performance'))
+    setActive(connId, tab.id)
+    return tab
+  }
+
+  function openInvestigations(
+    connId: string,
+    init?: { type: InvestigationType; sql?: string; question?: string }
+  ): Tab {
+    const existing = tabs.value.find((x) => x.connectionId === connId && x.kind === 'investigations')
+    const tab = existing ?? push(base(connId, 'investigations', 'Investigations'))
+    if (init) tab.investigateInit = init
     setActive(connId, tab.id)
     return tab
   }
@@ -1198,6 +1214,7 @@ export const useTabs = defineStore('tabs', () => {
     explorerGoTo,
     openTableFiltered,
     openPerformance,
+    openInvestigations,
     openDocs,
     openSearch,
     openAnalytics,
