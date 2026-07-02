@@ -32,7 +32,7 @@ function apply(): void {
 
 <template>
   <div class="filter-bar">
-    <button class="btn btn-ghost add" @click="add"><Icon name="filter" :size="13" /> Filter</button>
+    <button class="btn btn-ghost add" :disabled="!columns.length" @click="add"><Icon name="filter" :size="13" /> Filter</button>
     <div v-for="(f, i) in local" :key="i" class="filter">
       <select class="select sm" v-model="f.column" @change="apply">
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
@@ -61,12 +61,21 @@ function apply(): void {
   gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-soft);
-  flex-wrap: wrap;
+  /* Single row that scrolls horizontally — adding filters never changes the
+     bar's height, so the grid below never jumps. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 45px;
   background: var(--bg-app);
+}
+.filter-bar::-webkit-scrollbar {
+  height: 0;
 }
 .add {
   padding: 4px 9px;
   font-size: 12px;
+  flex-shrink: 0;
 }
 .filter {
   display: flex;
@@ -76,6 +85,7 @@ function apply(): void {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: 3px;
+  flex-shrink: 0;
 }
 .sm {
   padding: 3px 6px;

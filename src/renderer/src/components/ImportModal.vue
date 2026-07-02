@@ -58,7 +58,7 @@ async function runCsv(): Promise<void> {
 </script>
 
 <template>
-  <Modal title="Import" @close="emit('close')">
+  <Modal title="Import" :busy="busy" @close="emit('close')">
     <div class="seg">
       <button :class="{ on: mode === 'sql' }" @click="mode = 'sql'">SQL script</button>
       <button :class="{ on: mode === 'csv' }" @click="mode = 'csv'">CSV → table</button>

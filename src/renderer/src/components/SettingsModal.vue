@@ -2,14 +2,14 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useSettings } from '../stores/settings'
 import { useUi } from '../stores/ui'
-import type { AiProvider } from '@shared/types'
+import type { AiProvider, SshAuthMethod, SshProfile, SshProfileInput } from '@shared/types'
 import deviumLogo from '../assets/devium-logo.png'
 
 const settings = useSettings()
 const ui = useUi()
 const emit = defineEmits<{ close: [] }>()
 
-type Section = 'ai' | 'appearance' | 'mcp' | 'about'
+type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'about'
 const section = ref<Section>('ai')
 
 const appVersion = ref('0.1.0')
@@ -116,6 +116,72 @@ async function copy(text: string, what: string): Promise<void> {
   }
 }
 
+// SSH tunnel profiles
+const sshProfiles = computed(() => settings.sshProfiles)
+
+function blankSshDraft(): SshProfileInput {
+  return { name: '', host: '', port: 22, user: '', authMethod: 'key', keyPath: '' }
+}
+const sshDraft = ref<SshProfileInput>(blankSshDraft())
+const sshEditingId = ref<string | null>(null)
+const sshEditingHasSecret = ref(false)
+const sshSaving = ref(false)
+const sshError = ref('')
+
+function editSshProfile(p: SshProfile): void {
+  sshEditingId.value = p.id
+  sshEditingHasSecret.value = !!p.hasPassphrase || !!p.hasPassword
+  sshDraft.value = {
+    id: p.id,
+    name: p.name,
+    host: p.host,
+    port: p.port ?? 22,
+    user: p.user,
+    authMethod: p.authMethod,
+    keyPath: p.keyPath ?? ''
+  }
+}
+function newSshProfile(): void {
+  sshEditingId.value = null
+  sshEditingHasSecret.value = false
+  sshDraft.value = blankSshDraft()
+}
+function cancelSshEdit(): void {
+  newSshProfile()
+}
+async function pickSshKey(): Promise<void> {
+  const path = await window.api.pickFile()
+  if (path) sshDraft.value.keyPath = path
+}
+const canSaveSsh = computed(
+  () => !!sshDraft.value.name.trim() && !!sshDraft.value.host.trim() && !!sshDraft.value.user.trim()
+)
+async function saveSshProfile(): Promise<void> {
+  if (!canSaveSsh.value) return
+  sshSaving.value = true
+  sshError.value = ''
+  try {
+    await settings.saveSshProfile({ ...sshDraft.value, id: sshEditingId.value ?? undefined })
+    newSshProfile()
+  } catch (e) {
+    sshError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    sshSaving.value = false
+  }
+}
+async function deleteSshProfile(p: SshProfile): Promise<void> {
+  sshError.value = ''
+  try {
+    await settings.deleteSshProfile(p.id)
+    if (sshEditingId.value === p.id) newSshProfile()
+  } catch (e) {
+    sshError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+function setSshAuth(m: SshAuthMethod): void {
+  sshDraft.value.authMethod = m
+}
+
 </script>
 
 <template>
@@ -126,6 +192,7 @@ async function copy(text: string, what: string): Promise<void> {
           <div class="nav-title">Settings</div>
           <button :class="{ on: section === 'ai' }" @click="section = 'ai'">✨ AI Providers</button>
           <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'">🎨 Appearance</button>
+          <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'">🔐 SSH Tunnels</button>
           <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'">🔌 MCP Server</button>
           <button :class="{ on: section === 'about' }" @click="section = 'about'">ℹ️ About</button>
           <div class="nav-spacer" />
@@ -265,6 +332,109 @@ async function copy(text: string, what: string): Promise<void> {
                   <option :value="1000">1000</option>
                 </select>
               </div>
+            </div>
+          </section>
+
+          <!-- SSH tunnel profiles -->
+          <section v-else-if="section === 'ssh'">
+            <h2>SSH Tunnels</h2>
+            <p class="lead">
+              Save reusable SSH connections — host, user and key — once, then pick one from a
+              dropdown when creating a database connection. Passphrases and passwords are encrypted
+              with your OS keychain and never leave this machine.
+            </p>
+
+            <div class="ssh-list" v-if="sshProfiles.length">
+              <div
+                v-for="p in sshProfiles"
+                :key="p.id"
+                class="ssh-item"
+                :class="{ editing: sshEditingId === p.id }"
+              >
+                <div class="ssh-item-main">
+                  <span class="ssh-item-name">{{ p.name }}</span>
+                  <span class="ssh-item-detail">
+                    {{ p.user }}@{{ p.host }}<span v-if="p.port && p.port !== 22">:{{ p.port }}</span>
+                    · {{ p.authMethod === 'key' ? 'private key' : p.authMethod === 'password' ? 'password' : 'agent' }}
+                  </span>
+                </div>
+                <div class="ssh-item-actions">
+                  <button class="btn btn-ghost" @click="editSshProfile(p)">Edit</button>
+                  <button class="btn btn-ghost danger" @click="deleteSshProfile(p)">Delete</button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="empty-hint">No SSH profiles yet — add one below.</p>
+
+            <div class="ssh-editor">
+              <h3>{{ sshEditingId ? 'Edit profile' : 'New profile' }}</h3>
+              <div class="form-grid">
+                <div class="field span2">
+                  <label>Name</label>
+                  <input class="input" v-model="sshDraft.name" placeholder="Production bastion" />
+                </div>
+                <div class="field span2-host">
+                  <label>SSH host</label>
+                  <input class="input" v-model="sshDraft.host" placeholder="bastion.example.com" />
+                </div>
+                <div class="field">
+                  <label>Port</label>
+                  <input class="input" type="number" v-model.number="sshDraft.port" />
+                </div>
+                <div class="field">
+                  <label>User</label>
+                  <input class="input" v-model="sshDraft.user" placeholder="ubuntu" />
+                </div>
+                <div class="field">
+                  <label>Authentication</label>
+                  <div class="seg">
+                    <button :class="{ on: sshDraft.authMethod === 'key' }" @click="setSshAuth('key')">Key</button>
+                    <button :class="{ on: sshDraft.authMethod === 'password' }" @click="setSshAuth('password')">Password</button>
+                    <button :class="{ on: sshDraft.authMethod === 'agent' }" @click="setSshAuth('agent')">Agent</button>
+                  </div>
+                </div>
+
+                <template v-if="sshDraft.authMethod === 'key'">
+                  <div class="field span2">
+                    <label>Private key file</label>
+                    <div class="key-row">
+                      <input class="input" v-model="sshDraft.keyPath" placeholder="~/.ssh/id_ed25519" />
+                      <button class="btn" type="button" @click="pickSshKey">Browse…</button>
+                    </div>
+                  </div>
+                  <div class="field span2">
+                    <label>Key passphrase</label>
+                    <input
+                      class="input"
+                      type="password"
+                      v-model="sshDraft.passphrase"
+                      autocomplete="new-password"
+                      :placeholder="sshEditingHasSecret ? '•••••• (unchanged)' : 'optional'"
+                    />
+                  </div>
+                </template>
+
+                <div v-else-if="sshDraft.authMethod === 'password'" class="field span2">
+                  <label>SSH password</label>
+                  <input
+                    class="input"
+                    type="password"
+                    v-model="sshDraft.password"
+                    autocomplete="new-password"
+                    :placeholder="sshEditingHasSecret ? '•••••• (unchanged)' : ''"
+                  />
+                </div>
+
+                <p v-else class="ssh-note span2">Uses your running SSH agent (SSH_AUTH_SOCK).</p>
+              </div>
+
+              <div class="ssh-editor-actions">
+                <button class="btn btn-primary" :disabled="!canSaveSsh || sshSaving" @click="saveSshProfile">
+                  {{ sshEditingId ? 'Save changes' : 'Add profile' }}
+                </button>
+                <button v-if="sshEditingId" class="btn btn-ghost" @click="cancelSshEdit">Cancel</button>
+              </div>
+              <p v-if="sshError" class="ssh-err">{{ sshError }}</p>
             </div>
           </section>
 
@@ -709,5 +879,96 @@ h2 {
   margin-top: 18px;
   font-size: 11px;
   color: var(--text-faint);
+}
+
+/* SSH tunnel profiles */
+.ssh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.ssh-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+.ssh-item.editing {
+  border-color: var(--accent);
+}
+.ssh-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ssh-item-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.ssh-item-detail {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+.ssh-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ssh-item-actions .danger:hover {
+  color: var(--danger, #e5616a);
+}
+.empty-hint {
+  color: var(--text-faint);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.ssh-editor {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.ssh-editor h3 {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--text);
+}
+.ssh-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.span2 {
+  grid-column: 1 / -1;
+}
+.span2-host {
+  grid-column: 1 / 2;
+}
+.key-row {
+  display: flex;
+  gap: 8px;
+}
+.key-row .input {
+  flex: 1;
+}
+.ssh-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+.ssh-err {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--danger, #e5616a);
 }
 </style>

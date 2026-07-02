@@ -1,15 +1,21 @@
 <script setup lang="ts">
-defineProps<{ title: string; wide?: boolean }>()
+const props = defineProps<{ title: string; wide?: boolean; busy?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+
+// While an operation is running, ignore backdrop clicks and the ✕ so a stray
+// click can't abandon it. The footer's own buttons control closing instead.
+function requestClose(): void {
+  if (!props.busy) emit('close')
+}
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="overlay" @mousedown.self="emit('close')">
+    <div class="overlay" @mousedown.self="requestClose">
       <div class="modal" :class="{ wide }">
         <header class="modal-head">
           <h2>{{ title }}</h2>
-          <button class="btn-ghost close" @click="emit('close')">✕</button>
+          <button class="btn-ghost close" :disabled="busy" @click="requestClose">✕</button>
         </header>
         <div class="modal-body">
           <slot />
@@ -65,6 +71,10 @@ const emit = defineEmits<{ close: [] }>()
   width: 26px;
   height: 26px;
   border-radius: var(--radius-sm);
+}
+.close:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .modal-body {
   padding: 18px;

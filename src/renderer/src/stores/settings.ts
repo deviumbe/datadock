@@ -5,7 +5,9 @@ import type {
   AppSettings,
   AppearanceSettings,
   McpInfo,
-  ProviderInfo
+  ProviderInfo,
+  SshProfile,
+  SshProfileInput
 } from '@shared/types'
 
 export const useSettings = defineStore('settings', () => {
@@ -35,6 +37,7 @@ export const useSettings = defineStore('settings', () => {
     () => data.value?.appearance ?? { fontScale: 1, density: 'comfortable', pageSize: 200, theme: 'dark' }
   )
   const pageSize = computed(() => appearance.value.pageSize)
+  const sshProfiles = computed<SshProfile[]>(() => data.value?.sshProfiles ?? [])
   /** The active provider is usable (has a key, or is keyless like Ollama). */
   const aiReady = computed(() => {
     const p = providers.value.find((x) => x.provider === activeProvider.value)
@@ -61,6 +64,12 @@ export const useSettings = defineStore('settings', () => {
   }
   function testProvider(p: AiProvider): Promise<boolean> {
     return window.api.settings.testProvider(p)
+  }
+  async function saveSshProfile(input: SshProfileInput): Promise<void> {
+    apply(await window.api.settings.saveSshProfile(input))
+  }
+  async function deleteSshProfile(id: string): Promise<void> {
+    apply(await window.api.settings.deleteSshProfile(id))
   }
 
   // ---- MCP server -----------------------------------------------------------
@@ -91,6 +100,7 @@ export const useSettings = defineStore('settings', () => {
     activeProvider,
     appearance,
     pageSize,
+    sshProfiles,
     aiReady,
     setActiveProvider,
     setProviderKey,
@@ -98,6 +108,8 @@ export const useSettings = defineStore('settings', () => {
     setProviderConfig,
     setAppearance,
     testProvider,
+    saveSshProfile,
+    deleteSshProfile,
     mcp,
     loadMcp,
     setMcpEnabled,

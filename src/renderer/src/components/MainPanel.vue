@@ -12,6 +12,7 @@ import FilterBar from './FilterBar.vue'
 import ExportModal from './ExportModal.vue'
 import ExportDbModal from './ExportDbModal.vue'
 import ImportModal from './ImportModal.vue'
+import TransferModal from './TransferModal.vue'
 import NamePrompt from './NamePrompt.vue'
 import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
@@ -573,6 +574,18 @@ function formatActive(): void {
 const activeConn = computed(() =>
   ws.activeConnectionId ? ws.findConnection(ws.activeConnectionId) : undefined
 )
+
+const refreshingTables = ref(false)
+async function refreshTableList(): Promise<void> {
+  const conn = activeConn.value
+  if (!conn || refreshingTables.value) return
+  refreshingTables.value = true
+  try {
+    await ws.refreshTables(conn.id)
+  } finally {
+    refreshingTables.value = false
+  }
+}
 // Standalone chat session for the slide-out dock, tied to the active connection.
 const dockChat = computed(() =>
   activeConn.value ? tabsStore.dockChatFor(activeConn.value.id) : null
@@ -604,15 +617,6 @@ const activeFkColumns = computed<Record<string, { toTable: string; toColumn: str
   }
   return map
 })
-
-// Lazily load the FK graph whenever a table tab on this connection is shown.
-watch(
-  () => (active.value?.kind === 'table' ? active.value.connectionId : null),
-  (cid) => {
-    if (cid && !ws.erModels[cid]) void ws.loadErModel(cid).catch(() => {})
-  },
-  { immediate: true }
-)
 
 // Open the related row when a foreign-key arrow is clicked in the grid.
 function onFkNavigate(column: string, value: unknown): void {
@@ -685,6 +689,15 @@ const connTabs = computed(() =>
 )
 const active = computed(() =>
   ws.activeConnectionId ? tabsStore.activeTab(ws.activeConnectionId) : null
+)
+
+// Lazily load the FK graph whenever a table tab on this connection is shown.
+watch(
+  () => (active.value?.kind === 'table' ? active.value.connectionId : null),
+  (cid) => {
+    if (cid && !ws.erModels[cid]) void ws.loadErModel(cid).catch(() => {})
+  },
+  { immediate: true }
 )
 
 const filteredTables = computed(() => {
@@ -920,6 +933,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <div class="tables" v-show="!ui.tablesCollapsed" :style="{ width: ui.tablesWidth + 'px' }">
           <div class="tables-head">
             <input class="input filter" v-model="tableFilter" placeholder="Filter tables…" />
+            <button class="icon-btn sm" title="Refresh tables" :disabled="!activeConn || refreshingTables" @click="refreshTableList"><Icon name="refresh" :size="14" :class="{ spin: refreshingTables }" /></button>
             <button v-if="!nonSql && !readOnly" class="icon-btn sm" title="New table" @click="createTableOpen = true"><Icon name="plus" :size="14" /></button>
             <button class="icon-btn sm" title="Collapse list" @click="ui.toggleTables()"><Icon name="chevronLeft" :size="14" /></button>
           </div>
@@ -1015,7 +1029,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true"><Icon name="download" /> Export</button>
               </div>
             </div>
-            <div v-if="active.running" class="loading-bar" />
+            <div class="loading-bar" :class="{ active: active.running }" />
             <div class="editor-host">
               <SqlEditor
                 v-model="active.query"
@@ -1099,29 +1113,29 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   <button class="btn btn-ghost tb-icon" @click="tabsStore.reloadTable(active)" title="Refresh"><Icon name="refresh" /></button>
                 </div>
                 <div v-if="tabsStore.editsAllowed(active)" class="tb-group">
-                  <button class="btn btn-ghost" @click="tabsStore.addInsertRow(active)"><Icon name="plus" /> Add row</button>
+                  <button class="btn btn-ghost" title="Add row" @click="tabsStore.addInsertRow(active)"><Icon name="plus" /> <span class="lbl">Add row</span></button>
                   <button
-                    v-if="active.selection.length > 0"
                     class="btn btn-ghost"
+                    :disabled="active.selection.length === 0"
                     title="Set a column to one value across the selected rows"
                     @click="bulkOpen = true"
-                  ><Icon name="pencil" /> Bulk edit ({{ active.selection.length }})</button>
+                  ><Icon name="pencil" /> <span class="lbl">Bulk edit<span v-if="active.selection.length"> ({{ active.selection.length }})</span></span></button>
                   <button
-                    v-if="active.selection.length > 0"
                     class="btn btn-ghost"
+                    :disabled="active.selection.length === 0"
                     title="Generate INSERT/UPDATE SQL from the selected rows"
                     @click="openGenerateSqlMenu"
-                  ><Icon name="code" /> Generate SQL</button>
+                  ><Icon name="code" /> <span class="lbl">Generate SQL</span></button>
                 </div>
                 <div class="spacer" />
                 <div class="tb-group">
-                  <template v-if="tabsStore.dirtyCount(active) > 0">
-                    <span class="dirty-info">{{ tabsStore.dirtyCount(active) }} unsaved</span>
-                    <button class="btn btn-ghost" @click="tabsStore.discardEdits(active)">Discard</button>
-                    <button class="btn btn-primary" :disabled="active.running" @click="tabsStore.commit(active)">Save ⌘S</button>
+                  <template v-if="tabsStore.editsAllowed(active)">
+                    <span class="dirty-info" :class="{ idle: !tabsStore.dirtyCount(active) }">{{ tabsStore.dirtyCount(active) }} unsaved</span>
+                    <button class="btn btn-ghost" :disabled="!tabsStore.dirtyCount(active)" @click="tabsStore.discardEdits(active)">Discard</button>
+                    <button class="btn btn-primary" :disabled="!tabsStore.dirtyCount(active) || active.running" @click="tabsStore.commit(active)">Save ⌘S</button>
                   </template>
-                  <button v-if="canResultToTable" class="btn btn-ghost tb-icon" title="Save this result as a new table" @click="toTableOpen = true"><Icon name="tableExport" /></button>
-                  <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true"><Icon name="download" /> Export</button>
+                  <button class="btn btn-ghost tb-icon" :disabled="!canResultToTable" title="Save this result as a new table" @click="toTableOpen = true"><Icon name="tableExport" /></button>
+                  <button class="btn btn-ghost" :disabled="!active.result" title="Export" @click="exportOpen = true"><Icon name="download" /> <span class="lbl">Export</span></button>
                 </div>
               </template>
               <template v-else>
@@ -1130,7 +1144,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <span v-if="active.running" class="status-mini">Working…</span>
               </template>
             </div>
-            <div v-if="active.running" class="loading-bar" />
+            <div class="loading-bar" :class="{ active: active.running }" />
 
             <!-- Structure view -->
             <StructurePanel
@@ -1151,8 +1165,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <button class="table-note-edit" title="Edit note" @click="noteTarget = active.table">Edit</button>
               </div>
               <FilterBar
-                v-if="active.result"
-                :columns="active.result.columns"
+                :columns="active.result?.columns ?? []"
                 :filters="active.filters"
                 @apply="(f) => onApplyFilters(active!, f)"
               />
@@ -1444,6 +1457,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :tables="ws.tables"
         @close="ui.importOpen = false"
         @done="ws.refreshTables(activeConn.id)"
+      />
+      <TransferModal
+        v-if="ui.transferOpen"
+        :conn-id="activeConn.id"
+        :tables="ws.tables"
+        @close="ui.transferOpen = false"
       />
       <NamePrompt
         v-if="saveSnippetOpen"
@@ -1994,6 +2013,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   background: var(--bg-hover);
   color: var(--text);
 }
+.spin {
+  animation: tables-spin 0.7s linear infinite;
+}
+@keyframes tables-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .table-list {
   overflow-y: auto;
   padding: 0 6px 12px;
@@ -2181,15 +2208,46 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 
 .editor-pane {
   flex: 1;
-  display: grid;
-  grid-template-rows: auto minmax(110px, 0.4fr) 1fr;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.editor-pane > .toolbar,
+.editor-pane > .loading-bar,
+.editor-pane > .lints {
+  flex: none;
+}
+/* Editor and results split ~0.4 : 1, matching the prior grid, but robust to the
+   always-present loading bar and the optional lints panel between them. */
+.editor-pane > .editor-host {
+  flex: 2 1 0;
+  min-height: 110px;
+}
+.editor-pane > .results {
+  flex: 5 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 .table-pane {
   flex: 1;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  /* Establish a sizing context so the toolbar can compact its buttons to
+     icon-only based on the panel width (not the whole window). */
+  container-type: inline-size;
+}
+.table-pane > .toolbar,
+.table-pane > .loading-bar,
+.table-pane > .data-head {
+  flex: none;
+}
+.table-pane > .table-body,
+.table-pane > .structure {
+  flex: 1;
+  min-height: 0;
 }
 .table-note {
   display: flex;
@@ -2273,11 +2331,42 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  /* One fixed-height row that scrolls horizontally if it overflows — buttons
+     never wrap to a second line, so toggling them never shifts the grid. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 50px;
   gap: 7px 8px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
+}
+.toolbar::-webkit-scrollbar {
+  height: 6px;
+}
+.toolbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.toolbar .tb-group,
+.toolbar .pager,
+.toolbar .btn,
+.toolbar .select,
+.toolbar .pg-btn {
+  flex-shrink: 0;
+}
+/* When the data panel gets narrow, collapse labelled buttons to icon-only so
+   they stay on one row instead of overflowing off-screen. Tooltips keep them
+   discoverable; a scrollbar is the last resort at extreme widths. */
+@container (max-width: 600px) {
+  .toolbar .btn .lbl {
+    display: none;
+  }
+  .toolbar .btn {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
 }
 /* Keep controls full-size and let the row wrap on narrow windows rather than
    squishing or clipping them — calmer than a crowded single line. */
@@ -2289,14 +2378,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   font-size: 11px;
 }
 /* Thin indeterminate progress under the toolbar while a query/table is busy. */
+/* Always present as a 2px track (transparent when idle) so toggling the
+   loading state never adds/removes layout — only the animation appears. */
 .loading-bar {
   position: relative;
   flex: none;
   height: 2px;
   overflow: hidden;
+  background: transparent;
+}
+.loading-bar.active {
   background: var(--accent-soft);
 }
-.loading-bar::after {
+.loading-bar.active::after {
   content: '';
   position: absolute;
   top: 0;
@@ -2417,6 +2511,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .dirty-info {
   color: var(--warn);
   font-size: 12px;
+  white-space: nowrap;
+}
+/* Keep its width reserved when there are no edits, so Save/Discard don't slide. */
+.dirty-info.idle {
+  visibility: hidden;
 }
 .btn.is-saved {
   color: var(--accent);

@@ -25,6 +25,29 @@ function open(conn: ConnectionConfig): void {
   ws.connectAndOpen(conn.id)
 }
 
+const STATE_LABEL: Record<string, string> = {
+  disconnected: 'Disconnected',
+  connecting: 'Connecting…',
+  connected: 'Connected',
+  reconnecting: 'Reconnecting…',
+  unhealthy: 'Connection lost',
+  error: 'Connection failed'
+}
+
+function stateTitle(id: string): string {
+  const state = ws.connStates[id] || 'disconnected'
+  let title = STATE_LABEL[state] ?? state
+  const err = ws.connErrors[id]
+  if ((state === 'unhealthy' || state === 'error') && err) title += ` — ${err}`
+  const at = ws.connVerifiedAt[id]
+  if (state === 'connected' && at) {
+    const secs = Math.max(0, Math.round((Date.now() - at) / 1000))
+    title += secs < 5 ? ' · verified just now' : ` · verified ${secs}s ago`
+  }
+  if (state === 'unhealthy' || state === 'error') title += ' · click to reconnect'
+  return title
+}
+
 const DRIVER_LABEL: Record<string, string> = {
   postgres: 'PG',
   mysql: 'SQL',
@@ -94,7 +117,7 @@ const DRIVER_LABEL: Record<string, string> = {
                 <span
                   class="state"
                   :class="ws.connStates[conn.id] || 'disconnected'"
-                  :title="ws.connStates[conn.id] || 'disconnected'"
+                  :title="stateTitle(conn.id)"
                 />
                 <div class="row-actions" @click.stop>
                   <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)">⎘</button>
@@ -240,8 +263,13 @@ const DRIVER_LABEL: Record<string, string> = {
   background: var(--ok);
   box-shadow: 0 0 6px var(--ok);
 }
-.state.connecting {
+.state.connecting,
+.state.reconnecting {
   background: var(--warn);
+  animation: pulse 0.9s infinite;
+}
+.state.unhealthy {
+  background: var(--danger);
   animation: pulse 0.9s infinite;
 }
 .state.error {

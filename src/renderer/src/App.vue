@@ -11,6 +11,7 @@ import NamePrompt from './components/NamePrompt.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
+import TaskTray from './components/TaskTray.vue'
 import { useUpdates } from './stores/updates'
 import type { ConnectionConfig, Environment, Project } from '@shared/types'
 
@@ -275,6 +276,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
     <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
     <UpdateNotice />
+    <TaskTray />
   </div>
 </template>
 

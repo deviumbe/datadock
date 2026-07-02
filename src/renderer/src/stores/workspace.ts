@@ -3,6 +3,7 @@ import { reactive, ref, computed } from 'vue'
 import type {
   ConnectionConfig,
   ConnectionState,
+  ConnStatePayload,
   ErModel,
   Project,
   TableInfo,
@@ -14,8 +15,33 @@ export const useWorkspace = defineStore('workspace', () => {
   const projects = ref<Project[]>([])
   const expandedProjects = reactive<Set<string>>(new Set())
   const expandedEnvs = reactive<Set<string>>(new Set())
+  // Connection state is owned by the main process and pushed here — this map is
+  // a pure mirror, never set optimistically.
   const connStates = reactive<Record<string, ConnectionState>>({})
+  const connErrors = reactive<Record<string, string | undefined>>({})
+  const connVerifiedAt = reactive<Record<string, number | undefined>>({})
   const txn = reactive<Record<string, boolean>>({}) // active transaction per connection
+
+  function applyConnState(p: ConnStatePayload): void {
+    const prev = connStates[p.id]
+    connStates[p.id] = p.state
+    connErrors[p.id] = p.error
+    if (p.verifiedAt) connVerifiedAt[p.id] = p.verifiedAt
+    // When a connection recovers (heal or manual reconnect) and it's the one in
+    // view, pull a fresh table list — the cached one may be stale or empty.
+    if (p.state === 'connected' && prev && prev !== 'connected') {
+      if (activeConnectionId.value === p.id) void refreshTables(p.id)
+    }
+    if (p.state === 'disconnected') delete tablesPerConn[p.id]
+  }
+
+  /** Subscribe to pushed state + pull the current snapshot once. */
+  function watchConnStates(): void {
+    window.api.db.onConnState?.(applyConnState)
+    void window.api.db.connStates?.().then((states) => {
+      for (const s of states) applyConnState(s)
+    })
+  }
 
   const activeConnectionId = ref<string | null>(null)
   const error = ref<string | null>(null)
@@ -184,31 +210,31 @@ export const useWorkspace = defineStore('workspace', () => {
   async function connectAndOpen(id: string): Promise<void> {
     error.value = null
     activeConnectionId.value = id
+    // Healthy and already open — just (re)load the table list.
     if (connStates[id] === 'connected') {
       await refreshTables(id)
       return
     }
-    connStates[id] = 'connecting'
+    // A heal is already in flight — let the pushed state drive the UI.
+    if (connStates[id] === 'connecting' || connStates[id] === 'reconnecting') return
+    // Anything else (disconnected / unhealthy / error) means: (re)connect.
+    // State transitions arrive via the pushed conn:state stream.
     try {
       await window.api.db.connect(id)
-      connStates[id] = 'connected'
       // Re-open the tabs that were open for this connection last session. Done
       // synchronously here (before any await) so it runs ahead of the reactive
       // "open a default Query tab when a connection has none" fallback.
       useTabs().restoreForConnection(id)
       await refreshTables(id)
     } catch (e) {
-      connStates[id] = 'error'
       error.value = e instanceof Error ? e.message : String(e)
     }
   }
 
   async function disconnect(id: string): Promise<void> {
     await window.api.db.disconnect(id)
-    connStates[id] = 'disconnected'
+    // State ('disconnected') and the table-cache clear arrive via applyConnState.
     txn[id] = false
-    // Clear the cached table list for this connection.
-    delete tablesPerConn[id]
   }
 
   async function refreshTables(id: string): Promise<void> {
@@ -255,11 +281,15 @@ export const useWorkspace = defineStore('workspace', () => {
     }
   }
 
+  watchConnStates()
+
   return {
     projects,
     expandedProjects,
     expandedEnvs,
     connStates,
+    connErrors,
+    connVerifiedAt,
     txn,
     beginTxn,
     commitTxn,

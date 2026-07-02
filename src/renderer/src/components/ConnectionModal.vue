@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
 import Modal from './Modal.vue'
+import { useSettings } from '../stores/settings'
 import { DRIVERS, PG_FAMILY, type ConnectionConfig, type DriverType } from '@shared/types'
+
+const settings = useSettings()
+const sshProfiles = computed(() => settings.sshProfiles)
+onMounted(() => {
+  if (!settings.loaded) void settings.load()
+})
 
 const props = defineProps<{
   environmentId: string
@@ -17,7 +24,7 @@ function blank(): ConnectionConfig {
   return {
     id: '',
     name: '',
-    driver: 'postgres',
+    driver: '' as DriverType,
     color: COLORS[0],
     host: 'localhost',
     port: 5432,
@@ -39,24 +46,16 @@ const form = reactive<ConnectionConfig>({ ...blank(), ...(props.config ?? {}) })
 // Track presence of stored secrets so we can show "unchanged" placeholders.
 const hadPassword = ref(!!props.config?.hasPassword)
 const hadToken = ref(!!props.config?.hasToken)
-const hadSshPassword = ref(!!props.config?.hasSshPassword)
-const hadSshPassphrase = ref(!!props.config?.hasSshPassphrase)
 
 const isNetwork = computed(() =>
   ['mysql', 'mssql', 'redis', ...PG_FAMILY].includes(form.driver)
 )
 const isRedis = computed(() => form.driver === 'redis')
-const canTunnel = computed(() => !['sqlite', 'mongodb'].includes(form.driver))
-
-async function pickKey(): Promise<void> {
-  const path = await window.api.pickFile()
-  if (path) form.sshKeyPath = path
-}
+const canTunnel = computed(() => !!form.driver && !['sqlite', 'mongodb'].includes(form.driver))
 
 watch(
   () => form.driver,
-  (driver: DriverType, prev) => {
-    if (!prev) return
+  (driver: DriverType) => {
     const def = DRIVERS.find((d) => d.type === driver)
     if (def?.defaultPort) form.port = def.defaultPort
   }
@@ -80,6 +79,9 @@ async function test(): Promise<void> {
 
 const canSave = computed(() => {
   if (!form.name.trim()) return false
+  if (!form.driver) return false
+  // An SSH tunnel needs a profile (or legacy inline host on older connections).
+  if (form.sshEnabled && !form.sshProfileId && !form.sshHost) return false
   if (form.driver === 'sqlite') return !!form.filePath
   if (form.driver === 'influxdb') return !!form.url && !!form.org
   if (form.driver === 'mongodb') return !!form.url
@@ -102,6 +104,7 @@ function save(): void {
       <div class="field">
         <label>Driver</label>
         <select class="select" v-model="form.driver">
+          <option value="" disabled>Select a database type…</option>
           <option v-for="d in DRIVERS" :key="d.type" :value="d.type">{{ d.label }}</option>
         </select>
       </div>
@@ -232,64 +235,23 @@ function save(): void {
         <span>Connect over SSH tunnel</span>
       </label>
 
-      <div v-if="form.sshEnabled" class="form-grid ssh-grid">
-        <div class="field span2-host">
-          <label>SSH host</label>
-          <input class="input" v-model="form.sshHost" placeholder="bastion.example.com" />
-        </div>
-        <div class="field">
-          <label>SSH port</label>
-          <input class="input" type="number" v-model.number="form.sshPort" />
-        </div>
-        <div class="field">
-          <label>SSH user</label>
-          <input class="input" v-model="form.sshUser" placeholder="ubuntu" />
-        </div>
-        <div class="field">
-          <label>Authentication</label>
-          <select class="select" v-model="form.sshAuthMethod">
-            <option value="key">Private key</option>
-            <option value="password">Password</option>
-            <option value="agent">SSH agent</option>
+      <div v-if="form.sshEnabled" class="ssh-grid">
+        <div v-if="sshProfiles.length" class="field">
+          <label>SSH profile</label>
+          <select class="select" v-model="form.sshProfileId">
+            <option :value="undefined" disabled>Select a profile…</option>
+            <option v-for="p in sshProfiles" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.user }}@{{ p.host }})
+            </option>
           </select>
+          <p class="ssh-note">
+            Manage profiles in <strong>Settings → SSH Tunnels</strong>. The database host/port are
+            reached <em>from the SSH server</em> — e.g. <code>127.0.0.1</code> for a DB running there.
+          </p>
         </div>
-
-        <template v-if="form.sshAuthMethod === 'key'">
-          <div class="field span2">
-            <label>Private key file</label>
-            <div class="key-row">
-              <input class="input" v-model="form.sshKeyPath" placeholder="~/.ssh/id_ed25519" />
-              <button class="btn" type="button" @click="pickKey">Browse…</button>
-            </div>
-          </div>
-          <div class="field span2">
-            <label>Key passphrase</label>
-            <input
-              class="input"
-              type="password"
-              v-model="form.sshPassphrase"
-              autocomplete="new-password"
-              :placeholder="hadSshPassphrase ? '•••••• (unchanged)' : 'optional'"
-            />
-          </div>
-        </template>
-
-        <div v-else-if="form.sshAuthMethod === 'password'" class="field span2">
-          <label>SSH password</label>
-          <input
-            class="input"
-            type="password"
-            v-model="form.sshPassword"
-            autocomplete="new-password"
-            :placeholder="hadSshPassword ? '•••••• (unchanged)' : ''"
-          />
-        </div>
-
-        <p v-else class="ssh-note span2">Uses your running SSH agent (SSH_AUTH_SOCK).</p>
-
-        <p class="ssh-note span2">
-          The host/port above are reached <em>from the SSH server</em> — e.g. host
-          <code>127.0.0.1</code> for a DB running on that server.
+        <p v-else class="ssh-note">
+          No SSH profiles yet. Create one in <strong>Settings → SSH Tunnels</strong>, then select it
+          here.
         </p>
       </div>
     </div>
