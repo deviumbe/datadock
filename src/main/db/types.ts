@@ -27,7 +27,7 @@ export interface DbAdapter {
   connect(): Promise<void>
   disconnect(): Promise<void>
   /** Cheap liveness probe (e.g. `select 1`). Rejects if the link is dead. */
-  ping(): Promise<void>
+  ping?(): Promise<void>
   /**
    * Set by the manager after connect. Driver-level "connection lost" events
    * (pool errors, socket close) call this so the manager can mark the
@@ -87,6 +87,9 @@ export interface DbAdapter {
   dropTables?(tables: TableInfo[], opts: DropTableOptions): Promise<void>
   /** Empty one or more tables (TRUNCATE / DELETE), honoring FK options. */
   truncateTables?(tables: TableInfo[], opts: TruncateOptions): Promise<void>
+
+  /** Live replication status for the topology monitor (engines with replication). */
+  replicationStatus?(): Promise<import('@shared/types').ReplicationStatus>
 
   // Optional server-level capabilities (see DRIVER_CAPS).
   listDatabases?(): Promise<string[]>

@@ -71,6 +71,9 @@ export const useSettings = defineStore('settings', () => {
   async function deleteSshProfile(id: string): Promise<void> {
     apply(await window.api.settings.deleteSshProfile(id))
   }
+  function listModels(p: AiProvider): Promise<string[]> {
+    return window.api.settings.listModels(p)
+  }
 
   // ---- MCP server -----------------------------------------------------------
   const mcp = ref<McpInfo | null>(null)
@@ -110,6 +113,7 @@ export const useSettings = defineStore('settings', () => {
     testProvider,
     saveSshProfile,
     deleteSshProfile,
+    listModels,
     mcp,
     loadMcp,
     setMcpEnabled,

@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { buildMarkdown, slug, type DocModel, type DocTable, type DocColumn } from '../lib/docs'
 import { fmtBytes } from '../lib/perf'
 import { isSqlDriver } from '@shared/types'
+import Icon from './Icon.vue'
 
 const props = defineProps<{ connId: string; connName: string; driver: string }>()
 
@@ -16,6 +17,31 @@ const model = ref<DocModel | null>(null)
 const copied = ref(false)
 
 const markdown = computed(() => (model.value ? buildMarkdown(model.value) : ''))
+
+// AI: write a one-line purpose description for every table.
+const aiBusy = ref(false)
+const aiHasKey = ref(false)
+window.api.ai.hasKey().then((v) => (aiHasKey.value = v)).catch(() => (aiHasKey.value = false))
+
+async function describeAi(): Promise<void> {
+  if (!model.value || aiBusy.value) return
+  aiBusy.value = true
+  error.value = ''
+  try {
+    const descs = await window.api.ai.describeSchema({
+      driver: props.driver,
+      tables: model.value.tables.map((t) => ({ name: t.name, columns: t.columns.map((c) => c.name) }))
+    })
+    model.value = {
+      ...model.value,
+      tables: model.value.tables.map((t) => ({ ...t, description: descs[t.name] ?? t.description }))
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    aiBusy.value = false
+  }
+}
 
 async function generate(): Promise<void> {
   if (!isSql.value) return
@@ -98,6 +124,15 @@ function keyOf(c: DocColumn): string {
         <span class="sub" v-if="model">{{ model.tables.length }} tables · {{ model.totalBytes ? fmtBytes(model.totalBytes) : '—' }}</span>
       </div>
       <div class="spacer" />
+      <button
+        v-if="aiHasKey"
+        class="btn btn-ghost ai-describe"
+        :disabled="loading || aiBusy || !model"
+        title="Let AI write a one-line purpose for every table"
+        @click="describeAi"
+      >
+        <Icon name="sparkles" :size="13" /> {{ aiBusy ? 'Describing…' : 'Describe with AI' }}
+      </button>
       <button class="btn btn-ghost" :disabled="loading || !model" @click="copyMd">
         {{ copied ? '✓ Copied' : '⧉ Copy Markdown' }}
       </button>
@@ -135,6 +170,7 @@ function keyOf(c: DocColumn): string {
             <template v-if="t.bytes != null"> · {{ fmtBytes(t.bytes) }}</template>
           </span>
         </div>
+        <p v-if="t.description" class="tbl-desc"><Icon name="sparkles" :size="12" /> {{ t.description }}</p>
 
         <table class="cols">
           <thead>
@@ -278,6 +314,26 @@ function keyOf(c: DocColumn): string {
 .tbl-meta {
   font-size: 12px;
   color: var(--text-faint);
+}
+.tbl-desc {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.tbl-desc :deep(.dd-icon) {
+  margin-top: 2px;
+  flex: none;
+  color: var(--accent);
+}
+.ai-describe {
+  color: var(--accent);
+}
+.ai-describe:hover {
+  background: var(--accent-soft);
 }
 .cols {
   width: 100%;

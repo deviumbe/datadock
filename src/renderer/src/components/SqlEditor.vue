@@ -18,13 +18,39 @@ import {
   indentOnInput
 } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
-import { autocompletion, closeBrackets } from '@codemirror/autocomplete'
+import {
+  autocompletion,
+  closeBrackets,
+  type CompletionContext,
+  type CompletionResult
+} from '@codemirror/autocomplete'
 
 const props = defineProps<{
   modelValue: string
   placeholder?: string
   schema?: Record<string, string[]>
+  /** Saved snippets to offer as autocomplete (typing the name expands the SQL). */
+  snippets?: { name: string; sql: string }[]
 }>()
+
+// Completion source for saved snippets — merges with the SQL schema completions.
+// Reads props.snippets at call time so it always reflects the latest list.
+function snippetCompletions(ctx: CompletionContext): CompletionResult | null {
+  const list = props.snippets ?? []
+  if (!list.length) return null
+  const word = ctx.matchBefore(/[\w-]+/)
+  if (!word || (word.from === word.to && !ctx.explicit)) return null
+  return {
+    from: word.from,
+    options: list.map((s) => ({
+      label: s.name,
+      type: 'snippet',
+      detail: 'snippet',
+      info: s.sql.length > 240 ? s.sql.slice(0, 240) + '…' : s.sql,
+      apply: s.sql
+    }))
+  }
+}
 const emit = defineEmits<{ 'update:modelValue': [v: string]; run: [sql?: string] }>()
 
 const host = ref<HTMLDivElement>()
@@ -118,6 +144,7 @@ onMounted(() => {
         indentOnInput(),
         autocompletion(),
         sqlConf.of(sqlExt()),
+        EditorState.languageData.of(() => [{ autocomplete: snippetCompletions }]),
         syntaxHighlighting(highlight),
         theme,
         cmPlaceholder(props.placeholder ?? ''),

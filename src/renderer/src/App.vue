@@ -7,13 +7,16 @@ import { useSettings } from './stores/settings'
 import Sidebar from './components/Sidebar.vue'
 import MainPanel from './components/MainPanel.vue'
 import ConnectionModal from './components/ConnectionModal.vue'
+import TopologyPanel from './components/TopologyPanel.vue'
+import TopologyEditorModal from './components/TopologyEditorModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
 import TaskTray from './components/TaskTray.vue'
 import { useUpdates } from './stores/updates'
-import type { ConnectionConfig, Environment, Project } from '@shared/types'
+import type { ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 
 const ws = useWorkspace()
 const tabs = useTabs()
@@ -92,6 +95,9 @@ function handleMenu(action: string): void {
     case 'snapshots':
       ui.snapshotsOpen = true
       break
+    case 'recoverDeleted':
+      ui.recoverOpen = true
+      break
     case 'columnSearch':
       ui.columnSearchOpen = true
       break
@@ -144,6 +150,9 @@ function handleMenu(action: string): void {
     case 'exportDb':
       ui.exportDbOpen = true
       break
+    case 'cloneSqlite':
+      ui.cloneSqliteOpen = true
+      break
     case 'disconnect':
       void ws.disconnect(id)
       break
@@ -182,6 +191,33 @@ function openEditConnection(conn: ConnectionConfig, environmentId: string): void
 async function saveConnection(environmentId: string, config: ConnectionConfig): Promise<void> {
   await ws.saveConnection(environmentId, config)
   connModal.value = false
+}
+
+// ---- replication topologies -------------------------------------------------
+const topoModal = ref(false)
+const topoEditing = ref<Topology | undefined>(undefined)
+function openNewTopology(): void {
+  topoEditing.value = undefined
+  topoModal.value = true
+}
+function openEditTopology(t: Topology): void {
+  topoEditing.value = t
+  topoModal.value = true
+}
+async function saveTopology(t: Topology): Promise<void> {
+  await ws.saveTopology(t)
+  topoModal.value = false
+}
+async function deleteTopology(t: Topology): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Delete topology',
+    message: `Delete "${t.name}"? Connections themselves are not affected.`,
+    confirmLabel: 'Delete',
+    danger: true
+  })
+  if (!ok) return
+  if (ui.topologyId === t.id) ui.closeTopology()
+  await ws.deleteTopology(t.id)
 }
 
 // ---- name prompt ------------------------------------------------------------
@@ -256,8 +292,23 @@ function onDuplicateConnection(c: ConnectionConfig): void {
       @edit-connection="openEditConnection"
       @delete-connection="onDeleteConnection"
       @duplicate-connection="onDuplicateConnection"
+      @new-topology="openNewTopology"
+      @edit-topology="openEditTopology"
+      @delete-topology="deleteTopology"
     />
     <MainPanel />
+
+    <TopologyPanel
+      v-if="ui.topologyId"
+      :topology-id="ui.topologyId"
+      @edit="openEditTopology"
+    />
+    <TopologyEditorModal
+      v-if="topoModal"
+      :topology="topoEditing"
+      @save="saveTopology"
+      @close="topoModal = false"
+    />
 
     <ConnectionModal
       v-if="connModal"
@@ -275,6 +326,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     />
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
     <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+    <ConfirmModal />
     <UpdateNotice />
     <TaskTray />
   </div>
@@ -286,6 +338,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
   grid-template-columns: v-bind(sidebarWidth) 1fr;
   height: 100%;
   width: 100%;
+  position: relative;
   transition: grid-template-columns 0.18s ease;
 }
 .sidebar-slot {

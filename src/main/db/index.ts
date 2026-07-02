@@ -7,6 +7,11 @@ import { MSSQLAdapter } from './mssql'
 import { MongoAdapter } from './mongodb'
 import { InfluxAdapter } from './influxdb'
 import { RedisAdapter } from './redis'
+import { OracleAdapter } from './oracle'
+import { DuckDBAdapter } from './duckdb'
+import { ClickHouseAdapter } from './clickhouse'
+import { SnowflakeAdapter } from './snowflake'
+import { BigQueryAdapter } from './bigquery'
 import { openTunnel, type Tunnel } from './tunnel'
 import { resolveSshProfile } from '../settings'
 
@@ -168,6 +173,16 @@ export function createAdapter(config: ConnectionConfig): DbAdapter {
       return new SQLiteAdapter(config)
     case 'mssql':
       return new MSSQLAdapter(config)
+    case 'oracle':
+      return new OracleAdapter(config)
+    case 'duckdb':
+      return new DuckDBAdapter(config)
+    case 'clickhouse':
+      return new ClickHouseAdapter(config)
+    case 'snowflake':
+      return new SnowflakeAdapter(config)
+    case 'bigquery':
+      return new BigQueryAdapter(config)
     case 'mongodb':
       return new MongoAdapter(config)
     case 'redis':
@@ -271,7 +286,9 @@ async function verify(id: string): Promise<void> {
   const conn = live.get(id)
   if (!conn || conn.healing) return
   try {
-    await conn.adapter.ping()
+    // Adapters without a cheap probe (some newer engines) are assumed alive here;
+    // a failing real query will still mark them unhealthy on its own.
+    await conn.adapter.ping?.()
     if (conn.state !== 'connected') setState(id, 'connected')
     else conn.verifiedAt = Date.now()
   } catch (err) {

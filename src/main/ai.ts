@@ -90,6 +90,86 @@ export async function generateSql(req: AiSqlRequest): Promise<AiSqlResult> {
   return parseSql(await complete({ system, user }))
 }
 
+// ---- AI test-data generation ------------------------------------------------
+
+export interface AiSeedRequest {
+  driver: string
+  table: string
+  columns: { name: string; type?: string }[]
+  count: number
+  hint?: string
+}
+export interface AiSeedResult {
+  rows: Record<string, unknown>[]
+}
+
+export async function generateSeedData(req: AiSeedRequest): Promise<AiSeedResult> {
+  const d = dialect(req.driver)
+  const colList = req.columns
+    .map((c) => `- ${c.name}${c.type ? ` (${c.type})` : ''}`)
+    .join('\n')
+  const n = Math.max(1, Math.min(100, Math.floor(req.count) || 1))
+  const system =
+    `You generate realistic, internally-consistent sample data for seeding a ${d} table. ` +
+    `Return ONLY a JSON array of exactly ${n} row objects, each keyed by the given column names. ` +
+    `Make values plausible and varied — real-looking names, emails, companies, addresses, prices, ` +
+    `and ISO-8601 strings for dates/timestamps. Respect each column's type. Use null only where a ` +
+    `value is genuinely optional. Do not include any column not listed. No markdown, no commentary.`
+  const user =
+    `Table: ${req.table}\nColumns:\n${colList}\n\nGenerate ${n} rows as a JSON array.` +
+    (req.hint ? `\nExtra guidance: ${req.hint}` : '')
+  return { rows: parseRows(await complete({ system, user })) }
+}
+
+// ---- AI schema docs (one-line purpose per table) ----------------------------
+
+export interface AiDescribeRequest {
+  driver: string
+  tables: { name: string; columns: string[] }[]
+}
+
+export async function describeSchema(req: AiDescribeRequest): Promise<Record<string, string>> {
+  const d = dialect(req.driver)
+  const list = req.tables.map((t) => `${t.name}(${t.columns.join(', ')})`).join('\n')
+  const system =
+    `You document ${d} database schemas. For each table, infer its purpose from its name and ` +
+    `columns (and relationships between tables) and write ONE concise, plain-English sentence ` +
+    `describing what it stores. Don't restate the column list. ` +
+    `Respond with ONLY a JSON object mapping each table name to its description string. No markdown.`
+  const user = `Tables:\n${list}`
+  const text = await complete({ system, user })
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  try {
+    const obj = JSON.parse(cleaned)
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(obj)) if (typeof v === 'string') out[k] = v.trim()
+      return out
+    }
+  } catch {
+    /* ignore — return nothing rather than break the docs */
+  }
+  return {}
+}
+
+function parseRows(text: string): Record<string, unknown>[] {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  const tryParse = (s: string): Record<string, unknown>[] | null => {
+    try {
+      const data = JSON.parse(s)
+      if (Array.isArray(data)) return data.filter((r) => r && typeof r === 'object')
+    } catch {
+      /* fall through */
+    }
+    return null
+  }
+  const direct = tryParse(cleaned)
+  if (direct) return direct
+  // Models sometimes add prose around the array — extract the first [...] block.
+  const m = cleaned.match(/\[[\s\S]*\]/)
+  return (m && tryParse(m[0])) || []
+}
+
 export interface AiExplainRequest {
   driver: string
   schema: Record<string, string[]>
@@ -104,6 +184,84 @@ export async function explainQuery(req: AiExplainRequest): Promise<string> {
     `and call out any obvious performance concerns (missing indexes, full scans, cartesian joins). ` +
     `Be concise — a few short paragraphs or bullet points. Do not restate the SQL verbatim.`
   const user = `Database schema:\n${schemaText(req.schema)}\n\nQuery:\n${req.sql}`
+  return (await complete({ system, user })).trim()
+}
+
+// ---- replication advisor ----------------------------------------------------
+
+export interface AiReplicaNode {
+  name: string
+  driver: string
+  assignedRole: string
+  detectedRole?: string
+  isPrimary?: boolean
+  lagSeconds?: number | null
+  position?: string
+  replicas?: { name: string; state?: string; lagSeconds?: number | null }[]
+  managedBy?: string | null
+  detail?: string[]
+  error?: string
+  unreachable?: boolean
+  notConnected?: boolean
+}
+export interface AiReplicationAdviceRequest {
+  topology: string
+  warnSeconds: number
+  critSeconds: number
+  nodes: AiReplicaNode[]
+}
+
+function fmtSeconds(s?: number | null): string {
+  if (s == null) return 'unknown'
+  if (s < 1) return `${Math.round(s * 1000)}ms`
+  if (s < 90) return `${s.toFixed(1)}s`
+  return `${Math.round(s / 60)}m`
+}
+
+function replicaNodeText(n: AiReplicaNode): string {
+  const bits: string[] = [`- ${n.name} [${n.driver}] — assigned role: ${n.assignedRole}`]
+  if (n.notConnected) {
+    bits.push('  status: NOT CONNECTED in the client (no live reading)')
+  } else if (n.unreachable) {
+    bits.push(`  status: UNREACHABLE${n.error ? ` (${n.error})` : ''}`)
+  } else {
+    if (n.detectedRole) bits.push(`  engine-detected role: ${n.detectedRole}${n.isPrimary ? ' (primary)' : ''}`)
+    if (!n.isPrimary) bits.push(`  apply lag: ${fmtSeconds(n.lagSeconds)}`)
+    if (n.position) bits.push(`  position: ${n.position}`)
+    if (n.replicas?.length)
+      bits.push(
+        `  downstream replicas: ${n.replicas
+          .map((r) => `${r.name} (${r.state ?? '?'}, lag ${fmtSeconds(r.lagSeconds)})`)
+          .join('; ')}`
+      )
+    if (n.managedBy) bits.push(`  managed by: ${n.managedBy}`)
+    if (n.error) bits.push(`  note: ${n.error}`)
+    if (n.detail?.length) bits.push(`  detail: ${n.detail.join(' · ')}`)
+  }
+  return bits.join('\n')
+}
+
+export async function adviseReplication(req: AiReplicationAdviceRequest): Promise<string> {
+  const anyManaged = req.nodes.some((n) => n.managedBy)
+  const system =
+    `You are a senior database reliability engineer (SRE) embedded in a database client. ` +
+    `You are given a live snapshot of a replication topology. Diagnose it for the operator:\n` +
+    `1) Give a one-line overall health verdict.\n` +
+    `2) For each problem, state the most likely cause and concrete, SAFE next steps.\n` +
+    `Rules: when you suggest a command, give the exact command in backticks but make clear it is ADVISORY — ` +
+    `the operator runs it; this tool executes nothing. Prefer non-destructive diagnostics first. ` +
+    `NEVER recommend a manual failover/promotion (pg_promote, rs.stepDown, STOP/RESET REPLICA, REPLICAOF NO ONE) ` +
+    `on a managed or orchestrated cluster (Amazon RDS/Aurora, MongoDB Atlas, Patroni, repmgr, MySQL Group ` +
+    `Replication) — there, tell them to use the platform's own failover tooling instead. ` +
+    `Lag thresholds for this topology: amber ≥ ${req.warnSeconds}s, red ≥ ${req.critSeconds}s. ` +
+    `Remember MySQL Seconds_Behind_Source is unreliable (0 on idle, NULL when a thread stops). ` +
+    `Be concise and practical; use short markdown sections and bullets. If everything is healthy, say so in a sentence or two.`
+  const user =
+    `Topology: ${req.topology}\n` +
+    (anyManaged
+      ? `(One or more nodes run on a managed/orchestrated platform — do not advise manual failover on those.)\n`
+      : '') +
+    `\nNodes:\n${req.nodes.map(replicaNodeText).join('\n')}`
   return (await complete({ system, user })).trim()
 }
 
@@ -403,6 +561,8 @@ export interface AiChatRequest {
   driver: string
   schema: Record<string, string[]>
   history: ChatTurn[]
+  /** Opaque id echoed back with streamed deltas so the renderer can route them. */
+  streamId?: string
 }
 export interface AiChatResult {
   answer: string
@@ -412,9 +572,14 @@ export interface AiChatResult {
 /**
  * Answer questions about the live database. The caller supplies `runSql`, a
  * read-only query runner bound to the active connection; the model may call it
- * to inspect real data before replying.
+ * to inspect real data before replying. `onDelta` (optional) receives answer
+ * text as it streams.
  */
-export async function chat(req: AiChatRequest, runSql: RunSql): Promise<AiChatResult> {
+export async function chat(
+  req: AiChatRequest,
+  runSql: RunSql,
+  onDelta?: (text: string) => void
+): Promise<AiChatResult> {
   const d = dialect(req.driver)
   const system =
     `You are a helpful data analyst embedded in a database client, connected to a ${d} database. ` +
@@ -423,5 +588,5 @@ export async function chat(req: AiChatRequest, runSql: RunSql): Promise<AiChatRe
     `do this whenever a question depends on the actual data. Never try to modify data. ` +
     `When you state figures, base them on query results, not guesses. Keep answers concise and ` +
     `include small result tables or numbers where helpful.\n\nDatabase schema:\n${schemaText(req.schema)}`
-  return chatWithData({ system, history: req.history, runSql })
+  return chatWithData({ system, history: req.history, runSql, onDelta })
 }

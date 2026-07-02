@@ -2,7 +2,7 @@ import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { randomUUID } from 'crypto'
-import type { ConnectionConfig, Project, Workspace } from '@shared/types'
+import type { ConnectionConfig, Project, Topology, Workspace } from '@shared/types'
 
 const SECRET_FIELDS = ['password', 'token', 'sshPassword', 'sshPassphrase'] as const
 
@@ -67,7 +67,8 @@ export function workspaceForRenderer(): Workspace {
         ...e,
         connections: e.connections.map(sanitizeConnection)
       }))
-    }))
+    })),
+    topologies: workspace.topologies ?? []
   }
 }
 
@@ -152,6 +153,25 @@ export function renameProject(id: string, name: string): Workspace {
 
 export function deleteProject(id: string): Workspace {
   workspace.projects = workspace.projects.filter((p) => p.id !== id)
+  persist()
+  return workspaceForRenderer()
+}
+
+// ---- replication topologies -------------------------------------------------
+
+/** Create or update a topology (upsert by id; a blank id mints a new one). */
+export function saveTopology(topology: Topology): Workspace {
+  workspace.topologies ??= []
+  const incoming: Topology = { ...topology, id: topology.id || randomUUID() }
+  const idx = workspace.topologies.findIndex((t) => t.id === incoming.id)
+  if (idx >= 0) workspace.topologies[idx] = incoming
+  else workspace.topologies.push(incoming)
+  persist()
+  return workspaceForRenderer()
+}
+
+export function deleteTopology(id: string): Workspace {
+  workspace.topologies = (workspace.topologies ?? []).filter((t) => t.id !== id)
   persist()
   return workspaceForRenderer()
 }

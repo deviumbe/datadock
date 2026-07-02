@@ -15,7 +15,7 @@ import type {
 } from '@shared/types'
 import { DbAdapter, now, toNum, assertIdent } from './types'
 import { buildClauses, buildErModel, buildSnapshot, groupIndexes, indexName } from './clauses'
-import type { ErModel, SchemaSnapshot } from '@shared/types'
+import type { ErModel, ReplicaLink, ReplicationStatus, SchemaSnapshot } from '@shared/types'
 
 // Return numeric/bigint columns as strings instead of JS numbers where lossy,
 // and dates as ISO strings so they serialize cleanly over IPC.
@@ -104,6 +104,90 @@ export class PostgresAdapter implements DbAdapter {
     const total = p.totalCount
     const idle = p.idleCount
     return { max: 4, total, idle, active: Math.max(0, total - idle), waiting: p.waitingCount }
+  }
+
+  // Detected external cluster manager (memoized — it doesn't change per session).
+  private managedByValue?: string | null
+  private async detectManaged(): Promise<string | null> {
+    if (this.managedByValue !== undefined) return this.managedByValue
+    try {
+      const r = await this.pool!.query(
+        `select (select count(*) from pg_proc where proname = 'aurora_version') as aurora,
+                (select count(*) from pg_roles where rolname = 'rds_superuser') as rds,
+                (select count(*) from pg_extension where extname = 'repmgr') as repmgr`
+      )
+      const row = r.rows[0] ?? {}
+      this.managedByValue =
+        Number(row.aurora) > 0 ? 'Amazon Aurora'
+        : Number(row.rds) > 0 ? 'Amazon RDS'
+        : Number(row.repmgr) > 0 ? 'repmgr'
+        : null
+    } catch {
+      this.managedByValue = null
+    }
+    return this.managedByValue
+  }
+
+  async replicationStatus(): Promise<ReplicationStatus> {
+    try {
+      const managedBy = await this.detectManaged()
+      const rec = await this.pool!.query('select pg_is_in_recovery() as r')
+      if (rec.rows[0]?.r === true) {
+        // This node is a standby — report apply lag against the upstream.
+        const r = await this.pool!.query(
+          `select pg_last_wal_replay_lsn()::text as lsn,
+                  extract(epoch from (now() - pg_last_xact_replay_timestamp()))::float8 as lag`
+        )
+        const row = r.rows[0] ?? {}
+        const detail: string[] = []
+        const wr = await this.pool!
+          .query(`select sender_host, status from pg_stat_wal_receiver limit 1`)
+          .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+        if (wr.rows[0]?.sender_host)
+          detail.push(`Upstream ${wr.rows[0].sender_host} · ${wr.rows[0].status ?? '?'}`)
+        return {
+          detectedRole: 'replica',
+          isPrimary: false,
+          lagSeconds: row.lag == null ? null : Number(row.lag),
+          position: (row.lsn as string) ?? undefined,
+          detail,
+          managedBy
+        }
+      }
+      // This node is a primary — enumerate the standbys streaming from it.
+      const rep = await this.pool!.query(
+        `select coalesce(nullif(application_name, ''), host(client_addr), 'replica') as name,
+                state,
+                extract(epoch from replay_lag)::float8 as replay_lag_s,
+                pg_wal_lsn_diff(sent_lsn, replay_lsn) as lag_bytes
+           from pg_stat_replication`
+      )
+      const cur = await this.pool!
+        .query(`select pg_current_wal_lsn()::text as lsn`)
+        .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+      const replicas: ReplicaLink[] = rep.rows.map((r) => ({
+        name: String(r.name),
+        state: r.state as string,
+        lagSeconds: r.replay_lag_s == null ? null : Number(r.replay_lag_s),
+        lagBytes: r.lag_bytes == null ? null : Number(r.lag_bytes)
+      }))
+      return {
+        detectedRole: 'primary',
+        isPrimary: true,
+        replicas,
+        position: (cur.rows[0]?.lsn as string) ?? undefined,
+        detail: replicas.length
+          ? undefined
+          : ['No streaming standbys visible (none connected, or missing pg_monitor privilege)'],
+        managedBy
+      }
+    } catch (err) {
+      return {
+        detectedRole: 'unknown',
+        isPrimary: false,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   async listTables(): Promise<TableInfo[]> {

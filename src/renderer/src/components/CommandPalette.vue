@@ -164,6 +164,13 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     {
+      label: 'Clone to SQLite',
+      icon: '🗄',
+      handler: () => {
+        if (connId) ui.cloneSqliteOpen = true
+      }
+    },
+    {
       label: 'ER Diagram',
       icon: '🔗',
       handler: () => {
@@ -189,6 +196,48 @@ const allItems = computed<PaletteItem[]>(() => {
       icon: '📊',
       handler: () => {
         if (connId) tabsStore.openPerformance(connId)
+      }
+    },
+    {
+      label: 'AI Investigations',
+      icon: '✨',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId)
+      }
+    },
+    {
+      label: 'AI Health Check',
+      icon: '🩺',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'health' })
+      }
+    },
+    {
+      label: 'AI Root Cause Analysis',
+      icon: '🎯',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'rootCause' })
+      }
+    },
+    {
+      label: 'AI Data Quality Inspector',
+      icon: '🧹',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'dataQuality' })
+      }
+    },
+    {
+      label: 'AI Security & Privacy Audit',
+      icon: '🔐',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'security' })
+      }
+    },
+    {
+      label: 'AI Explain Database',
+      icon: '📖',
+      handler: () => {
+        if (connId) tabsStore.openInvestigations(connId, { type: 'schema' })
       }
     },
     {
