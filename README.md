@@ -241,6 +241,12 @@ npm run build
 
 > **macOS note:** SQLite uses a native module (`better-sqlite3`) compiled for Electron. If you hit a build error about missing C++ headers, reinstall the Command Line Tools: `xcode-select --install`.
 
+> **`Error: Electron uninstall` on `npm run dev`?** The `electron` package downloads its ~100 MB binary in a `postinstall` step that can be skipped (e.g. if `npm install` ran with `--ignore-scripts`, or the download failed). Fetch it manually, then carry on:
+> ```bash
+> node node_modules/electron/install.js   # download the Electron binary
+> npm run rebuild                          # recompile better-sqlite3 if SQLite errors
+> ```
+
 ---
 
 ## ⌨️ Keyboard shortcuts
