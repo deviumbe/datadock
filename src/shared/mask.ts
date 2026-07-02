@@ -67,6 +67,14 @@ export const MASK_LABELS: Record<MaskType, string> = Object.fromEntries(
   MASK_OPTIONS.map((o) => [o.value, o.label])
 ) as Record<MaskType, string>
 
+/** Total number of columns that will be anonymized by a config. */
+export function countMasked(config: MaskConfig | undefined): number {
+  if (!config) return 0
+  let n = 0
+  for (const cols of Object.values(config)) n += Object.keys(cols).length
+  return n
+}
+
 /** Best-effort default mask for a column, from its name & type. Never masks IDs. */
 export function guessMask(col: string, _type: string): MaskType {
   const n = col.toLowerCase()

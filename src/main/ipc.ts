@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow } from 'electron'
 import type {
   AlterOp,
   ConnectionConfig,
@@ -10,8 +10,10 @@ import type {
   IpcResult,
   RowChangeSet,
   TableDumpSpec,
+  IoProgress,
   TableInfo,
   TableQueryOptions,
+  TransferMode,
   TruncateOptions
 } from '@shared/types'
 import type { HistoryEntry, Snippet, QueueAction, QueueJobState } from '@shared/types'
@@ -32,7 +34,13 @@ import * as mcp from './mcp'
 import { prepareStatement } from './sqlGuard'
 import { testProvider } from './aiProviders'
 import type { RunSql } from './aiProviders'
-import type { AiProvider, AppearanceSettings, McpSettings, QueryResult } from '@shared/types'
+import type {
+  AiProvider,
+  AppearanceSettings,
+  McpSettings,
+  QueryResult,
+  SshProfileInput
+} from '@shared/types'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
 
@@ -71,7 +79,44 @@ function handle<T>(channel: string, fn: Handler<T>): void {
   })
 }
 
+/** Broadcast export/transfer progress to all windows, tagged with the op id. */
+function progressEmitter(opId: string): (p: Omit<IoProgress, 'opId'>) => void {
+  return (p) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('io:progress', { opId, ...p })
+    }
+  }
+}
+
+/** Cancellable background ops: one AbortController per op id, cancelled via io:cancel. */
+const aborters = new Map<string, AbortController>()
+async function withAbort<T>(
+  opId: string | undefined,
+  fn: (signal?: AbortSignal) => Promise<T>
+): Promise<T> {
+  if (!opId) return fn(undefined)
+  const ac = new AbortController()
+  aborters.set(opId, ac)
+  try {
+    return await fn(ac.signal)
+  } finally {
+    aborters.delete(opId)
+  }
+}
+
 export function registerIpc(): void {
+  // Connection liveness: broadcast every state transition to all windows, let
+  // the heartbeat run only while a window is focused, and start it.
+  db.onConnState((p) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('conn:state', p)
+    }
+  })
+  db.setActivityProbe(() =>
+    BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.isFocused())
+  )
+  db.startHeartbeat()
+
   // Workspace tree
   handle('workspace:get', () => store.workspaceForRenderer())
   handle('workspace:addProject', (name: string) => store.addProject(name))
@@ -104,6 +149,7 @@ export function registerIpc(): void {
     return true
   })
   handle('db:isConnected', (id: string) => db.isConnected(id))
+  handle('db:connStates', () => db.allStates())
   handle('db:listTables', (id: string) => db.getAdapter(id).listTables())
   handle('db:tableData', (id: string, table: TableInfo, opts: TableQueryOptions) =>
     db.getAdapter(id).tableData(table, opts)
@@ -183,8 +229,46 @@ export function registerIpc(): void {
   )
   handle(
     'io:exportDatabase',
-    (id: string, specs: TableDumpSpec[], format: DumpFormat, maskConfig?: MaskConfig) =>
-      io.exportDatabase(id, specs, format, maskConfig)
+    (
+      id: string,
+      specs: TableDumpSpec[],
+      format: DumpFormat,
+      maskConfig?: MaskConfig,
+      dropTables?: boolean,
+      opId?: string
+    ) =>
+      withAbort(opId, (signal) =>
+        io.exportDatabase(id, specs, format, maskConfig, dropTables ?? true, opId ? progressEmitter(opId) : undefined, signal, opId)
+      )
+  )
+  handle('io:nativeAvailable', (driver: string) => io.nativeToolsAvailable(driver))
+  handle('io:cancel', (opId: string) => {
+    aborters.get(opId)?.abort()
+    io.killNativeChildren(opId)
+    return true
+  })
+  handle(
+    'transfer:run',
+    (
+      sourceId: string,
+      targetId: string,
+      specs: TableDumpSpec[],
+      mode: TransferMode,
+      maskConfig?: MaskConfig,
+      opId?: string
+    ) =>
+      withAbort(opId, (signal) =>
+        io.transferDatabase(
+          sourceId,
+          targetId,
+          specs,
+          mode,
+          maskConfig,
+          opId ? progressEmitter(opId) : undefined,
+          signal,
+          opId
+        )
+      )
   )
   handle('io:importSql', (id: string) => io.importSql(id))
   handle('io:importCsv', (id: string, table: TableInfo) => io.importCsv(id, table))
@@ -305,6 +389,8 @@ export function registerIpc(): void {
     settings.setProviderConfig(p, cfg)
   )
   handle('settings:setAppearance', (a: Partial<AppearanceSettings>) => settings.setAppearance(a))
+  handle('settings:saveSshProfile', (input: SshProfileInput) => settings.saveSshProfile(input))
+  handle('settings:deleteSshProfile', (id: string) => settings.deleteSshProfile(id))
   handle('settings:testProvider', async (p: AiProvider) => {
     await testProvider(p)
     return true

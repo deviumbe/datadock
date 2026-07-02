@@ -63,6 +63,10 @@ export class MongoAdapter implements DbAdapter {
     await this.client.connect()
   }
 
+  async ping(): Promise<void> {
+    await this.db().command({ ping: 1 })
+  }
+
   async disconnect(): Promise<void> {
     await this.client?.close()
     this.client = undefined

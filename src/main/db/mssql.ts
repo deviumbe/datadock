@@ -70,8 +70,15 @@ export class MSSQLAdapter implements DbAdapter {
     }
   }
 
+  onConnectionLost?: (err: Error) => void
+
   async connect(): Promise<void> {
     this.pool = await new sql.ConnectionPool(this.poolConfig()).connect()
+    this.pool.on('error', (err: Error) => this.onConnectionLost?.(err))
+  }
+
+  async ping(): Promise<void> {
+    await this.pool!.request().query('select 1')
   }
 
   async disconnect(): Promise<void> {

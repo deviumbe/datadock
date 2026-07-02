@@ -127,15 +127,49 @@ export interface ConnectionConfig {
   // SSH tunnel — connect to the SSH host, then reach the DB (host/port above
   // are interpreted relative to the SSH server, e.g. localhost:5432).
   sshEnabled?: boolean
+  /** Selected SSH tunnel profile (see SshProfile) — preferred over the inline
+   * fields below, which remain only for backward compatibility. */
+  sshProfileId?: string
   sshHost?: string
   sshPort?: number
   sshUser?: string
-  sshAuthMethod?: 'key' | 'password' | 'agent'
+  sshAuthMethod?: SshAuthMethod
   sshKeyPath?: string
   sshPassphrase?: string
   hasSshPassphrase?: boolean
   sshPassword?: string
   hasSshPassword?: boolean
+}
+
+export type SshAuthMethod = 'key' | 'password' | 'agent'
+
+/** A reusable SSH tunnel definition, managed in Settings and selected per
+ * connection. Secrets (passphrase/password) are never sent to the renderer —
+ * only their presence as a boolean. */
+export interface SshProfile {
+  id: string
+  name: string
+  host: string
+  port?: number
+  user: string
+  authMethod: SshAuthMethod
+  keyPath?: string
+  hasPassphrase?: boolean
+  hasPassword?: boolean
+}
+
+/** Renderer -> main payload for creating/updating a profile. A blank secret on
+ * an existing profile means "keep the stored one". */
+export interface SshProfileInput {
+  id?: string
+  name: string
+  host: string
+  port?: number
+  user: string
+  authMethod: SshAuthMethod
+  keyPath?: string
+  passphrase?: string
+  password?: string
 }
 
 export interface Environment {
@@ -461,7 +495,30 @@ export interface TruncateOptions {
   restartIdentity?: boolean
 }
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
+/**
+ * Liveness of a connection, owned by the main process and pushed to the
+ * renderer. `error` = never established (bad creds/host) — needs a fix.
+ * `unhealthy` = was connected, then dropped — auto-heal pending (or, for a
+ * production connection, awaiting a deliberate reconnect). `reconnecting` =
+ * actively re-establishing.
+ */
+export type ConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'unhealthy'
+  | 'error'
+
+/** Pushed on every connection-state transition (main -> renderer). */
+export interface ConnStatePayload {
+  id: string
+  state: ConnectionState
+  /** Last error message, when state is `unhealthy` or `error`. */
+  error?: string
+  /** Epoch ms of the last successful operation/ping, when known. */
+  verifiedAt?: number
+}
 
 /** Server-level features a driver supports beyond querying tables. */
 export interface DriverCapabilities {
@@ -496,6 +553,36 @@ export interface TableDumpSpec {
   schema?: string
   name: string
   mode: TableDumpMode
+}
+
+/** Copy a database onto another connection. `replace` drops target tables
+    first (clean restore); `merge` runs the dump as-is over the existing schema. */
+export type TransferMode = 'replace' | 'merge'
+
+export interface TransferResult {
+  tableCount: number
+  statements: number
+  errors: string[]
+}
+
+/** Live progress for a long export/transfer, broadcast main → renderer. */
+export interface IoProgress {
+  opId: string
+  phase: 'prepare' | 'dump' | 'import'
+  /** Current table name (dump) or a short status (import). */
+  label: string
+  /** Units completed: tables dumped, or statements imported. */
+  current: number
+  /** Total units, or 0 when unknown (renders an indeterminate bar). */
+  total: number
+  /** Rows written for the current table, when dumping data. */
+  rows?: number
+  /** Cumulative rows dumped across all tables (for an accurate overall bar). */
+  doneRows?: number
+  /** Total rows to dump, counted up front; 0/undefined when unknown. */
+  totalRows?: number
+  /** Estimated milliseconds remaining for the dump phase. */
+  etaMs?: number
 }
 
 /** A saved restore point — a full structure+data SQL dump of a connection. */
@@ -585,6 +672,7 @@ export interface AppSettings {
     providers: ProviderInfo[]
   }
   appearance: AppearanceSettings
+  sshProfiles: SshProfile[]
 }
 
 /**

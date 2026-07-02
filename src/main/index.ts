@@ -1,9 +1,14 @@
-import { app, BrowserWindow, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, shell, nativeImage, powerMonitor } from 'electron'
 import { join } from 'path'
 import { registerIpc } from './ipc'
+
+// Large database clones/dumps push a lot of transient data through the main
+// process; give V8's old space generous headroom so a big transfer can't trip
+// the default ~4 GB ceiling mid-run. Must be set before the app is ready.
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=8192')
 import { startScheduler } from './scheduler'
 import { loadWorkspace } from './storage'
-import { disconnectAll } from './db'
+import { disconnectAll, verifyAll } from './db'
 import { startMcp, stopMcp } from './mcp'
 import { buildMenu } from './menu'
 import { setupUpdater } from './updater'
@@ -38,6 +43,10 @@ function createWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => win.show())
 
+  // Returning to the app is a strong cue to re-check connections (the laptop
+  // may have slept, or an idle tunnel timed out while we were away).
+  win.on('focus', () => void verifyAll())
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
@@ -66,6 +75,9 @@ app.whenReady().then(() => {
     const img = nativeImage.createFromPath(iconPath)
     if (!img.isEmpty()) app.dock.setIcon(img)
   }
+  // Waking from sleep is the most common cause of a "green but dead" socket.
+  powerMonitor.on('resume', () => void verifyAll())
+
   loadWorkspace()
   registerIpc()
   buildMenu()

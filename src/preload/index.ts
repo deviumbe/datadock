@@ -11,6 +11,8 @@ import type {
   ScheduledReport,
   AppearanceSettings,
   AppSettings,
+  SshProfileInput,
+  ConnStatePayload,
   McpInfo,
   McpSettings,
   ChatMessage,
@@ -28,6 +30,7 @@ import type {
   FileResult,
   HistoryEntry,
   ImportResult,
+  IoProgress,
   IpcResult,
   PlanNode,
   PoolStats,
@@ -48,6 +51,8 @@ import type {
   TableQueryOptions,
   TableSizeInfo,
   TableStructure,
+  TransferMode,
+  TransferResult,
   Workspace
 } from '@shared/types'
 
@@ -86,6 +91,12 @@ const api = {
     connect: (id: string) => invoke<boolean>('db:connect', id),
     disconnect: (id: string) => invoke<boolean>('db:disconnect', id),
     isConnected: (id: string) => invoke<boolean>('db:isConnected', id),
+    connStates: () => invoke<ConnStatePayload[]>('db:connStates'),
+    onConnState: (cb: (p: ConnStatePayload) => void): (() => void) => {
+      const l = (_e: unknown, p: ConnStatePayload): void => cb(p)
+      ipcRenderer.on('conn:state', l)
+      return () => ipcRenderer.removeListener('conn:state', l)
+    },
     listTables: (id: string) => invoke<TableInfo[]>('db:listTables', id),
     tableData: (id: string, table: TableInfo, opts: TableQueryOptions) =>
       invoke<QueryResult>('db:tableData', id, table, opts),
@@ -145,8 +156,29 @@ const api = {
       invoke<FileResult>('io:exportData', id, format, payload),
     exportTable: (id: string, table: TableInfo, format: ExportFormat) =>
       invoke<FileResult>('io:exportTable', id, table, format),
-    exportDatabase: (id: string, specs: TableDumpSpec[], format: DumpFormat, maskConfig?: MaskConfig) =>
-      invoke<FileResult>('io:exportDatabase', id, specs, format, maskConfig),
+    exportDatabase: (
+      id: string,
+      specs: TableDumpSpec[],
+      format: DumpFormat,
+      maskConfig?: MaskConfig,
+      dropTables?: boolean,
+      opId?: string
+    ) => invoke<FileResult>('io:exportDatabase', id, specs, format, maskConfig, dropTables, opId),
+    nativeAvailable: (driver: string) => invoke<boolean>('io:nativeAvailable', driver),
+    transferDatabase: (
+      sourceId: string,
+      targetId: string,
+      specs: TableDumpSpec[],
+      mode: TransferMode,
+      maskConfig?: MaskConfig,
+      opId?: string
+    ) => invoke<TransferResult>('transfer:run', sourceId, targetId, specs, mode, maskConfig, opId),
+    onProgress: (cb: (p: IoProgress) => void): (() => void) => {
+      const l = (_e: unknown, p: IoProgress): void => cb(p)
+      ipcRenderer.on('io:progress', l)
+      return () => ipcRenderer.removeListener('io:progress', l)
+    },
+    cancel: (opId: string) => invoke<boolean>('io:cancel', opId),
     importSql: (id: string) => invoke<ImportResult & { canceled?: boolean }>('io:importSql', id),
     importCsv: (id: string, table: TableInfo) =>
       invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table),
@@ -259,7 +291,10 @@ const api = {
       invoke<AppSettings>('settings:setProviderConfig', p, cfg),
     setAppearance: (a: Partial<AppearanceSettings>) =>
       invoke<AppSettings>('settings:setAppearance', a),
-    testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p)
+    testProvider: (p: AiProvider) => invoke<boolean>('settings:testProvider', p),
+    saveSshProfile: (input: SshProfileInput) =>
+      invoke<AppSettings>('settings:saveSshProfile', input),
+    deleteSshProfile: (id: string) => invoke<AppSettings>('settings:deleteSshProfile', id)
   },
   mcp: {
     get: () => invoke<McpInfo>('mcp:get'),

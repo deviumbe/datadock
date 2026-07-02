@@ -75,6 +75,10 @@ export class RedisAdapter implements DbAdapter {
     this.client = undefined
   }
 
+  async ping(): Promise<void> {
+    await this.db.ping()
+  }
+
   /** SCAN keys matching a pattern, capped to stay responsive. */
   private async scanKeys(match: string, cap = SCAN_CAP): Promise<string[]> {
     const out: string[] = []

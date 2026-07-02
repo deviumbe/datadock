@@ -45,6 +45,10 @@ export class SQLiteAdapter implements DbAdapter {
     this.db = undefined
   }
 
+  async ping(): Promise<void> {
+    this.db!.prepare('select 1').get()
+  }
+
   async beginTransaction(): Promise<void> {
     this.db!.exec('begin')
   }

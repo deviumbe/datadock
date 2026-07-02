@@ -14,13 +14,31 @@ export function quoteIdent(name: string, dialect: Dialect): string {
   }
 }
 
+// MySQL/MariaDB interpret backslash escapes inside string literals, so every
+// backslash, NUL and control char in the data must be escaped or the stored
+// bytes won't match the original (silently corrupting e.g. PHP-serialized
+// payloads, whose `s:N:` length prefix then no longer matches). Postgres,
+// SQLite and MSSQL treat backslash literally — there, only the quote doubles.
+const MYSQL_ESCAPES: Record<string, string> = {
+  '\\': '\\\\',
+  "'": "\\'",
+  '\0': '\\0',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\x1a': '\\Z'
+}
+
 export function escapeSqlValue(v: unknown, dialect: Dialect): string {
   if (v === null || v === undefined) return 'NULL'
   if (typeof v === 'number') return String(v)
   if (typeof v === 'boolean') {
     return dialect === 'postgres' ? (v ? 'TRUE' : 'FALSE') : v ? '1' : '0'
   }
-  return `'${String(v).replace(/'/g, "''")}'`
+  const s = String(v)
+  if (dialect === 'mysql') {
+    return `'${s.replace(/[\\'\0\n\r\x1a]/g, (c) => MYSQL_ESCAPES[c])}'`
+  }
+  return `'${s.replace(/'/g, "''")}'`
 }
 
 // ---- CSV --------------------------------------------------------------------

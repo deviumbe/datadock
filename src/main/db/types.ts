@@ -1,5 +1,6 @@
 import type {
   AlterOp,
+  ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
@@ -25,10 +26,30 @@ export interface DbAdapter {
   /** Establish the long-lived connection/pool held by the manager. */
   connect(): Promise<void>
   disconnect(): Promise<void>
+  /** Cheap liveness probe (e.g. `select 1`). Rejects if the link is dead. */
+  ping(): Promise<void>
+  /**
+   * Set by the manager after connect. Driver-level "connection lost" events
+   * (pool errors, socket close) call this so the manager can mark the
+   * connection unhealthy and heal it without waiting for the next query.
+   */
+  onConnectionLost?: (err: Error) => void
   listTables(): Promise<TableInfo[]>
   tableData(table: TableInfo, opts: TableQueryOptions): Promise<QueryResult>
   /** Total row count for a table (honoring filters), for the pagination header. */
   countRows?(table: TableInfo, opts: TableQueryOptions): Promise<number>
+  /**
+   * Stream an entire table in pages of ~`pageSize` rows for bulk export/transfer.
+   * Implementations MUST avoid OFFSET pagination (which is O(n²) over large
+   * tables) — use a server-side cursor or keyset/seek pagination instead.
+   * `onChunk` is awaited before the next page (backpressure). Optional: callers
+   * fall back to offset paging when absent.
+   */
+  streamTableData?(
+    table: TableInfo,
+    pageSize: number,
+    onChunk: (columns: ColumnMeta[], rows: unknown[][]) => Promise<void>
+  ): Promise<void>
   query(sql: string): Promise<QueryResult>
   /** Cancel any in-flight query on this connection (engines that support it). */
   cancelQuery?(): Promise<void>

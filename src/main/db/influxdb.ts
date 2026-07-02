@@ -37,6 +37,11 @@ export class InfluxAdapter implements DbAdapter {
     this.client = undefined
   }
 
+  async ping(): Promise<void> {
+    // InfluxDB is stateless HTTP; validate reachability with a cheap query.
+    await runFlux(this.client ?? this.makeClient(), this.org, 'buckets() |> limit(n: 1)')
+  }
+
   async listTables(): Promise<TableInfo[]> {
     const bucket = this.config.bucket
     if (!bucket) return []

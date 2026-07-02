@@ -1,6 +1,7 @@
 import pg from 'pg'
 import type {
   AlterOp,
+  ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
@@ -68,10 +69,19 @@ export class PostgresAdapter implements DbAdapter {
     }
   }
 
+  onConnectionLost?: (err: Error) => void
+
   async connect(): Promise<void> {
     this.pool = this.makePool()
+    // An idle client erroring (server restart, dropped tunnel) emits here; left
+    // unhandled it would crash the process. Treat it as a lost connection.
+    this.pool.on('error', (err) => this.onConnectionLost?.(err))
     const client = await this.pool.connect()
     client.release()
+  }
+
+  async ping(): Promise<void> {
+    await this.pool!.query('select 1')
   }
 
   async disconnect(): Promise<void> {
@@ -209,6 +219,51 @@ export class PostgresAdapter implements DbAdapter {
       values: params
     })
     return Number(res.rows[0]?.cnt ?? 0)
+  }
+
+  /**
+   * Keyset (seek) pagination for bulk export: `WHERE pk > $1 ORDER BY pk` is an
+   * index range scan with constant cost per page, unlike OFFSET which rescans
+   * all skipped rows (O(n²)). Requires a single-column primary key; otherwise
+   * falls back to OFFSET paging. pg buffers full results, so there is no native
+   * cursor without an extra dependency — keyset gives the same O(n) guarantee.
+   */
+  async streamTableData(
+    table: TableInfo,
+    pageSize: number,
+    onChunk: (columns: ColumnMeta[], rows: unknown[][]) => Promise<void>
+  ): Promise<void> {
+    const pk = (await this.primaryKeys(table)).filter(Boolean)
+    if (pk.length !== 1) {
+      let offset = 0
+      for (;;) {
+        const r = await this.tableData(table, { limit: pageSize, offset })
+        await onChunk(r.columns, r.rows)
+        if (r.rows.length < pageSize) break
+        offset += pageSize
+      }
+      return
+    }
+
+    const key = quoteIdent(pk[0])
+    let last: unknown
+    for (;;) {
+      const where = last === undefined ? '' : ` where ${key} > $1`
+      const text = `select * from ${this.ident(table)}${where} order by ${key} asc limit ${pageSize}`
+      const res = await this.pool!.query({
+        text,
+        rowMode: 'array',
+        values: last === undefined ? [] : [last]
+      })
+      const raw = (res.rows ?? []) as unknown[][]
+      if (raw.length === 0) break
+      const columns: ColumnMeta[] = (res.fields ?? []).map((f) => ({ name: f.name }))
+      const keyIdx = columns.findIndex((c) => c.name === pk[0])
+      // Raw (un-normalized) key value preserves its type for the next $1 bind.
+      last = raw[raw.length - 1][keyIdx]
+      await onChunk(columns, normalizeRows(raw))
+      if (raw.length < pageSize) break
+    }
   }
 
   async primaryKeys(table: TableInfo): Promise<string[]> {

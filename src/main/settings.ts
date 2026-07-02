@@ -1,13 +1,15 @@
 import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import { join } from 'path'
 import type {
   AiProvider,
   AppSettings,
   AppearanceSettings,
   McpSettings,
-  ProviderInfo
+  ProviderInfo,
+  SshProfile,
+  SshProfileInput
 } from '@shared/types'
 
 // Application settings — AI provider keys (encrypted at rest with safeStorage,
@@ -20,10 +22,22 @@ interface RawProvider {
   model?: string
   baseUrl?: string
 }
+interface RawSshProfile {
+  id: string
+  name: string
+  host: string
+  port?: number
+  user: string
+  authMethod: SshProfile['authMethod']
+  keyPath?: string
+  passphrase?: string
+  password?: string
+}
 interface RawSettings {
   ai: { activeProvider: AiProvider; providers: Partial<Record<AiProvider, RawProvider>> }
   appearance: AppearanceSettings
   mcp: McpSettings
+  sshProfiles: RawSshProfile[]
 }
 
 export const PROVIDER_META: Record<
@@ -88,7 +102,8 @@ function blank(): RawSettings {
   return {
     ai: { activeProvider: 'anthropic', providers: {} },
     appearance: { ...DEFAULT_APPEARANCE },
-    mcp: { ...DEFAULT_MCP }
+    mcp: { ...DEFAULT_MCP },
+    sshProfiles: []
   }
 }
 
@@ -120,7 +135,8 @@ function load(): RawSettings {
           providers: parsed.ai?.providers ?? {}
         },
         appearance: { ...DEFAULT_APPEARANCE, ...(parsed.appearance ?? {}) },
-        mcp: { ...DEFAULT_MCP, ...(parsed.mcp ?? {}) }
+        mcp: { ...DEFAULT_MCP, ...(parsed.mcp ?? {}) },
+        sshProfiles: parsed.sshProfiles ?? []
       }
     } catch {
       s = blank()
@@ -158,7 +174,93 @@ export function getSettings(): AppSettings {
       activeProvider: raw.ai.activeProvider,
       providers: (Object.keys(PROVIDER_META) as AiProvider[]).map((p) => providerInfo(p, raw))
     },
-    appearance: { ...raw.appearance }
+    appearance: { ...raw.appearance },
+    sshProfiles: raw.sshProfiles.map(sanitizeSshProfile)
+  }
+}
+
+// ---- SSH tunnel profiles ----------------------------------------------------
+
+function sanitizeSshProfile(p: RawSshProfile): SshProfile {
+  return {
+    id: p.id,
+    name: p.name,
+    host: p.host,
+    port: p.port,
+    user: p.user,
+    authMethod: p.authMethod,
+    keyPath: p.keyPath,
+    hasPassphrase: !!p.passphrase,
+    hasPassword: !!p.password
+  }
+}
+
+/** Create (no id) or update an SSH profile. Blank secrets on an update keep the
+ * stored value; secrets irrelevant to the auth method are dropped. */
+export function saveSshProfile(input: SshProfileInput): AppSettings {
+  const raw = load()
+  const existing = input.id ? raw.sshProfiles.find((p) => p.id === input.id) : undefined
+
+  const profile: RawSshProfile = {
+    id: existing?.id ?? randomUUID(),
+    name: input.name.trim() || 'SSH profile',
+    host: input.host.trim(),
+    port: input.port,
+    user: input.user.trim(),
+    authMethod: input.authMethod,
+    keyPath: input.authMethod === 'key' ? input.keyPath?.trim() || undefined : undefined
+  }
+
+  if (profile.authMethod === 'key' && profile.keyPath?.endsWith('.pub')) {
+    throw new Error('That looks like a public key (.pub). Select the matching private key file instead.')
+  }
+
+  if (input.authMethod === 'key') {
+    profile.passphrase = input.passphrase?.trim()
+      ? encrypt(input.passphrase.trim())
+      : existing?.passphrase
+  } else if (input.authMethod === 'password') {
+    profile.password = input.password?.trim()
+      ? encrypt(input.password.trim())
+      : existing?.password
+  }
+
+  if (existing) Object.assign(existing, profile)
+  else raw.sshProfiles.push(profile)
+  save()
+  return getSettings()
+}
+
+export function deleteSshProfile(id: string): AppSettings {
+  const raw = load()
+  raw.sshProfiles = raw.sshProfiles.filter((p) => p.id !== id)
+  save()
+  return getSettings()
+}
+
+export interface ResolvedSshProfile {
+  host: string
+  port?: number
+  user: string
+  authMethod: SshProfile['authMethod']
+  keyPath?: string
+  passphrase?: string
+  password?: string
+}
+
+/** Decrypted profile for the tunnel layer. Undefined if the id is unknown. */
+export function resolveSshProfile(id: string): ResolvedSshProfile | undefined {
+  const raw = load()
+  const p = raw.sshProfiles.find((x) => x.id === id)
+  if (!p) return undefined
+  return {
+    host: p.host,
+    port: p.port,
+    user: p.user,
+    authMethod: p.authMethod,
+    keyPath: p.keyPath,
+    passphrase: decrypt(p.passphrase),
+    password: decrypt(p.password)
   }
 }
 

@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise'
 import type {
   AlterOp,
+  ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
   DropTableOptions,
@@ -47,8 +48,21 @@ export class MySQLAdapter implements DbAdapter {
     }
   }
 
+  onConnectionLost?: (err: Error) => void
+
   async connect(): Promise<void> {
     this.conn = await mysql.createConnection(this.connectOpts())
+    // A fatal socket error (server gone, tunnel dropped) surfaces here; without
+    // a listener mysql2 throws it as an uncaught error.
+    this.conn.on('error', (err: Error) => this.onConnectionLost?.(err))
+  }
+
+  async ping(): Promise<void> {
+    // A query already in flight proves the link is alive; issuing a concurrent
+    // ping on the single connection (e.g. the heartbeat firing during a long
+    // import) can desync the wire protocol, so skip it when busy.
+    if (this.inFlight > 0) return
+    await this.conn!.ping()
   }
 
   async disconnect(): Promise<void> {
@@ -100,6 +114,72 @@ export class MySQLAdapter implements DbAdapter {
       values: params
     })
     return Number((rows as { cnt: number }[])[0]?.cnt ?? 0)
+  }
+
+  /**
+   * Keyset (seek) pagination for bulk export: `WHERE pk > ? ORDER BY pk` is an
+   * index range scan with constant cost per page, unlike OFFSET (O(n²)). Each
+   * page is its own request, so — unlike mysql2's native streaming, which keeps
+   * buffering rows off the socket faster than a slow consumer can drain them and
+   * OOMs on large tables — memory stays bounded to one page. Falls back to OFFSET
+   * paging when there is no single-column primary key.
+   */
+  async streamTableData(
+    table: TableInfo,
+    pageSize: number,
+    onChunk: (columns: ColumnMeta[], rows: unknown[][]) => Promise<void>
+  ): Promise<void> {
+    // A long dump runs on its OWN connection: the shared one is also used by the
+    // heartbeat ping and any browsing the user does on the source while the clone
+    // runs in the background. Interleaving those on a single mysql2 connection
+    // desyncs the protocol ("packets out of order") and can balloon memory.
+    let conn = await mysql.createConnection(this.connectOpts())
+    // mysql2 can retain memory across many queries on a single connection; recycle
+    // it every so often during a long dump so accumulated state is released.
+    const RECYCLE_PAGES = 200
+    try {
+      const [pkRows] = await conn.query(
+        `select column_name as name from information_schema.key_column_usage
+          where table_schema = database() and table_name = ? and constraint_name = 'PRIMARY'
+          order by ordinal_position`,
+        [table.name]
+      )
+      const pk = (pkRows as { name: string }[]).map((r) => r.name).filter(Boolean)
+      const keyset = pk.length === 1
+      const key = keyset ? q(pk[0]) : ''
+
+      let last: unknown
+      let offset = 0
+      let pageNo = 0
+      for (;;) {
+        const sql = keyset
+          ? `select * from ${q(table.name)}${last === undefined ? '' : ` where ${key} > ?`} order by ${key} asc limit ${pageSize}`
+          : `select * from ${q(table.name)} limit ${pageSize} offset ${offset}`
+        const [rows, fields] = await conn.query({
+          sql,
+          values: keyset && last !== undefined ? [last] : [],
+          rowsAsArray: true
+        })
+        const raw = rows as unknown[][]
+        if (raw.length === 0) break
+        const columns: ColumnMeta[] = Array.isArray(fields) ? fields.map((f) => ({ name: f.name })) : []
+        if (keyset) {
+          // Raw (un-normalized) key value preserves its type for the next bind.
+          last = raw[raw.length - 1][columns.findIndex((c) => c.name === pk[0])]
+        } else {
+          offset += pageSize
+        }
+        await onChunk(columns, normalizeRows(raw))
+        if (raw.length < pageSize) break
+
+        if (++pageNo % RECYCLE_PAGES === 0) {
+          await conn.end().catch(() => undefined)
+          conn = await mysql.createConnection(this.connectOpts())
+        }
+      }
+    } finally {
+      await conn.end().catch(() => undefined)
+    }
   }
 
   async primaryKeys(table: TableInfo): Promise<string[]> {
