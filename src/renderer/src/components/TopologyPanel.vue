@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { computed, reactive, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
@@ -436,7 +437,7 @@ const sinceTimer = setInterval(() => {
       <header class="adv-head">
         <span class="adv-title">✦ Replication advisor</span>
         <button class="btn" :class="{ spin: advising }" title="Re-run" @click="runAdvisor">↻</button>
-        <button class="adv-close" title="Close" @click="advisorOpen = false">✕</button>
+        <button class="adv-close" title="Close" @click="advisorOpen = false"><Icon name="x" :size="12" /></button>
       </header>
       <div class="adv-body">
         <div v-if="advising && !advice" class="adv-state">Analyzing the topology…</div>

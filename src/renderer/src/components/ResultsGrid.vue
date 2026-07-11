@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { QueryResult, SortSpec } from '@shared/types'
 
@@ -145,39 +146,9 @@ watch(
   }
 )
 
-// Horizontal scrolling for wide grids. A plain mouse wheel only emits vertical
-// ticks (and a tilt/thumb wheel's horizontal ticks are tiny with no momentum),
-// so Chromium's native handling barely moves a wide table sideways. Map any
-// horizontal-dominant intent — a tilt/thumb wheel's deltaX, or Shift+vertical —
-// onto scrollLeft ourselves so it reaches the far edge.
-//
-// We key off the *dominant axis* (|deltaX| ≥ |deltaY|) rather than requiring a
-// pure-horizontal event: high-resolution mice (e.g. Logitech MX Master's thumb
-// wheel on Windows) send horizontal scroll with a tiny residual deltaY, which a
-// strict `deltaY === 0` check would miss — leaving it to Chromium, which barely
-// moves. Vertical-dominant wheels/trackpad gestures are left to the browser.
-function onWheel(e: WheelEvent): void {
-  const el = wrap.value
-  if (!el) return
-  const max = el.scrollWidth - el.clientWidth
-  if (max <= 0) return // nothing to scroll horizontally
-  const ax = Math.abs(e.deltaX)
-  const ay = Math.abs(e.deltaY)
-  let delta = 0
-  if (ax > ay) delta = e.deltaX // horizontal-dominant wheel / tilt / thumb wheel
-  else if (e.shiftKey && ay > 0) delta = e.deltaY // Shift + vertical wheel → horizontal
-  else return // vertical-dominant (or empty) — leave to the browser
-  // Normalize line/page delta modes to pixels (mouse wheels often report lines).
-  if (e.deltaMode === 1) delta *= 16
-  else if (e.deltaMode === 2) delta *= el.clientWidth
-  const next = Math.max(0, Math.min(max, el.scrollLeft + delta))
-  if (next !== el.scrollLeft) {
-    el.scrollLeft = next
-    e.preventDefault() // we consumed the horizontal scroll; don't let Chromium double-apply it
-  }
-}
-onMounted(() => wrap.value?.addEventListener('wheel', onWheel, { passive: false }))
-onBeforeUnmount(() => wrap.value?.removeEventListener('wheel', onWheel))
+// Horizontal wheel-scrolling for wide grids is handled app-wide by
+// installHorizontalWheel() (see lib/hscroll.ts), which scrolls the nearest
+// horizontally-scrollable ancestor — no per-grid handler needed here.
 
 // ---- rectangular cell selection (drag to select a block, ⌘C / ⌘⇧C to copy) --
 const cellSel = ref<{ a: { r: number; c: number }; f: { r: number; c: number } } | null>(null)
@@ -433,7 +404,7 @@ watch(
         <tr v-for="(ins, i) in inserts" :key="'ins-' + i" class="insert-row">
           <td v-if="selectable" class="selcol"></td>
           <td class="rownum">
-            <button class="remove-insert" title="Remove" @click.stop="emit('removeInsert', i)">✕</button>
+            <button class="remove-insert" title="Remove" @click.stop="emit('removeInsert', i)"><Icon name="x" :size="11" /></button>
           </td>
           <td v-if="actionLabel" class="actcol"></td>
           <td

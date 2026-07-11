@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed } from 'vue'
 import { isSqlDriver, type QueryResult } from '@shared/types'
 import { useTabs } from '../stores/tabs'
@@ -132,7 +133,7 @@ function openTable(table: string): void {
   <div class="search">
     <header class="search-head">
       <div class="searchbox">
-        <span class="ic">⌕</span>
+        <span class="ic"><Icon name="search" :size="15" /></span>
         <input
           v-model="term"
           class="sinput"
@@ -180,7 +181,7 @@ function openTable(table: string): void {
       <div v-if="!isSql" class="state">Universal search isn't available for {{ driver }}.</div>
       <div v-else-if="error" class="state err">{{ error }}</div>
       <div v-else-if="!scanned" class="state">
-        <div class="big">⌕</div>
+        <div class="big"><Icon name="search" :size="34" /></div>
         <p>Type a value and hit Search to find it anywhere in this database — every text column of every table is scanned.</p>
       </div>
       <div v-else-if="!hits.length && !running" class="state">No matches found for “{{ term }}”.</div>

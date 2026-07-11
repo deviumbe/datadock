@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import type {
@@ -311,7 +312,7 @@ async function askAi(): Promise<void> {
           :placeholder="f.type === 'text' ? 'contains…' : 'equals…'"
           @input="onFilterInput"
         />
-        <button class="fchip-x" title="Remove filter" @click="removeFilter(f.id)">✕</button>
+        <button class="fchip-x" title="Remove filter" @click="removeFilter(f.id)"><Icon name="x" :size="11" /></button>
       </div>
 
       <div v-if="addingFilter" class="add-filter">

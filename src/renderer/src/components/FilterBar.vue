@@ -6,8 +6,40 @@ import type { ColumnMeta, FilterOp, FilterSpec } from '@shared/types'
 const props = defineProps<{ columns: ColumnMeta[]; filters: FilterSpec[] }>()
 const emit = defineEmits<{ apply: [filters: FilterSpec[]] }>()
 
-const OPS: FilterOp[] = ['=', '!=', '<', '<=', '>', '>=', 'contains', 'starts', 'is null', 'not null']
+// Grouped for the dropdown: comparison, text matching, sets/ranges, null checks.
+const OP_GROUPS: { label: string; ops: FilterOp[] }[] = [
+  { label: 'Compare', ops: ['=', '!=', '<', '<=', '>', '>='] },
+  { label: 'Text', ops: ['contains', 'not contains', 'starts', 'ends', 'like', 'not like'] },
+  { label: 'Set / range', ops: ['in', 'not in', 'between'] },
+  { label: 'Null', ops: ['is null', 'not null'] }
+]
+const OP_LABELS: Record<FilterOp, string> = {
+  '=': '=',
+  '!=': '≠',
+  '<': '<',
+  '<=': '≤',
+  '>': '>',
+  '>=': '≥',
+  contains: 'contains',
+  'not contains': 'not contains',
+  starts: 'starts with',
+  ends: 'ends with',
+  like: 'LIKE',
+  'not like': 'NOT LIKE',
+  in: 'IN',
+  'not in': 'NOT IN',
+  between: 'between',
+  'is null': 'is null',
+  'not null': 'not null'
+}
 const noValue = (op: FilterOp): boolean => op === 'is null' || op === 'not null'
+const isRange = (op: FilterOp): boolean => op === 'between'
+const isList = (op: FilterOp): boolean => op === 'in' || op === 'not in'
+function placeholderFor(op: FilterOp): string {
+  if (isList(op)) return 'a, b, c'
+  if (op === 'like' || op === 'not like') return '%pattern%'
+  return 'value'
+}
 
 const local = ref<FilterSpec[]>(props.filters.map((f) => ({ ...f })))
 
@@ -38,16 +70,29 @@ function apply(): void {
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
       </select>
       <select class="select sm op" v-model="f.op" @change="apply">
-        <option v-for="op in OPS" :key="op" :value="op">{{ op }}</option>
+        <optgroup v-for="g in OP_GROUPS" :key="g.label" :label="g.label">
+          <option v-for="op in g.ops" :key="op" :value="op">{{ OP_LABELS[op] }}</option>
+        </optgroup>
       </select>
-      <input
-        v-if="!noValue(f.op)"
-        class="input sm"
-        v-model="f.value"
-        placeholder="value"
-        @keydown.enter="apply"
-        @blur="apply"
-      />
+      <template v-if="!noValue(f.op)">
+        <input
+          class="input sm"
+          v-model="f.value"
+          :placeholder="placeholderFor(f.op)"
+          @keydown.enter="apply"
+          @blur="apply"
+        />
+        <template v-if="isRange(f.op)">
+          <span class="and">and</span>
+          <input
+            class="input sm"
+            v-model="f.value2"
+            placeholder="value"
+            @keydown.enter="apply"
+            @blur="apply"
+          />
+        </template>
+      </template>
       <button class="btn-ghost rm" @click="remove(i)"><Icon name="x" :size="13" /></button>
     </div>
     <span v-if="local.length === 0" class="hint">No filters</span>
@@ -95,10 +140,15 @@ function apply(): void {
   max-width: 130px;
 }
 .op {
-  min-width: 64px;
+  min-width: 88px;
 }
 .input.sm {
   width: 110px;
+}
+.and {
+  color: var(--text-faint);
+  font-size: 11px;
+  padding: 0 1px;
 }
 .rm {
   display: inline-flex;

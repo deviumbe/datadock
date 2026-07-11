@@ -134,10 +134,10 @@ function keyOf(c: DocColumn): string {
         <Icon name="sparkles" :size="13" /> {{ aiBusy ? 'Describing…' : 'Describe with AI' }}
       </button>
       <button class="btn btn-ghost" :disabled="loading || !model" @click="copyMd">
-        {{ copied ? '✓ Copied' : '⧉ Copy Markdown' }}
+        <Icon :name="copied ? 'check' : 'copy'" :size="13" /> {{ copied ? 'Copied' : 'Copy Markdown' }}
       </button>
-      <button class="btn btn-primary" :disabled="loading || !model" @click="exportMd">⤓ Export .md</button>
-      <button class="btn btn-ghost" :disabled="loading" @click="generate" title="Regenerate">⟳</button>
+      <button class="btn btn-primary" :disabled="loading || !model" @click="exportMd"><Icon name="download" :size="13" /> Export .md</button>
+      <button class="btn btn-ghost" :disabled="loading" @click="generate" title="Regenerate"><Icon name="refresh" :size="14" /></button>
     </header>
 
     <div v-if="!isSql" class="state">Documentation generation isn't available for {{ driver }}.</div>

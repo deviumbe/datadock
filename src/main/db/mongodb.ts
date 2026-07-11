@@ -20,6 +20,7 @@ import type {
   TableSizeInfo
 } from '@shared/types'
 import { DbAdapter, now } from './types'
+import { splitList } from './clauses'
 
 /**
  * MongoDB adapter. Unlike the SQL engines this is a document store, so the
@@ -348,8 +349,30 @@ function buildFilter(filters?: FilterSpec[]): Filter<Document> {
       case 'contains':
         out[f.column] = { $regex: escapeRegex(v), $options: 'i' }
         break
+      case 'not contains':
+        out[f.column] = { $not: new RegExp(escapeRegex(v), 'i') }
+        break
       case 'starts':
         out[f.column] = { $regex: `^${escapeRegex(v)}`, $options: 'i' }
+        break
+      case 'ends':
+        out[f.column] = { $regex: `${escapeRegex(v)}$`, $options: 'i' }
+        break
+      case 'like':
+        // Treat SQL-style % / _ wildcards as their regex equivalents.
+        out[f.column] = { $regex: likeToRegex(v), $options: 'i' }
+        break
+      case 'not like':
+        out[f.column] = { $not: new RegExp(likeToRegex(v), 'i') }
+        break
+      case 'in':
+        out[f.column] = { $in: splitList(v).map(maybeNumber) }
+        break
+      case 'not in':
+        out[f.column] = { $nin: splitList(v).map(maybeNumber) }
+        break
+      case 'between':
+        out[f.column] = { $gte: maybeNumber(v), $lte: maybeNumber(f.value2 ?? '') }
         break
       case 'is null':
         out[f.column] = null
@@ -427,4 +450,15 @@ function maybeNumber(v: string): string | number {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Convert a SQL LIKE pattern (`%` = any, `_` = one char) to an anchored regex. */
+function likeToRegex(pattern: string): string {
+  let out = '^'
+  for (const ch of pattern) {
+    if (ch === '%') out += '.*'
+    else if (ch === '_') out += '.'
+    else out += escapeRegex(ch)
+  }
+  return out + '$'
 }

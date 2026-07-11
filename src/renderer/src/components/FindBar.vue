@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import type { QueryResult } from '@shared/types'
 
@@ -173,9 +174,9 @@ function close(): void {
         <template v-if="searchText && matchCount > 0">{{ currentIndex + 1 }} of {{ matchCount }} matches</template>
         <template v-else-if="searchText">No matches</template>
       </span>
-      <button class="btn-ghost nav-btn" title="Previous match (Shift+Enter)" :disabled="matchCount === 0" @click="goPrev">▲</button>
-      <button class="btn-ghost nav-btn" title="Next match (Enter)" :disabled="matchCount === 0" @click="goNext">▼</button>
-      <button class="btn-ghost close-btn" title="Close (Esc)" @click="close">✕</button>
+      <button class="btn-ghost nav-btn" title="Previous match (Shift+Enter)" :disabled="matchCount === 0" @click="goPrev"><Icon name="chevronUp" :size="13" /></button>
+      <button class="btn-ghost nav-btn" title="Next match (Enter)" :disabled="matchCount === 0" @click="goNext"><Icon name="chevronDown" :size="13" /></button>
+      <button class="btn-ghost close-btn" title="Close (Esc)" @click="close"><Icon name="x" :size="13" /></button>
     </div>
     <div v-if="editable" class="replace-row">
       <input

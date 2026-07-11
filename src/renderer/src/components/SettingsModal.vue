@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import Icon from './Icon.vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useSettings } from '../stores/settings'
 import { useUi } from '../stores/ui'
 import type { AiProvider, SshAuthMethod, SshProfile, SshProfileInput } from '@shared/types'
@@ -11,6 +12,13 @@ const emit = defineEmits<{ close: [] }>()
 
 type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'about'
 const section = ref<Section>('ai')
+
+// Escape closes settings — unless a confirm dialog is stacked on top.
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && !ui.confirmState) emit('close')
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 const appVersion = ref('0.1.0')
 onMounted(async () => {
@@ -223,13 +231,13 @@ function setSshAuth(m: SshAuthMethod): void {
       <div class="settings">
         <nav class="nav">
           <div class="nav-title">Settings</div>
-          <button :class="{ on: section === 'ai' }" @click="section = 'ai'">✨ AI Providers</button>
-          <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'">🎨 Appearance</button>
-          <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'">🔐 SSH Tunnels</button>
-          <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'">🔌 MCP Server</button>
-          <button :class="{ on: section === 'about' }" @click="section = 'about'">ℹ️ About</button>
+          <button :class="{ on: section === 'ai' }" @click="section = 'ai'"><Icon name="sparkles" :size="13" /> AI Providers</button>
+          <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'"><Icon name="sun" :size="13" /> Appearance</button>
+          <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'"><Icon name="lock" :size="13" /> SSH Tunnels</button>
+          <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'"><Icon name="bolt" :size="13" /> MCP Server</button>
+          <button :class="{ on: section === 'about' }" @click="section = 'about'"><Icon name="info" :size="13" /> About</button>
           <div class="nav-spacer" />
-          <button class="close-x" @click="emit('close')">Close ✕</button>
+          <button class="close-x" @click="emit('close')">Close <Icon name="x" :size="12" /></button>
         </nav>
 
         <div class="panel">
@@ -608,11 +616,12 @@ function setSshAuth(m: SshAuthMethod): void {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 120;
+  animation: settings-fade var(--dur-2) ease;
 }
 .settings {
   width: 760px;
@@ -625,6 +634,18 @@ function setSshAuth(m: SshAuthMethod): void {
   border-radius: var(--radius);
   box-shadow: var(--shadow-modal);
   overflow: hidden;
+  animation: settings-rise var(--dur-3) var(--ease-out);
+}
+@keyframes settings-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes settings-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
 }
 .nav {
   width: 188px;
@@ -644,11 +665,15 @@ function setSshAuth(m: SshAuthMethod): void {
   padding: 4px 10px 10px;
 }
 .nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   padding: 9px 12px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-dim);
+  transition: background var(--dur-1), color var(--dur-1);
 }
 .nav button:hover {
   background: var(--bg-hover);

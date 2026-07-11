@@ -11,6 +11,12 @@ function quote(driver: string, id: string): string {
 function lit(v: string): string {
   return `'${String(v).replace(/'/g, "''")}'`
 }
+function splitList(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((s) => s.length > 0)
+}
 
 function fromExpr(driver: string, source: DatasetSource): string {
   if (source.kind === 'sql') {
@@ -69,7 +75,18 @@ function whereClause(driver: string, filters?: FilterSpec[]): string {
       case 'is null': return `${col} IS NULL`
       case 'not null': return `${col} IS NOT NULL`
       case 'contains': return `${col} LIKE ${lit(`%${f.value ?? ''}%`)}`
+      case 'not contains': return `${col} NOT LIKE ${lit(`%${f.value ?? ''}%`)}`
       case 'starts': return `${col} LIKE ${lit(`${f.value ?? ''}%`)}`
+      case 'ends': return `${col} LIKE ${lit(`%${f.value ?? ''}`)}`
+      case 'like': return `${col} LIKE ${lit(f.value ?? '')}`
+      case 'not like': return `${col} NOT LIKE ${lit(f.value ?? '')}`
+      case 'in':
+      case 'not in': {
+        const items = splitList(f.value)
+        if (!items.length) return f.op === 'in' ? '1 = 0' : '1 = 1'
+        return `${col} ${f.op === 'in' ? 'IN' : 'NOT IN'} (${items.map(lit).join(', ')})`
+      }
+      case 'between': return `${col} BETWEEN ${lit(f.value ?? '')} AND ${lit(f.value2 ?? '')}`
       default: return `${col} ${f.op} ${lit(f.value ?? '')}`
     }
   })

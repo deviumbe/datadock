@@ -69,6 +69,33 @@ export function indexName(table: string, columns: string[]): string {
 export type Quote = (ident: string) => string
 export type Placeholder = (index: number) => string // 1-based
 
+/**
+ * Split a comma-separated `in` / `not in` value into trimmed, non-empty items.
+ * A leading/trailing quote pair around an item is stripped so users can write
+ * `'a, b', c` when a literal value itself contains a comma.
+ */
+export function splitList(value: string | undefined): string[] {
+  const raw = value ?? ''
+  const items: string[] = []
+  let cur = ''
+  let quote: string | null = null
+  for (const ch of raw) {
+    if (quote) {
+      if (ch === quote) quote = null
+      else cur += ch
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+    } else if (ch === ',') {
+      items.push(cur.trim())
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  items.push(cur.trim())
+  return items.filter((s) => s.length > 0)
+}
+
 export interface BuiltClauses {
   where: string
   order: string
@@ -96,9 +123,38 @@ export function buildClauses(opts: TableQueryOptions, quote: Quote, ph: Placehol
         case 'contains':
           params.push(`%${f.value ?? ''}%`)
           return `${col} like ${ph(params.length)}`
+        case 'not contains':
+          params.push(`%${f.value ?? ''}%`)
+          return `${col} not like ${ph(params.length)}`
         case 'starts':
           params.push(`${f.value ?? ''}%`)
           return `${col} like ${ph(params.length)}`
+        case 'ends':
+          params.push(`%${f.value ?? ''}`)
+          return `${col} like ${ph(params.length)}`
+        case 'like':
+          params.push(f.value ?? '')
+          return `${col} like ${ph(params.length)}`
+        case 'not like':
+          params.push(f.value ?? '')
+          return `${col} not like ${ph(params.length)}`
+        case 'in':
+        case 'not in': {
+          const items = splitList(f.value)
+          if (!items.length) return f.op === 'in' ? '1 = 0' : '1 = 1'
+          const phs = items.map((v) => {
+            params.push(v)
+            return ph(params.length)
+          })
+          return `${col} ${f.op === 'in' ? 'in' : 'not in'} (${phs.join(', ')})`
+        }
+        case 'between': {
+          params.push(f.value ?? '')
+          const lo = ph(params.length)
+          params.push(f.value2 ?? '')
+          const hi = ph(params.length)
+          return `${col} between ${lo} and ${hi}`
+        }
         default:
           params.push(f.value ?? '')
           return `${col} ${f.op} ${ph(params.length)}`

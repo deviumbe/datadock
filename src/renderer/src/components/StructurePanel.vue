@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, watch, computed } from 'vue'
 import type { AlterOp, ColumnDef, TableStructure } from '@shared/types'
 
@@ -124,7 +125,7 @@ function dropIndex(name: string): void {
             <td><input class="input sm" v-model="c.type" :disabled="locked" @keydown.enter="commitType(i)" @blur="commitType(i)" /></td>
             <td class="c"><input type="checkbox" v-model="c.nullable" :disabled="locked" @change="commitNullable(i)" /></td>
             <td class="def">{{ c.default ?? '—' }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropColumn(structure!.columns[i].name)">✕</button></td>
+            <td class="c"><button class="drop" :disabled="locked" @click="dropColumn(structure!.columns[i].name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>
@@ -149,7 +150,7 @@ function dropIndex(name: string): void {
             <td class="mono">{{ f.name }}</td>
             <td class="mono">{{ f.column }}</td>
             <td class="mono">{{ f.refTable }}.{{ f.refColumn }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropFk(f.name)">✕</button></td>
+            <td class="c"><button class="drop" :disabled="locked" @click="dropFk(f.name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>
@@ -188,7 +189,7 @@ function dropIndex(name: string): void {
             <td class="mono">{{ idx.name }}</td>
             <td class="mono">{{ idx.columns.join(', ') }}</td>
             <td class="c">{{ idx.unique ? '✓' : '' }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropIndex(idx.name)">✕</button></td>
+            <td class="c"><button class="drop" :disabled="locked" @click="dropIndex(idx.name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>

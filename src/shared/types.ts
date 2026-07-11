@@ -544,7 +544,14 @@ export type FilterOp =
   | '>'
   | '>='
   | 'contains'
+  | 'not contains'
   | 'starts'
+  | 'ends'
+  | 'like'
+  | 'not like'
+  | 'in'
+  | 'not in'
+  | 'between'
   | 'is null'
   | 'not null'
 
@@ -552,6 +559,8 @@ export interface FilterSpec {
   column: string
   op: FilterOp
   value?: string
+  /** Second operand — only used by `between` (upper bound). */
+  value2?: string
 }
 
 export interface TableQueryOptions {

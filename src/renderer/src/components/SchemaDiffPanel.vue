@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed } from 'vue'
 import { diffSchemas, type TableDiff } from '../lib/schemaDiff'
 import { buildMigration } from '../lib/migration'
@@ -92,7 +93,7 @@ const badge = (s: TableDiff['status']): string =>
         class="btn btn-ghost"
         :class="{ on: showMigration }"
         @click="showMigration = !showMigration"
-      >⤓ Migration script</button>
+      ><Icon name="download" :size="13" /> Migration script</button>
     </div>
 
     <div v-if="error" class="err">{{ error }}</div>
@@ -115,7 +116,7 @@ const badge = (s: TableDiff['status']): string =>
           <button :class="{ on: !toTarget }" @click="toTarget = false">target → {{ connName }}</button>
         </div>
         <div class="spacer" />
-        <button class="btn btn-ghost" @click="copyMigration">{{ copied ? '✓ Copied' : '⧉ Copy' }}</button>
+        <button class="btn btn-ghost" @click="copyMigration"><Icon :name="copied ? 'check' : 'copy'" :size="13" /> {{ copied ? 'Copied' : 'Copy' }}</button>
         <button class="btn btn-primary" @click="openMigrationAsQuery">Open as query →</button>
       </div>
       <pre class="mig-sql">{{ migration }}</pre>

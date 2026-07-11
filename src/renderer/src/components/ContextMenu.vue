@@ -6,6 +6,7 @@ export interface MenuItem {
   shortcut?: string
   action?: () => void
 }
+import { onMounted, onBeforeUnmount } from 'vue'
 defineProps<{ x: number; y: number; items: MenuItem[] }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -14,12 +15,18 @@ function pick(item: MenuItem): void {
   item.action?.()
   emit('close')
 }
+
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') emit('close')
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
   <Teleport to="body">
     <div class="cm-overlay" @mousedown="emit('close')" @contextmenu.prevent="emit('close')">
-      <div class="cm" :style="{ left: `${x}px`, top: `${y}px` }" @mousedown.stop>
+      <div class="cm pop-in" :style="{ left: `${x}px`, top: `${y}px` }" @mousedown.stop>
         <template v-for="(it, i) in items" :key="i">
           <div v-if="it.sep" class="cm-sep" />
           <button v-else class="cm-item" :class="{ danger: it.danger }" @click="pick(it)">
@@ -44,8 +51,18 @@ function pick(item: MenuItem): void {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-pop);
   padding: 4px;
+}
+.pop-in {
+  transform-origin: top left;
+  animation: cm-pop var(--dur-2) var(--ease-spring) both;
+}
+@keyframes cm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-3px);
+  }
 }
 .cm-item {
   display: flex;
@@ -57,6 +74,7 @@ function pick(item: MenuItem): void {
   border-radius: 4px;
   font-size: 13px;
   color: var(--text);
+  transition: background 0.08s, color 0.08s;
 }
 .cm-label {
   flex: 1;

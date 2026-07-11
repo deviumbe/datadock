@@ -297,7 +297,12 @@ export interface AiAnalyticsRequest {
 const CHART_TYPES: ChartType[] = ['bar', 'hbar', 'line', 'area', 'pie', 'donut', 'kpi', 'table', 'pivot']
 const AGGS: Aggregation[] = ['count', 'sum', 'avg', 'min', 'max']
 const BUCKETS = ['none', 'day', 'week', 'month', 'quarter', 'year']
-const FILTER_OPS = new Set(['=', '!=', '<', '<=', '>', '>=', 'contains', 'starts', 'is null', 'not null'])
+const FILTER_OPS = new Set([
+  '=', '!=', '<', '<=', '>', '>=',
+  'contains', 'not contains', 'starts', 'ends', 'like', 'not like',
+  'in', 'not in', 'between',
+  'is null', 'not null'
+])
 const FORMAT_STYLES = new Set(['plain', 'currency', 'percent'])
 const OP_KINDS = new Set([
   'createDataset', 'updateDataset', 'deleteDataset',
@@ -314,7 +319,8 @@ function parseFilters(raw: unknown): FilterSpec[] | undefined {
     out.push({
       column: String(f.column),
       op: String(f.op) as FilterSpec['op'],
-      value: f.value !== undefined ? String(f.value) : undefined
+      value: f.value !== undefined ? String(f.value) : undefined,
+      value2: f.value2 !== undefined ? String(f.value2) : undefined
     })
   }
   return out.length ? out : undefined

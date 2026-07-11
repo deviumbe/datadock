@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed } from 'vue'
 import Modal from './Modal.vue'
 import { COLUMN_TYPES, type DriverType, type NewColumn } from '@shared/types'
@@ -93,7 +94,7 @@ async function create(): Promise<void> {
           <td class="c"><input type="checkbox" v-model="c.primaryKey" /></td>
           <td><input class="input sm" v-model="c.default" placeholder="optional" /></td>
           <td class="c">
-            <button class="drop" :disabled="columns.length <= 1" @click="removeColumn(i)">✕</button>
+            <button class="drop" :disabled="columns.length <= 1" @click="removeColumn(i)"><Icon name="x" :size="12" /></button>
           </td>
         </tr>
       </tbody>

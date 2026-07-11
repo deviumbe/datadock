@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { ErModel } from '@shared/types'
 
@@ -398,7 +399,7 @@ function endDrag(): void {
       <button class="btn btn-ghost" @click="layout()">Re-layout</button>
       <button class="btn btn-ghost" title="Export as SVG" @click="exportSvg">SVG</button>
       <button class="btn btn-ghost" title="Export as PNG" @click="exportPng">PNG</button>
-      <button class="btn btn-ghost" @click="emit('reload')">⟳</button>
+      <button class="btn btn-ghost" @click="emit('reload')"><Icon name="refresh" :size="14" /></button>
     </div>
 
     <div ref="container" class="er-canvas">

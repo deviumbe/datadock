@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { isSqlDriver } from '@shared/types'
 import type { HistoryEntry, TableSizeInfo, PoolStats, SizeSnapshot } from '@shared/types'
@@ -201,7 +202,7 @@ function poolPct(): number {
           <option :value="1000">1 s</option>
         </select>
       </label>
-      <button class="btn btn-ghost" :disabled="loading" @click="load">⟳ Refresh</button>
+      <button class="btn btn-ghost" :disabled="loading" @click="load"><Icon name="refresh" :size="13" /> Refresh</button>
     </header>
 
     <div v-if="!totalRuns && !loading" class="empty">
@@ -335,7 +336,7 @@ function poolPct(): number {
           <span v-if="idxScanned" class="count">{{ findings.length }}</span>
           <div class="spacer" />
           <button v-if="isSql" class="btn btn-ghost sm" :disabled="idxScanning" @click="scanIndexes">
-            {{ idxScanning ? `Scanning… ${idxProgress}/${idxTotal}` : idxScanned ? '⟳ Rescan' : '⌕ Scan schema' }}
+            {{ idxScanning ? `Scanning… ${idxProgress}/${idxTotal}` : idxScanned ? 'Rescan' : 'Scan schema' }}
           </button>
         </h3>
         <p v-if="!isSql" class="muted">Not available for {{ driver }}.</p>

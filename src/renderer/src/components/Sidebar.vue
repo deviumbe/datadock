@@ -4,6 +4,7 @@ import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
 import type { ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 import logoUrl from '../assets/logo.png'
+import Icon from './Icon.vue'
 
 const ws = useWorkspace()
 const ui = useUi()
@@ -69,7 +70,7 @@ const DRIVER_LABEL: Record<string, string> = {
     <div class="side-head">
       <img class="logo" :src="logoUrl" alt="DataDock" />
       <span class="brand">DataDock</span>
-      <button class="btn-ghost icon" title="New project" @click="emit('newProject')">＋</button>
+      <button class="btn-ghost icon" title="New project" @click="emit('newProject')"><Icon name="plus" :size="14" /></button>
     </div>
 
     <div class="tree">
@@ -80,12 +81,12 @@ const DRIVER_LABEL: Record<string, string> = {
 
       <div v-for="project in ws.projects" :key="project.id" class="project">
         <div class="row project-row" @click="ws.toggleProject(project.id)">
-          <span class="caret" :class="{ open: ws.expandedProjects.has(project.id) }">▸</span>
+          <span class="caret" :class="{ open: ws.expandedProjects.has(project.id) }"><Icon name="chevronRight" :size="11" /></span>
           <span class="label">{{ project.name }}</span>
           <div class="row-actions" @click.stop>
-            <button class="btn-ghost icon" title="New environment" @click="emit('newEnvironment', project.id)">＋</button>
-            <button class="btn-ghost icon" title="Rename" @click="emit('editProject', project)">✎</button>
-            <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteProject', project)">🗑</button>
+            <button class="btn-ghost icon" title="New environment" @click="emit('newEnvironment', project.id)"><Icon name="plus" :size="13" /></button>
+            <button class="btn-ghost icon" title="Rename" @click="emit('editProject', project)"><Icon name="pencil" :size="12" /></button>
+            <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteProject', project)"><Icon name="trash" :size="12" /></button>
           </div>
         </div>
 
@@ -96,13 +97,13 @@ const DRIVER_LABEL: Record<string, string> = {
 
           <div v-for="env in project.environments" :key="env.id" class="env">
             <div class="row env-row" @click="ws.toggleEnv(env.id)">
-              <span class="caret" :class="{ open: ws.expandedEnvs.has(env.id) }">▸</span>
-              <span class="folder">▤</span>
+              <span class="caret" :class="{ open: ws.expandedEnvs.has(env.id) }"><Icon name="chevronRight" :size="11" /></span>
+              <span class="folder"><Icon name="folder" :size="12" /></span>
               <span class="label">{{ env.name }}</span>
               <div class="row-actions" @click.stop>
-                <button class="btn-ghost icon" title="New connection" @click="emit('newConnection', env.id)">＋</button>
-                <button class="btn-ghost icon" title="Rename" @click="emit('editEnvironment', env)">✎</button>
-                <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteEnvironment', env)">🗑</button>
+                <button class="btn-ghost icon" title="New connection" @click="emit('newConnection', env.id)"><Icon name="plus" :size="13" /></button>
+                <button class="btn-ghost icon" title="Rename" @click="emit('editEnvironment', env)"><Icon name="pencil" :size="12" /></button>
+                <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteEnvironment', env)"><Icon name="trash" :size="12" /></button>
               </div>
             </div>
 
@@ -126,9 +127,9 @@ const DRIVER_LABEL: Record<string, string> = {
                   :title="stateTitle(conn.id)"
                 />
                 <div class="row-actions" @click.stop>
-                  <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)">⎘</button>
-                  <button class="btn-ghost icon" title="Edit" @click="emit('editConnection', conn, env.id)">✎</button>
-                  <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteConnection', conn)">🗑</button>
+                  <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)"><Icon name="copy" :size="12" /></button>
+                  <button class="btn-ghost icon" title="Edit" @click="emit('editConnection', conn, env.id)"><Icon name="pencil" :size="12" /></button>
+                  <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteConnection', conn)"><Icon name="trash" :size="12" /></button>
                 </div>
               </div>
             </div>
@@ -141,7 +142,7 @@ const DRIVER_LABEL: Record<string, string> = {
     <div class="topo-section">
       <div class="topo-head">
         <span class="topo-title">Topologies</span>
-        <button class="btn-ghost icon" title="New topology" @click="emit('newTopology')">＋</button>
+        <button class="btn-ghost icon" title="New topology" @click="emit('newTopology')"><Icon name="plus" :size="13" /></button>
       </div>
       <div
         v-for="t in ws.topologies"
@@ -150,12 +151,12 @@ const DRIVER_LABEL: Record<string, string> = {
         :class="{ active: ui.topologyId === t.id }"
         @click="ui.openTopology(t.id)"
       >
-        <span class="topo-dot">◇</span>
+        <span class="topo-dot"><Icon name="diagram" :size="12" /></span>
         <span class="topo-name">{{ t.name }}</span>
         <span class="topo-count">{{ t.nodes.length }}</span>
         <div class="row-actions" @click.stop>
-          <button class="btn-ghost icon" title="Edit" @click="emit('editTopology', t)">✎</button>
-          <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteTopology', t)">🗑</button>
+          <button class="btn-ghost icon" title="Edit" @click="emit('editTopology', t)"><Icon name="pencil" :size="12" /></button>
+          <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteTopology', t)"><Icon name="trash" :size="12" /></button>
         </div>
       </div>
       <p v-if="!ws.topologies.length" class="topo-empty">
@@ -219,6 +220,7 @@ const DRIVER_LABEL: Record<string, string> = {
   border-radius: var(--radius-sm);
   cursor: pointer;
   position: relative;
+  transition: background var(--dur-1);
 }
 .row:hover {
   background: var(--bg-hover);
@@ -242,17 +244,21 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .caret {
   width: 12px;
-  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-faint);
-  transition: transform 0.12s;
+  transition: transform var(--dur-2) var(--ease-out);
   flex-shrink: 0;
 }
 .caret.open {
   transform: rotate(90deg);
 }
 .folder {
+  display: inline-flex;
+  align-items: center;
   color: var(--text-faint);
-  font-size: 11px;
+  flex-shrink: 0;
 }
 .label {
   flex: 1;
@@ -269,6 +275,14 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .children {
   padding-left: 14px;
+  /* v-show re-triggers this on every expand: a quick settle-in for the subtree. */
+  animation: kids-in var(--dur-2) var(--ease-out);
+}
+@keyframes kids-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .dot {
   width: 9px;
@@ -312,23 +326,39 @@ const DRIVER_LABEL: Record<string, string> = {
     opacity: 0.3;
   }
 }
+/* Hover actions float in a small pill on the right instead of pushing the
+   label/badges around — the row's layout never shifts. */
 .row-actions {
-  display: none;
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
   align-items: center;
   gap: 1px;
+  padding: 1px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1);
 }
-.row:hover .row-actions {
-  display: flex;
+.row:hover .row-actions,
+.row:focus-within .row-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 .icon {
   width: 22px;
   height: 22px;
   border-radius: 4px;
-  font-size: 12px;
   color: var(--text-dim);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--dur-1), color var(--dur-1);
 }
 .icon:hover {
   background: var(--bg-active);
@@ -376,8 +406,10 @@ const DRIVER_LABEL: Record<string, string> = {
   background: var(--accent-soft);
 }
 .topo-dot {
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
-  font-size: 11px;
+  flex-shrink: 0;
 }
 .topo-name {
   flex: 1;
@@ -394,7 +426,10 @@ const DRIVER_LABEL: Record<string, string> = {
   padding: 0 6px;
 }
 .topo-row:hover .topo-count {
-  display: none;
+  opacity: 0;
+}
+.topo-count {
+  transition: opacity var(--dur-1);
 }
 .topo-empty {
   padding: 2px 10px 6px;

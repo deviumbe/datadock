@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useTabs } from '../stores/tabs'
 import { useUi } from '../stores/ui'
+import Icon from './Icon.vue'
 
 const emit = defineEmits<{ close: []; action: [action: string] }>()
 
@@ -33,7 +34,7 @@ const allItems = computed<PaletteItem[]>(() => {
         items.push({
           id: `conn-${conn.id}`,
           label: conn.name,
-          icon: '🔌',
+          icon: 'database',
           category: 'Connections',
           action: () => {
             void ws.connectAndOpen(conn.id)
@@ -51,7 +52,7 @@ const allItems = computed<PaletteItem[]>(() => {
       items.push({
         id: `table-${table.schema ?? ''}.${table.name}`,
         label: table.name,
-        icon: table.type === 'view' ? '◫' : '▦',
+        icon: table.type === 'view' ? 'view' : 'table',
         category: 'Tables',
         action: () => {
           tabsStore.openTable(connId, table)
@@ -65,80 +66,80 @@ const allItems = computed<PaletteItem[]>(() => {
   const actions: { label: string; icon: string; handler: () => void }[] = [
     {
       label: 'New Query',
-      icon: '＋',
+      icon: 'plus',
       handler: () => {
         if (connId) tabsStore.openQuery(connId)
       }
     },
     {
       label: 'Chat with Data',
-      icon: '✨',
+      icon: 'sparkles',
       handler: () => {
         if (connId) tabsStore.openChat(connId)
       }
     },
-    { label: 'Settings', icon: '⚙', handler: () => (ui.settingsOpen = true) },
-    { label: 'Toggle Theme', icon: '☀', handler: () => ui.toggleTheme() },
-    { label: 'Toggle Sidebar', icon: '☰', handler: () => ui.toggleSidebar() },
+    { label: 'Settings', icon: 'sliders', handler: () => (ui.settingsOpen = true) },
+    { label: 'Toggle Theme', icon: 'sun', handler: () => ui.toggleTheme() },
+    { label: 'Toggle Sidebar', icon: 'menu', handler: () => ui.toggleSidebar() },
     {
       label: 'Databases',
-      icon: '🗄',
+      icon: 'database',
       handler: () => {
         if (connId) tabsStore.openServer(connId, 'databases')
       }
     },
     {
       label: 'Users',
-      icon: '👤',
+      icon: 'user',
       handler: () => {
         if (connId) tabsStore.openServer(connId, 'users')
       }
     },
     {
       label: 'Table Sizes',
-      icon: '📊',
+      icon: 'chart',
       handler: () => {
         if (connId) ui.tableSizesOpen = true
       }
     },
     {
       label: 'Search Schema',
-      icon: '🔎',
+      icon: 'search',
       handler: () => {
         if (connId) ui.columnSearchOpen = true
       }
     },
     {
       label: 'Processes',
-      icon: '⚙',
+      icon: 'bolt',
       handler: () => {
         if (connId) tabsStore.openServer(connId, 'processes')
       }
     },
     {
       label: 'Query History',
-      icon: '🕑',
+      icon: 'clock',
       handler: () => {
         if (connId) tabsStore.openHistory(connId)
       }
     },
     {
       label: 'Saved Queries',
-      icon: '★',
+      icon: 'star',
       handler: () => {
         if (connId) tabsStore.openSnippets(connId)
       }
     },
     {
       label: 'Disconnect',
-      icon: '⏏',
+      icon: 'power',
       handler: () => {
         if (connId) void ws.disconnect(connId)
       }
     },
     {
       label: 'Import',
-      icon: '📥',
+      icon: 'download',
       handler: () => {
         if (connId) {
           if (ws.isReadOnly(connId)) {
@@ -151,7 +152,7 @@ const allItems = computed<PaletteItem[]>(() => {
     },
     {
       label: 'Export Database',
-      icon: '📤',
+      icon: 'upload',
       handler: () => {
         if (connId) ui.exportDbOpen = true
       }
@@ -165,98 +166,98 @@ const allItems = computed<PaletteItem[]>(() => {
     },
     {
       label: 'Clone to SQLite',
-      icon: '🗄',
+      icon: 'copy',
       handler: () => {
         if (connId) ui.cloneSqliteOpen = true
       }
     },
     {
       label: 'ER Diagram',
-      icon: '🔗',
+      icon: 'diagram',
       handler: () => {
         if (connId) tabsStore.openDiagram(connId)
       }
     },
     {
       label: 'Visual Query Builder',
-      icon: '🔍',
+      icon: 'diagram',
       handler: () => {
         if (connId) tabsStore.openVisualQuery(connId)
       }
     },
     {
       label: 'Analytics',
-      icon: '📈',
+      icon: 'chart',
       handler: () => {
         if (connId) tabsStore.openAnalytics(connId)
       }
     },
     {
       label: 'Performance',
-      icon: '📊',
+      icon: 'chart',
       handler: () => {
         if (connId) tabsStore.openPerformance(connId)
       }
     },
     {
       label: 'AI Investigations',
-      icon: '✨',
+      icon: 'sparkles',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId)
       }
     },
     {
       label: 'AI Health Check',
-      icon: '🩺',
+      icon: 'check',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId, { type: 'health' })
       }
     },
     {
       label: 'AI Root Cause Analysis',
-      icon: '🎯',
+      icon: 'target',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId, { type: 'rootCause' })
       }
     },
     {
       label: 'AI Data Quality Inspector',
-      icon: '🧹',
+      icon: 'filter',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId, { type: 'dataQuality' })
       }
     },
     {
       label: 'AI Security & Privacy Audit',
-      icon: '🔐',
+      icon: 'lock',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId, { type: 'security' })
       }
     },
     {
       label: 'AI Explain Database',
-      icon: '📖',
+      icon: 'note',
       handler: () => {
         if (connId) tabsStore.openInvestigations(connId, { type: 'schema' })
       }
     },
     {
       label: 'Documentation',
-      icon: '📄',
+      icon: 'note',
       handler: () => {
         if (connId) tabsStore.openDocs(connId)
       }
     },
     {
       label: 'Search Everywhere',
-      icon: '⌕',
+      icon: 'search',
       handler: () => {
         if (connId) tabsStore.openSearch(connId)
       }
     },
     {
       label: 'Environment Diff',
-      icon: '⇄',
+      icon: 'swap',
       handler: () => {
         if (connId) tabsStore.openEnvDiff(connId)
       }
@@ -267,7 +268,7 @@ const allItems = computed<PaletteItem[]>(() => {
   if (connId && ws.findConnection(connId)?.driver === 'redis') {
     actions.push({
       label: 'Redis Queues',
-      icon: '📨',
+      icon: 'menu',
       handler: () => tabsStore.openRedisQueues(connId)
     })
   }
@@ -359,7 +360,7 @@ onMounted(() => {
       <div class="backdrop" @mousedown.self="emit('close')">
         <div class="palette" @keydown="onKeydown">
           <div class="search-bar">
-            <span class="search-icon">⌘</span>
+            <span class="search-icon"><Icon name="search" :size="15" /></span>
             <input
               ref="inputEl"
               v-model="query"
@@ -382,7 +383,7 @@ onMounted(() => {
                 @mouseenter="selectedIndex = globalIndex"
                 @click="item.action()"
               >
-                <span class="item-icon">{{ item.icon }}</span>
+                <span class="item-icon"><Icon :name="item.icon" :size="14" /></span>
                 <span class="item-label">{{ item.label }}</span>
                 <span class="item-badge">{{ item.category }}</span>
               </div>
@@ -433,8 +434,9 @@ onMounted(() => {
   border-bottom: 1px solid var(--border);
 }
 .search-icon {
+  display: inline-flex;
+  align-items: center;
   color: var(--text-faint);
-  font-size: 14px;
   flex-shrink: 0;
 }
 .search-input {
@@ -476,10 +478,15 @@ onMounted(() => {
   background: var(--accent-soft);
 }
 .item-icon {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
-  text-align: center;
+  color: var(--text-dim);
   flex-shrink: 0;
+}
+.item.selected .item-icon {
+  color: var(--accent);
 }
 .item-label {
   flex: 1;

@@ -18,6 +18,7 @@ import type {
   TableSizeInfo
 } from '@shared/types'
 import { DbAdapter, now } from './types'
+import { splitList } from './clauses'
 import { discoverQueues, queueAction, queueJobs, queueOverview } from './redisQueues'
 
 const NO_PREFIX = '(no prefix)'
@@ -188,8 +189,18 @@ export class RedisAdapter implements DbAdapter {
       if (f.column !== 'key' || !f.value) continue
       const v = f.value.toLowerCase()
       if (f.op === 'contains') keys = keys.filter((k) => k.toLowerCase().includes(v))
+      else if (f.op === 'not contains') keys = keys.filter((k) => !k.toLowerCase().includes(v))
       else if (f.op === 'starts') keys = keys.filter((k) => k.toLowerCase().startsWith(v))
+      else if (f.op === 'ends') keys = keys.filter((k) => k.toLowerCase().endsWith(v))
       else if (f.op === '=') keys = keys.filter((k) => k === f.value)
+      else if (f.op === '!=') keys = keys.filter((k) => k !== f.value)
+      else if (f.op === 'in') {
+        const set = new Set(splitList(f.value))
+        keys = keys.filter((k) => set.has(k))
+      } else if (f.op === 'not in') {
+        const set = new Set(splitList(f.value))
+        keys = keys.filter((k) => !set.has(k))
+      }
     }
     keys.sort((a, b) => a.localeCompare(b))
     if (opts.sort?.column === 'key' && opts.sort.dir === 'desc') keys.reverse()
