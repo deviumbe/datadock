@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { randomUUID } from 'crypto'
 import type { ConnectionConfig, Project, Topology, Workspace } from '@shared/types'
+import { isMssqlEntra, isPostgresEntra } from './auth/entra'
 
 const SECRET_FIELDS = ['password', 'token', 'sshPassword', 'sshPassphrase'] as const
 
@@ -212,12 +213,14 @@ export function saveConnection(environmentId: string, config: ConnectionConfig):
   delete prepared.hasSshPassphrase
 
   const existing = config.id ? findConnection(config.id)?.connection : undefined
+  const entraAuth = isMssqlEntra(prepared) || isPostgresEntra(prepared)
+  if (entraAuth) delete prepared.password
 
   for (const f of SECRET_FIELDS) {
     const incoming = prepared[f] as string | undefined
     if (incoming) {
       prepared[f] = encryptSecret(incoming)
-    } else if (existing?.[f]) {
+    } else if (existing?.[f] && !(entraAuth && f === 'password')) {
       prepared[f] = existing[f] // keep prior encrypted secret
     } else {
       delete prepared[f]
@@ -226,6 +229,7 @@ export function saveConnection(environmentId: string, config: ConnectionConfig):
 
   if (existing) {
     Object.assign(existing, prepared, { id: existing.id })
+    if (entraAuth) delete existing.password
     // If the connection moved environments, relocate it.
     const current = findConnection(existing.id)
     if (current && current.environmentId !== environmentId) {

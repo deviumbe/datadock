@@ -33,6 +33,7 @@ function blank(): ConnectionConfig {
     password: '',
     ssl: false,
     mssqlAuthType: 'sql',
+    postgresAuthType: 'password',
     readOnly: false,
     production: false,
     mcpExcluded: false,
@@ -54,14 +55,21 @@ const isNetwork = computed(() =>
 const isRedis = computed(() => form.driver === 'redis')
 const isOracle = computed(() => form.driver === 'oracle')
 const isMssql = computed(() => form.driver === 'mssql')
-const isEntraAuth = computed(() => isMssql.value && form.mssqlAuthType === 'entra-interactive')
+const isPostgres = computed(() => form.driver === 'postgres')
+const isMssqlEntra = computed(() => isMssql.value && form.mssqlAuthType === 'entra-interactive')
+const isPostgresEntra = computed(() => isPostgres.value && form.postgresAuthType === 'entra-interactive')
+const isEntraAuth = computed(() => isMssqlEntra.value || isPostgresEntra.value)
 
-// Azure SQL requires an encrypted connection — flip SSL on automatically the
-// moment Entra auth is chosen (the user can still turn it back off).
+// Azure SQL / Azure PostgreSQL require TLS — flip SSL on automatically the
+// moment Entra auth is chosen (the user can still turn it back off). Also
+// clear a typed password so it is not saved onto an Entra connection.
 watch(
-  () => form.mssqlAuthType,
-  (t) => {
-    if (t === 'entra-interactive') form.ssl = true
+  () => [form.mssqlAuthType, form.postgresAuthType] as const,
+  ([mssql, postgres]) => {
+    if (mssql === 'entra-interactive' || postgres === 'entra-interactive') {
+      form.ssl = true
+      form.password = ''
+    }
   }
 )
 const canTunnel = computed(
@@ -112,12 +120,16 @@ const canSave = computed(() => {
 
 // One-click presets that fill the form with sensible local defaults per engine.
 const PRESETS: { label: string; config: Partial<ConnectionConfig> }[] = [
-  { label: 'PostgreSQL', config: { driver: 'postgres', host: 'localhost', port: 5432, user: 'postgres', database: 'postgres' } },
+  { label: 'PostgreSQL', config: { driver: 'postgres', host: 'localhost', port: 5432, user: 'postgres', database: 'postgres', postgresAuthType: 'password' } },
   { label: 'MySQL / MariaDB', config: { driver: 'mysql', host: 'localhost', port: 3306, user: 'root' } },
   { label: 'SQL Server', config: { driver: 'mssql', host: 'localhost', port: 1433, user: 'sa', mssqlAuthType: 'sql' } },
   {
     label: 'Azure SQL (Entra ID)',
     config: { driver: 'mssql', host: '', port: 1433, ssl: true, mssqlAuthType: 'entra-interactive' }
+  },
+  {
+    label: 'Azure PostgreSQL (Entra ID)',
+    config: { driver: 'postgres', host: '', port: 5432, ssl: true, postgresAuthType: 'entra-interactive' }
   },
   { label: 'Oracle', config: { driver: 'oracle', host: 'localhost', port: 1521, user: 'system', database: 'XEPDB1' } },
   { label: 'MongoDB', config: { driver: 'mongodb', url: 'mongodb://localhost:27017' } },
@@ -198,7 +210,13 @@ function save(): void {
           <input
             class="input"
             v-model="form.host"
-            :placeholder="isEntraAuth ? 'yourserver.database.windows.net' : 'localhost'"
+            :placeholder="
+              isMssqlEntra
+                ? 'yourserver.database.windows.net'
+                : isPostgresEntra
+                  ? 'yourserver.postgres.database.azure.com'
+                  : 'localhost'
+            "
           />
         </div>
         <div class="field">
@@ -221,6 +239,13 @@ function save(): void {
             <option value="entra-interactive">Microsoft Entra ID — sign in with browser</option>
           </select>
         </div>
+        <div v-else-if="isPostgres" class="field span2">
+          <label>Authentication</label>
+          <select class="select" v-model="form.postgresAuthType">
+            <option value="password">Password (username / password)</option>
+            <option value="entra-interactive">Microsoft Entra ID — sign in with browser</option>
+          </select>
+        </div>
         <template v-if="!isEntraAuth">
           <div class="field">
             <label>{{ isRedis ? 'Username (ACL, optional)' : 'User' }}</label>
@@ -237,19 +262,34 @@ function save(): void {
             />
           </div>
         </template>
-        <div v-else class="field span2">
-          <label>Entra tenant ID (optional)</label>
-          <input
-            class="input"
-            v-model="form.entraTenantId"
-            placeholder="e.g. contoso.onmicrosoft.com or a GUID — leave blank to pick at sign-in"
-          />
-          <small class="hint">
-            Testing or connecting opens your system browser to sign in with Microsoft Entra ID
-            (MFA/conditional access supported). DataDock keeps you signed in for the rest of this
-            app session; you'll sign in again after restarting.
-          </small>
-        </div>
+        <template v-else>
+          <div v-if="isPostgresEntra" class="field span2">
+            <label>PostgreSQL role override (optional)</label>
+            <input
+              class="input"
+              v-model="form.user"
+              autocomplete="off"
+              placeholder="Leave blank to use your signed-in UPN"
+            />
+            <small class="hint">
+              Group logins need the exact Entra group display name (case-sensitive, max 63
+              characters). Individual logins can leave this blank.
+            </small>
+          </div>
+          <div class="field span2">
+            <label>Entra tenant ID (optional)</label>
+            <input
+              class="input"
+              v-model="form.entraTenantId"
+              placeholder="e.g. contoso.onmicrosoft.com or a GUID — leave blank to pick at sign-in"
+            />
+            <small class="hint">
+              Testing or connecting opens your system browser to sign in with Microsoft Entra ID
+              (MFA/conditional access supported). DataDock keeps you signed in for the rest of this
+              app session; you'll sign in again after restarting.
+            </small>
+          </div>
+        </template>
         <label class="check span2">
           <input type="checkbox" v-model="form.ssl" />
           <span>Use SSL / TLS (accept self-signed)</span>

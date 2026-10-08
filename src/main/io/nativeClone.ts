@@ -10,6 +10,7 @@ import { tmpdir } from 'os'
 import { join, delimiter } from 'path'
 import type { ConnectionConfig, IoProgress, SqlDialect } from '@shared/types'
 import { sqlDialect } from '@shared/types'
+import { entraPostgresAccessToken, entraPostgresRole, isPostgresEntra } from '../auth/entra'
 
 type ProgressFn = (p: Omit<IoProgress, 'opId'>) => void
 
@@ -87,6 +88,23 @@ export async function findCloneTools(dialect: SqlDialect): Promise<CloneTools | 
 const host = (c: ConnectionConfig): string => c.host || '127.0.0.1'
 const port = (c: ConnectionConfig): string =>
   String(c.port || (sqlDialect(c.driver) === 'mysql' ? 3306 : 5432))
+
+/** Env + role for pg_dump/psql. Entra uses a fresh token as PGPASSWORD. */
+async function postgresCliAuth(
+  config: ConnectionConfig
+): Promise<{ env: NodeJS.ProcessEnv; user: string }> {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  if (isPostgresEntra(config)) {
+    const token = await entraPostgresAccessToken(config)
+    env.PGPASSWORD = token
+    env.PGGSSENCMODE = 'disable'
+    env.PGSSLMODE = 'require'
+    return { env, user: entraPostgresRole(config, token) }
+  }
+  env.PGPASSWORD = config.password ?? ''
+  if (config.ssl) env.PGSSLMODE = 'require'
+  return { env, user: config.user ?? '' }
+}
 
 /** Write a 0600 my.cnf so the password never appears in argv or env. */
 async function writeMyCnf(cfg: ConnectionConfig): Promise<string> {
@@ -256,9 +274,8 @@ async function buildDump(tools: CloneTools, source: ConnectionConfig, spec: Clon
     return { bin: tools.dump, args, env: process.env, tool: 'mysqldump', cleanup: [cnf] }
   }
   // postgres family
-  const env: NodeJS.ProcessEnv = { ...process.env, PGPASSWORD: source.password ?? '' }
-  if (source.ssl) env.PGSSLMODE = 'require'
-  const args = ['-h', host(source), '-p', port(source), '-U', source.user ?? '', '--no-owner', '--no-privileges']
+  const { env, user } = await postgresCliAuth(source)
+  const args = ['-h', host(source), '-p', port(source), '-U', user, '--no-owner', '--no-privileges']
   if (spec.mode === 'replace') args.push('--clean', '--if-exists')
   if (spec.structureOnly) args.push('--schema-only')
   if (spec.dataOnly) args.push('--data-only')
@@ -312,9 +329,8 @@ export async function nativeClone(
       args.push(target.database ?? '')
       await runRestore({ bin: tools.restore, args, env: process.env, inFile: tmpFile, label: `Restoring into ${target.name}`, onProgress, signal, opId })
     } else {
-      const env: NodeJS.ProcessEnv = { ...process.env, PGPASSWORD: target.password ?? '' }
-      if (target.ssl) env.PGSSLMODE = 'require'
-      const args = ['-h', host(target), '-p', port(target), '-U', target.user ?? '', '-d', target.database ?? '', '-v', 'ON_ERROR_STOP=0']
+      const { env, user } = await postgresCliAuth(target)
+      const args = ['-h', host(target), '-p', port(target), '-U', user, '-d', target.database ?? '', '-v', 'ON_ERROR_STOP=0']
       await runRestore({ bin: tools.restore, args, env, inFile: tmpFile, label: `Restoring into ${target.name}`, onProgress, signal, opId })
     }
   } finally {

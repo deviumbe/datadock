@@ -162,6 +162,11 @@ export interface ConnectionConfig {
   // user/password above. Interactive sign-in opens the system browser (MSAL),
   // so it supports MFA/conditional access on managed Azure SQL databases.
   mssqlAuthType?: MssqlAuthType
+  // PostgreSQL — same interactive Entra flow for Azure Database for PostgreSQL
+  // Flexible Server. The access token is used as the password. `user` is an
+  // optional role override (UPN or group display name); blank derives it from
+  // the signed-in token.
+  postgresAuthType?: PostgresAuthType
   /** Optional: pin interactive sign-in to a specific Entra tenant (GUID or domain). */
   entraTenantId?: string
 
@@ -204,6 +209,8 @@ export interface ConnectionConfig {
 export type SshAuthMethod = 'key' | 'password' | 'agent'
 
 export type MssqlAuthType = 'sql' | 'entra-interactive'
+
+export type PostgresAuthType = 'password' | 'entra-interactive'
 
 /** A reusable SSH tunnel definition, managed in Settings and selected per
  * connection. Secrets (passphrase/password) are never sent to the renderer —
