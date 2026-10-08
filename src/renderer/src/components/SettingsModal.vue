@@ -85,6 +85,10 @@ async function clearKey(p: AiProvider): Promise<void> {
 async function saveModel(p: AiProvider): Promise<void> {
   if (modelDraft[p] !== undefined) await settings.setProviderConfig(p, { model: modelDraft[p] })
 }
+async function pickModel(p: AiProvider, m: string): Promise<void> {
+  modelDraft[p] = m
+  await saveModel(p)
+}
 async function saveUrl(p: AiProvider): Promise<void> {
   if (urlDraft[p] !== undefined) await settings.setProviderConfig(p, { baseUrl: urlDraft[p] })
 }
@@ -260,7 +264,8 @@ function setSshAuth(m: SshAuthMethod): void {
                   <span class="prov-name">{{ p.label }}</span>
                 </label>
                 <span v-if="p.provider === settings.activeProvider" class="badge-active">Active</span>
-                <span v-if="!p.needsKey" class="badge-local">no key needed</span>
+                <span v-if="p.provider === 'claude-code'" class="badge-local">uses your Claude login</span>
+                <span v-else-if="!p.needsKey" class="badge-local">no key needed</span>
                 <span v-else-if="p.hasKey" class="badge-set">key set</span>
               </div>
 
@@ -280,6 +285,25 @@ function setSshAuth(m: SshAuthMethod): void {
                   </div>
                 </div>
 
+                <p v-if="p.provider === 'claude-code'" class="hint-models">
+                  Runs the local <code>claude</code> CLI, so requests count against your Claude Pro/Max
+                  subscription instead of API credits. Run <code>claude</code> once in a terminal to log in.
+                  The CLI gets no tools — DataDock runs any SQL it asks for, read-only.
+                </p>
+
+                <div class="row" v-if="p.provider === 'claude-code'">
+                  <label>CLI path</label>
+                  <div class="row-inputs">
+                    <input
+                      class="input"
+                      :value="urlDraft[p.provider] ?? p.baseUrl"
+                      @input="urlDraft[p.provider] = ($event.target as HTMLInputElement).value"
+                      placeholder="auto-detect (e.g. ~/.local/bin/claude)"
+                      @blur="saveUrl(p.provider)"
+                    />
+                  </div>
+                </div>
+
                 <div class="row" v-if="p.provider === 'ollama'">
                   <label>Server URL</label>
                   <div class="row-inputs">
@@ -296,18 +320,28 @@ function setSshAuth(m: SshAuthMethod): void {
                 <div class="row">
                   <label>Model</label>
                   <div class="row-inputs">
+                    <!-- A <select> rather than a <datalist>: datalists filter by the typed
+                         value, so a saved "sonnet" would hide every other model. -->
+                    <select
+                      v-if="(models[p.provider]?.length ?? 0) > 0"
+                      class="input"
+                      :value="modelDraft[p.provider] ?? p.model"
+                      @change="pickModel(p.provider, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-if="!models[p.provider].includes(modelDraft[p.provider] ?? p.model)" :value="modelDraft[p.provider] ?? p.model">
+                        {{ modelDraft[p.provider] ?? p.model }} (custom)
+                      </option>
+                      <option v-for="m in models[p.provider]" :key="m" :value="m">{{ m }}</option>
+                    </select>
                     <input
                       class="input"
-                      :list="'models-' + p.provider"
                       :value="modelDraft[p.provider] ?? p.model"
                       @input="modelDraft[p.provider] = ($event.target as HTMLInputElement).value"
                       @change="saveModel(p.provider)"
                       :placeholder="p.defaultModel"
+                      :title="(models[p.provider]?.length ?? 0) > 0 ? 'Or type any model id' : undefined"
                       @blur="saveModel(p.provider)"
                     />
-                    <datalist :id="'models-' + p.provider">
-                      <option v-for="m in models[p.provider] || []" :key="m" :value="m" />
-                    </datalist>
                     <button
                       class="btn"
                       @click="detectModels(p.provider)"
@@ -321,7 +355,7 @@ function setSshAuth(m: SshAuthMethod): void {
                     </button>
                   </div>
                   <p v-if="(models[p.provider]?.length ?? 0) > 0" class="hint-models">
-                    {{ models[p.provider].length }} models detected — pick one from the field's dropdown.
+                    {{ models[p.provider].length }} models detected — pick one from the list, or type any model id.
                   </p>
                   <p v-else-if="detectState[p.provider] === 'fail'" class="test fail">{{ detectMsg[p.provider] }}</p>
                 </div>

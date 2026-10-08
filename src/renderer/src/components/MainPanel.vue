@@ -1136,6 +1136,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               class="tab"
               :class="{ on: active?.id === tab.id }"
               @click="tabsStore.setActive(activeConn.id, tab.id)"
+              @mousedown.middle.prevent
+              @mouseup.middle="tabsStore.closeTab(tab.id)"
             >
               <span class="tab-kind" :class="tab.kind" />
               <span class="tab-title">{{ tab.title }}</span>

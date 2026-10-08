@@ -570,6 +570,8 @@ export interface FilterSpec {
   value?: string
   /** Second operand — only used by `between` (upper bound). */
   value2?: string
+  /** Kept in the filter bar but not applied to the query (toggled off). */
+  disabled?: boolean
 }
 
 export interface TableQueryOptions {
@@ -881,7 +883,7 @@ export interface Bookmark {
 
 // ---- settings / AI providers ------------------------------------------------
 
-export type AiProvider = 'anthropic' | 'google' | 'mistral' | 'xai' | 'ollama'
+export type AiProvider = 'anthropic' | 'claude-code' | 'google' | 'mistral' | 'xai' | 'ollama'
 
 /** Provider config as exposed to the renderer — never includes the raw key. */
 export interface ProviderInfo {
@@ -892,7 +894,7 @@ export interface ProviderInfo {
   hasKey: boolean
   model: string
   defaultModel: string
-  /** Server URL — only user-editable for Ollama. */
+  /** Server URL for Ollama; CLI binary path for Claude Code (blank = auto-detect). */
   baseUrl?: string
 }
 

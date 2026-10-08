@@ -579,6 +579,13 @@ export const useTabs = defineStore('tabs', () => {
     await reloadTable(tab)
   }
 
+  /** Plain copies of the filters that should hit the query (set + not toggled off). */
+  function appliedFilters(tab: Tab): FilterSpec[] {
+    return tab.filters
+      .filter((f) => f.column && !f.disabled)
+      .map((f) => ({ column: f.column, op: f.op, value: f.value, value2: f.value2 }))
+  }
+
   /**
    * Fetch the true total row count for the current filters (background, best-effort).
    * Skips the query when paging/sorting — the count only depends on the filters —
@@ -586,7 +593,7 @@ export const useTabs = defineStore('tabs', () => {
    */
   async function countRowsFor(tab: Tab): Promise<void> {
     if (!tab.table) return
-    const activeFilters = tab.filters.filter((f) => f.column)
+    const activeFilters = appliedFilters(tab)
     const key = JSON.stringify(activeFilters)
     if (tab.totalRowsKey === key && tab.totalRows !== null) return
     tab.totalRows = null
@@ -595,7 +602,7 @@ export const useTabs = defineStore('tabs', () => {
       const n = await window.api.db.countRows(tab.connectionId, plainTable(tab.table), {
         limit: 0,
         offset: 0,
-        filters: activeFilters.map((f) => ({ column: f.column, op: f.op, value: f.value }))
+        filters: activeFilters
       })
       // Only apply if the filters haven't changed since we started counting.
       if (tab.totalRowsKey === key) tab.totalRows = n
@@ -615,9 +622,7 @@ export const useTabs = defineStore('tabs', () => {
         limit: tab.pageSize,
         offset: tab.offset,
         sort: tab.sort ? { column: tab.sort.column, dir: tab.sort.dir } : undefined,
-        filters: tab.filters
-          .filter((f) => f.column)
-          .map((f) => ({ column: f.column, op: f.op, value: f.value }))
+        filters: appliedFilters(tab)
       })
       tab.result = markRaw(result)
       tab.edits = {}

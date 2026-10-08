@@ -2,13 +2,17 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { AiProvider, ChatStep } from '@shared/types'
 import { resolveProvider, type ResolvedProvider, PROVIDER_META } from './settings'
+import { cliComplete, cliChatWithData, CLI_MODELS } from './claudeCli'
 
 // A thin abstraction over the supported AI providers. Anthropic uses its own
 // SDK; Google (Gemini), Mistral, xAI (Grok) and Ollama are all reached through
 // their OpenAI-compatible chat endpoints via the `openai` client with a custom
 // baseURL. This keeps a single code path for everything except Anthropic.
+// "Claude Code" shells out to the local `claude` CLI (see claudeCli.ts) so the
+// user's Claude subscription can be used instead of an API key.
 
-const OPENAI_BASE: Record<Exclude<AiProvider, 'anthropic' | 'ollama'>, string> = {
+type OpenAiCompat = Exclude<AiProvider, 'anthropic' | 'claude-code' | 'ollama'>
+const OPENAI_BASE: Record<OpenAiCompat, string> = {
   google: 'https://generativelanguage.googleapis.com/v1beta/openai/',
   mistral: 'https://api.mistral.ai/v1',
   xai: 'https://api.x.ai/v1'
@@ -24,7 +28,7 @@ function openaiClient(rp: ResolvedProvider): OpenAI {
   const baseURL =
     rp.provider === 'ollama'
       ? `${(rp.baseUrl || 'http://localhost:11434').replace(/\/+$/, '')}/v1`
-      : OPENAI_BASE[rp.provider as Exclude<AiProvider, 'anthropic' | 'ollama'>]
+      : OPENAI_BASE[rp.provider as OpenAiCompat]
   // Ollama ignores the key but the client requires a non-empty string.
   return new OpenAI({ apiKey: rp.apiKey || 'ollama', baseURL })
 }
@@ -44,6 +48,9 @@ function anthropicText(res: Anthropic.Message): string {
 export async function complete(opts: { system: string; user: string }): Promise<string> {
   const rp = resolveProvider()
   ensureReady(rp)
+  if (rp.provider === 'claude-code') {
+    return cliComplete({ bin: rp.baseUrl, model: rp.model, system: opts.system, user: opts.user })
+  }
   if (rp.provider === 'anthropic') {
     const client = new Anthropic({ apiKey: rp.apiKey! })
     const res = await client.messages.create({
@@ -98,6 +105,9 @@ export async function chatWithData(opts: {
   const rp = resolveProvider()
   ensureReady(rp)
   const steps: ChatStep[] = []
+  if (rp.provider === 'claude-code') {
+    return cliChatWithData({ bin: rp.baseUrl, model: rp.model, ...opts })
+  }
   return rp.provider === 'anthropic'
     ? anthropicChat(rp, opts, steps)
     : openaiChat(rp, opts, steps)
@@ -225,6 +235,7 @@ async function openaiChat(
 export async function listModels(provider: AiProvider): Promise<string[]> {
   const rp = resolveProvider(provider)
   ensureReady(rp)
+  if (rp.provider === 'claude-code') return claudeCodeModels()
   let ids: string[]
   if (rp.provider === 'anthropic') {
     const client = new Anthropic({ apiKey: rp.apiKey! })
@@ -235,6 +246,26 @@ export async function listModels(provider: AiProvider): Promise<string[]> {
     ids = page.data.map((m) => m.id)
   }
   return cleanModels(ids, provider)
+}
+
+/**
+ * Aliases + known ids for the CLI. If an Anthropic API key is also saved, merge in
+ * the live `/v1/models` catalog so older/pinned versions are pickable too.
+ */
+async function claudeCodeModels(): Promise<string[]> {
+  const ids = new Set(CLI_MODELS)
+  const anthropicKey = resolveProvider('anthropic').apiKey
+  if (anthropicKey) {
+    try {
+      const page = await new Anthropic({ apiKey: anthropicKey }).models.list({ limit: 100 })
+      for (const m of page.data) ids.add(m.id)
+    } catch {
+      /* the key is optional here — fall back to the built-in list */
+    }
+  }
+  const aliases = CLI_MODELS.filter((m) => !m.startsWith('claude-'))
+  const full = [...ids].filter((m) => !aliases.includes(m)).sort().reverse()
+  return [...aliases, ...full]
 }
 
 /** Keep chat-capable model ids, drop embeddings/audio/image-only, de-dupe & sort. */
@@ -263,6 +294,10 @@ function cleanModels(ids: string[], provider: AiProvider): string[] {
 export async function testProvider(provider: AiProvider): Promise<void> {
   const rp = resolveProvider(provider)
   ensureReady(rp)
+  if (rp.provider === 'claude-code') {
+    await cliComplete({ bin: rp.baseUrl, model: rp.model, system: 'Reply with: ok', user: 'ping' })
+    return
+  }
   if (rp.provider === 'anthropic') {
     const client = new Anthropic({ apiKey: rp.apiKey! })
     await client.messages.create({

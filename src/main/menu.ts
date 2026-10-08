@@ -141,7 +141,10 @@ export function buildMenu(): void {
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: () => send('toggleSidebar') },
         { label: 'Toggle Theme', accelerator: 'CmdOrCtrl+Shift+T', click: () => send('toggleTheme') },
         { type: 'separator' },
-        { role: 'reload' },
+        // ⌘R re-queries the open table instead of reloading the whole app;
+        // the full window reload moves to ⌘⌥R.
+        { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => send('refresh') },
+        { role: 'reload', label: 'Reload Window', accelerator: 'CmdOrCtrl+Alt+R' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },

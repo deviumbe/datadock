@@ -57,6 +57,10 @@ function remove(i: number): void {
   local.value.splice(i, 1)
   apply()
 }
+function toggle(i: number): void {
+  local.value[i].disabled = !local.value[i].disabled
+  apply()
+}
 function apply(): void {
   emit('apply', local.value.filter((f) => f.column).map((f) => ({ ...f })))
 }
@@ -65,7 +69,14 @@ function apply(): void {
 <template>
   <div class="filter-bar">
     <button class="btn btn-ghost add" :disabled="!columns.length" @click="add"><Icon name="filter" :size="13" /> Filter</button>
-    <div v-for="(f, i) in local" :key="i" class="filter">
+    <div v-for="(f, i) in local" :key="i" class="filter" :class="{ off: f.disabled }">
+      <input
+        type="checkbox"
+        class="toggle"
+        :checked="!f.disabled"
+        :title="f.disabled ? 'Filter disabled — click to apply it' : 'Click to disable this filter without removing it'"
+        @change="toggle(i)"
+      />
       <select class="select sm" v-model="f.column" @change="apply">
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
       </select>
@@ -131,6 +142,17 @@ function apply(): void {
   border-radius: var(--radius-sm);
   padding: 3px;
   flex-shrink: 0;
+}
+.filter.off > :not(.toggle):not(.rm) {
+  opacity: 0.45;
+}
+.filter.off .input.sm {
+  text-decoration: line-through;
+}
+.toggle {
+  margin: 0 3px 0 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .sm {
   padding: 3px 6px;

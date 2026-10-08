@@ -77,6 +77,9 @@ function handleMenu(action: string): void {
     case 'redo':
       if (tab?.kind === 'table') tabs.redo(tab)
       break
+    case 'refresh':
+      if (tab) void refreshTab(tab)
+      break
     case 'refreshTables':
       ws.refreshTables(id)
       break
@@ -157,6 +160,26 @@ function handleMenu(action: string): void {
       void ws.disconnect(id)
       break
   }
+}
+
+/** ⌘R: re-query the active table tab (data or structure view). */
+async function refreshTab(tab: NonNullable<ReturnType<typeof tabs.activeTab>>): Promise<void> {
+  if (tab.kind !== 'table') return
+  if (tab.viewMode === 'structure') {
+    void tabs.loadStructure(tab)
+    return
+  }
+  const dirty = tabs.dirtyCount(tab)
+  if (dirty > 0) {
+    const ok = await ui.confirmDialog({
+      title: 'Discard unsaved changes?',
+      message: `Refreshing reloads the table and discards ${dirty} pending change${dirty === 1 ? '' : 's'}.`,
+      confirmLabel: 'Discard & refresh',
+      danger: true
+    })
+    if (!ok) return
+  }
+  void tabs.reloadTable(tab)
 }
 
 let unsubscribe: (() => void) | undefined
