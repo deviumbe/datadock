@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
-import type { ConnectionConfig, Environment, Project, Topology } from '@shared/types'
+import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 import logoUrl from '../assets/logo.png'
 import Icon from './Icon.vue'
+import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
 const ws = useWorkspace()
 const ui = useUi()
@@ -13,6 +14,11 @@ const emit = defineEmits<{
   newProject: []
   editProject: [project: Project]
   deleteProject: [project: Project]
+  moveProject: [project: Project, workspaceId: string]
+  moveProjectToNewWorkspace: [project: Project]
+  newWorkspace: []
+  editWorkspace: [workspace: Workspace]
+  deleteWorkspace: [workspace: Workspace]
   newEnvironment: [projectId: string]
   editEnvironment: [env: Environment]
   deleteEnvironment: [env: Environment]
@@ -26,6 +32,47 @@ const emit = defineEmits<{
 }>()
 
 const empty = computed(() => ws.projects.length === 0)
+
+// The workspace switcher only appears once there is something to switch between;
+// with a single workspace the sidebar is the plain project tree.
+const multiWorkspace = computed(() => ws.workspaces.length > 1)
+
+const ctx = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+
+function openWorkspaceMenu(e: MouseEvent): void {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const active = ws.activeWorkspace
+  const items: MenuItem[] = ws.workspaces.map((c) => ({
+    label: `${c.id === active?.id ? '✓' : '\u2007'} ${c.name}`,
+    action: () => void ws.setActiveWorkspace(c.id)
+  }))
+  if (items.length) items.push({ sep: true })
+  items.push({ label: 'New workspace…', action: () => emit('newWorkspace') })
+  if (active) {
+    items.push(
+      { label: `Rename “${active.name}”…`, action: () => emit('editWorkspace', active) },
+      { label: `Delete “${active.name}”…`, danger: true, action: () => emit('deleteWorkspace', active) }
+    )
+  }
+  ctx.value = { x: rect.left, y: rect.bottom + 4, items }
+}
+
+function openProjectMenu(e: MouseEvent, project: Project): void {
+  const others = ws.workspaces.filter((c) => c.id !== project.workspaceId)
+  const items: MenuItem[] = [
+    { label: 'New environment', action: () => emit('newEnvironment', project.id) },
+    { label: 'Rename', action: () => emit('editProject', project) }
+  ]
+  const targets: MenuItem[] = others.map((c) => ({
+    label: c.name,
+    action: () => emit('moveProject', project, c.id)
+  }))
+  if (targets.length) targets.push({ sep: true })
+  targets.push({ label: 'New workspace…', action: () => emit('moveProjectToNewWorkspace', project) })
+  items.push({ label: 'Move to workspace', children: targets })
+  items.push({ sep: true }, { label: 'Delete', danger: true, action: () => emit('deleteProject', project) })
+  ctx.value = { x: e.clientX, y: e.clientY, items }
+}
 
 function open(conn: ConnectionConfig): void {
   ws.connectAndOpen(conn.id)
@@ -70,17 +117,29 @@ const DRIVER_LABEL: Record<string, string> = {
     <div class="side-head">
       <img class="logo" :src="logoUrl" alt="DataDock" />
       <span class="brand">DataDock</span>
+      <button class="btn-ghost icon" title="Workspaces" @click="openWorkspaceMenu"><Icon name="building" :size="14" /></button>
       <button class="btn-ghost icon" title="New project" @click="emit('newProject')"><Icon name="plus" :size="14" /></button>
     </div>
 
+    <button v-if="multiWorkspace" class="workspace-row" title="Switch workspace" @click="openWorkspaceMenu">
+      <span class="workspace-icon"><Icon name="building" :size="13" /></span>
+      <span class="workspace-name">{{ ws.activeWorkspace?.name ?? 'No workspace' }}</span>
+      <span class="workspace-caret"><Icon name="chevronDown" :size="12" /></span>
+    </button>
+
     <div class="tree">
       <div v-if="empty" class="empty">
-        <p>No projects yet.</p>
+        <p v-if="multiWorkspace && ws.activeWorkspace">No projects for {{ ws.activeWorkspace.name }} yet.</p>
+        <p v-else>No projects yet.</p>
         <button class="btn btn-primary" @click="emit('newProject')">Create your first project</button>
       </div>
 
       <div v-for="project in ws.projects" :key="project.id" class="project">
-        <div class="row project-row" @click="ws.toggleProject(project.id)">
+        <div
+          class="row project-row"
+          @click="ws.toggleProject(project.id)"
+          @contextmenu.prevent="openProjectMenu($event, project)"
+        >
           <span class="caret" :class="{ open: ws.expandedProjects.has(project.id) }"><Icon name="chevronRight" :size="11" /></span>
           <span class="label">{{ project.name }}</span>
           <div class="row-actions" @click.stop>
@@ -163,6 +222,8 @@ const DRIVER_LABEL: Record<string, string> = {
         Group replicas into a set to watch live lag & health.
       </p>
     </div>
+
+    <ContextMenu v-if="ctx" :x="ctx.x" :y="ctx.y" :items="ctx.items" @close="ctx = null" />
   </aside>
 </template>
 
@@ -197,6 +258,39 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .side-head .icon {
   -webkit-app-region: no-drag;
+}
+.workspace-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 6px 0;
+  padding: 0 8px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-1);
+}
+.workspace-row:hover {
+  background: var(--bg-hover);
+}
+.workspace-icon,
+.workspace-caret {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.workspace-name {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tree {
   flex: 1;

@@ -6,7 +6,7 @@
 
 ### The database client that finally organizes itself the way *you* think.
 
-**Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB, Redis, InfluxDB — plus DuckDB, ClickHouse, Snowflake and BigQuery — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams, a realtime Redis queue viewer, a live replication-topology monitor and a command palette built in.
+**Workspaces → Projects → Environments → Connections.** One clean desktop app for PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB, Redis, InfluxDB — plus DuckDB, ClickHouse, Snowflake and BigQuery — with browsing, editing, structure changes, import/export, SSH tunneling, ER diagrams, a realtime Redis queue viewer, a live replication-topology monitor and a command palette built in.
 
 <br/>
 
@@ -34,18 +34,21 @@ Most database clients dump every connection into one flat, unsearchable list. If
 DataDock fixes the part that actually slows you down: **organization.**
 
 ```
-📁 Acme Shop
- ├─ 🗂  Local
- │   └─ ● Sample Shop        (SQLite)
- ├─ 🗂  Staging
- │   └─ ● shop-staging       (PostgreSQL)
- └─ 🗂  Production
-     ├─ ● shop-primary       (PostgreSQL over SSH)
-     ├─ ● metrics            (InfluxDB)
-     └─ ● jobs & cache       (Redis)
+🏢 Acme Corp                      ← switch workspaces from the sidebar
+ └─ 📁 Acme Shop
+     ├─ 🗂  Local
+     │   └─ ● Sample Shop        (SQLite)
+     ├─ 🗂  Staging
+     │   └─ ● shop-staging       (PostgreSQL)
+     └─ 🗂  Production
+         ├─ ● shop-primary       (PostgreSQL over SSH)
+         ├─ ● metrics            (InfluxDB)
+         └─ ● jobs & cache       (Redis)
 ```
 
 Click your way down — **project → environment → connection** — and you're in. No more `prod_db_2_FINAL_v3` in a sea of saved connections.
+
+Work for several clients? Give each one a workspace: every workspace has its own project list, and the sidebar only ever shows the workspace you switched to — so two clients' "Shop" projects never sit side by side. With a single workspace the switcher stays out of the way.
 
 ---
 
@@ -55,7 +58,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 | | Area | What you get |
 |:--:|---|---|
-| 🗄️ | **Organized connections** | Projects → environment folders → connections — color-coded, encrypted at rest, shareable, with a read-only safe mode |
+| 🗄️ | **Organized connections** | Workspaces → projects → environment folders → connections — one workspace in view at a time, color-coded, encrypted at rest, shareable, with a read-only safe mode |
 | 🔌 | **Fifteen engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · Oracle · CockroachDB · TimescaleDB · Amazon Redshift · MongoDB · Redis · InfluxDB · **DuckDB · ClickHouse · Snowflake · Google BigQuery** |
 | 🌐 | **Replication topology** | Group connections into a replication set and watch it **live** — primary/replica roles, per-link lag (green/amber/red), node health badges and click-through to any node's workspace |
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
@@ -78,7 +81,9 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 <br>
 
 #### 🗄️ Organized connections
-- **Projects → Environment folders → Connections** — a real hierarchy, not a flat list.
+- **Workspaces → Projects → Environment folders → Connections** — a real hierarchy, not a flat list.
+- **One workspace at a time** — switch from the sidebar (or ⌘K → *Switch to …*); projects of other workspaces are never shown alongside. Right-click a project to move it to another workspace.
+- **Environment template** — a new project can start with Local · Development · Staging · Production folders in one click.
 - Color-coded connections with live status dots (connecting / connected / error).
 - **Duplicate a connection** in one click — useful for cloning a staging config to try against prod.
 - Credentials **encrypted at rest** with the OS keychain (Electron `safeStorage`) — never stored in plain text.
@@ -297,7 +302,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 
 | Area | Highlights |
 |---|---|
-| 🗄️ **Connections** | Projects → environments hierarchy · duplicate · **one-click engine presets** (Postgres · MySQL/MariaDB · SQL Server · Mongo · Redis · SQLite) · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
+| 🗄️ **Connections** | Workspaces → projects → environments hierarchy · workspace switcher · duplicate · **one-click engine presets** (Postgres · MySQL/MariaDB · SQL Server · Mongo · Redis · SQLite) · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
 | 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo · **soft-delete recovery** (find & restore rows hidden by `deleted_at` / `archived_at` / `removed_at`) · **time-travel row history** (right-click a row → Row history: a timeline of every edit you've made to it, with before→after diffs and one-click restore of earlier values) |
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · related-records overview (everything linked to one record, drill-down) · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table, with per-connection table exclusions) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |

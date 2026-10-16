@@ -243,10 +243,32 @@ export interface Environment {
 export interface Project {
   id: string
   name: string
+  workspaceId: string
   environments: Environment[]
 }
 
+/** A workspace (a client of yours). Projects belong to exactly one workspace and the sidebar
+ * only ever shows one workspace at a time, so similarly named projects of
+ * different workspaces never mix. */
 export interface Workspace {
+  id: string
+  name: string
+  color?: string
+}
+
+/** Environment names created for a new project when the template is enabled. */
+export const ENVIRONMENT_TEMPLATE = ['Local', 'Development', 'Staging', 'Production']
+
+export interface NewProjectInput {
+  name: string
+  workspaceId: string
+  /** Environments to create right away (see ENVIRONMENT_TEMPLATE). */
+  environments?: string[]
+}
+
+export interface Catalog {
+  workspaces: Workspace[]
+  activeWorkspaceId?: string
   projects: Project[]
   /** Named replication topologies grouping connections by role (Phase 1: monitoring). */
   topologies?: Topology[]

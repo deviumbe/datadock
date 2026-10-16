@@ -10,13 +10,14 @@ import ConnectionModal from './components/ConnectionModal.vue'
 import TopologyPanel from './components/TopologyPanel.vue'
 import TopologyEditorModal from './components/TopologyEditorModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
+import NewProjectModal from './components/NewProjectModal.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
 import TaskTray from './components/TaskTray.vue'
 import { useUpdates } from './stores/updates'
-import type { ConnectionConfig, Environment, Project, Topology } from '@shared/types'
+import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 
 const ws = useWorkspace()
 const tabs = useTabs()
@@ -275,7 +276,34 @@ onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 
 // ---- sidebar event handlers -------------------------------------------------
-const onNewProject = () => askName('New Project', '', (n) => ws.addProject(n))
+const newProject = ref(false)
+const onNewProject = () => (newProject.value = true)
+function submitNewProject(name: string, environments: string[]): void {
+  void ws.addProject({ name, environments })
+  newProject.value = false
+}
+
+const onNewWorkspace = () => askName('New Workspace', '', (n) => ws.addWorkspace(n))
+const onEditWorkspace = (c: Workspace) => askName('Rename Workspace', c.name, (n) => ws.renameWorkspace(c.id, n))
+async function onDeleteWorkspace(c: Workspace): Promise<void> {
+  const count = ws.allProjects.filter((p) => p.workspaceId === c.id).length
+  const ok = await ui.confirmDialog({
+    title: 'Delete workspace',
+    message: `Delete "${c.name}" and its ${count} project${count === 1 ? '' : 's'}, including all environments and connections?`,
+    confirmLabel: 'Delete',
+    danger: true
+  })
+  if (!ok) return
+  for (const p of ws.allProjects.filter((x) => x.workspaceId === c.id))
+    for (const e of p.environments) for (const conn of e.connections) tabs.closeForConnection(conn.id)
+  await ws.deleteWorkspace(c.id)
+}
+const onMoveProject = (p: Project, workspaceId: string) => void ws.moveProject(p.id, workspaceId)
+const onMoveProjectToNewWorkspace = (p: Project) =>
+  askName(`Move "${p.name}" to a new workspace`, '', async (n) => {
+    await ws.addWorkspace(n)
+    if (ws.activeWorkspaceId) await ws.moveProject(p.id, ws.activeWorkspaceId)
+  })
 const onEditProject = (p: Project) => askName('Rename Project', p.name, (n) => ws.renameProject(p.id, n))
 const onNewEnvironment = (projectId: string) =>
   askName('New Environment', '', (n) => ws.addEnvironment(projectId, n))
@@ -308,6 +336,11 @@ function onDuplicateConnection(c: ConnectionConfig): void {
       @new-project="onNewProject"
       @edit-project="onEditProject"
       @delete-project="onDeleteProject"
+      @move-project="onMoveProject"
+      @move-project-to-new-workspace="onMoveProjectToNewWorkspace"
+      @new-workspace="onNewWorkspace"
+      @edit-workspace="onEditWorkspace"
+      @delete-workspace="onDeleteWorkspace"
       @new-environment="onNewEnvironment"
       @edit-environment="onEditEnvironment"
       @delete-environment="onDeleteEnvironment"
@@ -349,6 +382,12 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     />
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
     <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+    <NewProjectModal
+      v-if="newProject"
+      :workspace-name="ws.workspaces.length > 1 ? ws.activeWorkspace?.name : undefined"
+      @submit="submitNewProject"
+      @close="newProject = false"
+    />
     <ConfirmModal />
     <UpdateNotice />
     <TaskTray />

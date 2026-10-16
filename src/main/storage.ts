@@ -2,12 +2,23 @@ import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { randomUUID } from 'crypto'
-import type { ConnectionConfig, Project, Topology, Workspace } from '@shared/types'
+import type {
+  Workspace,
+  ConnectionConfig,
+  NewProjectInput,
+  Project,
+  Topology,
+  Catalog
+} from '@shared/types'
 
 const SECRET_FIELDS = ['password', 'token', 'sshPassword', 'sshPassphrase'] as const
 
 let storePath = ''
-let workspace: Workspace = { projects: [] }
+let catalog: Catalog = emptyCatalog()
+
+function emptyCatalog(): Catalog {
+  return { workspaces: [], projects: [] }
+}
 
 function file(): string {
   if (!storePath) storePath = join(app.getPath('userData'), 'datadock.json')
@@ -18,20 +29,48 @@ export function loadWorkspace(): void {
   const path = file()
   if (existsSync(path)) {
     try {
-      workspace = JSON.parse(readFileSync(path, 'utf-8')) as Workspace
-      if (!Array.isArray(workspace.projects)) workspace = { projects: [] }
+      catalog = JSON.parse(readFileSync(path, 'utf-8')) as Catalog
+      if (!Array.isArray(catalog.projects)) catalog = emptyCatalog()
     } catch {
-      workspace = { projects: [] }
+      catalog = emptyCatalog()
     }
   } else {
-    workspace = { projects: [] }
+    catalog = emptyCatalog()
   }
+  if (migrateWorkspaces()) persist()
+}
+
+/**
+ * Workspaces written before the workspace level had projects at the root. Put
+ * those under a "Default" workspace and make sure the active workspace is valid.
+ * Returns true when anything changed.
+ */
+function migrateWorkspaces(): boolean {
+  let changed = false
+  if (!Array.isArray(catalog.workspaces)) {
+    catalog.workspaces = []
+    changed = true
+  }
+  const orphans = catalog.projects.filter(
+    (p) => !p.workspaceId || !catalog.workspaces.some((c) => c.id === p.workspaceId)
+  )
+  if (orphans.length) {
+    const home = defaultWorkspace()
+    for (const p of orphans) p.workspaceId = home.id
+    changed = true
+  }
+  const active = catalog.workspaces.find((c) => c.id === catalog.activeWorkspaceId)
+  if (!active && catalog.workspaces.length) {
+    catalog.activeWorkspaceId = catalog.workspaces[0].id
+    changed = true
+  }
+  return changed
 }
 
 function persist(): void {
   const path = file()
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify(workspace, null, 2), 'utf-8')
+  writeFileSync(path, JSON.stringify(catalog, null, 2), 'utf-8')
 }
 
 // ---- secret encryption -----------------------------------------------------
@@ -58,29 +97,50 @@ function decryptSecret(stored: string | undefined): string | undefined {
 
 // ---- views ------------------------------------------------------------------
 
-/** Strip secrets before handing the workspace to the renderer. */
-export function workspaceForRenderer(): Workspace {
+/** Strip secrets before handing the catalog to the renderer. */
+export function catalogForRenderer(): Catalog {
   return {
-    projects: workspace.projects.map((p) => ({
+    workspaces: catalog.workspaces.map((c) => ({ ...c })),
+    activeWorkspaceId: catalog.activeWorkspaceId,
+    projects: catalog.projects.map((p) => ({
       ...p,
       environments: p.environments.map((e) => ({
         ...e,
         connections: e.connections.map(sanitizeConnection)
       }))
     })),
-    topologies: workspace.topologies ?? []
+    topologies: catalog.topologies ?? []
   }
 }
 
 /** Flat list of all stored connections (secrets stripped), across projects/envs. */
 export function allConnections(): ConnectionConfig[] {
   const out: ConnectionConfig[] = []
-  for (const p of workspace.projects) {
+  for (const p of catalog.projects) {
     for (const e of p.environments) {
       for (const c of e.connections) out.push(sanitizeConnection(c))
     }
   }
   return out
+}
+
+export interface ConnectionPath {
+  workspace: string
+  project: string
+  environment: string
+}
+
+/** Where a connection lives, as display names: workspace / project / environment. */
+export function connectionPath(id: string): ConnectionPath | undefined {
+  for (const p of catalog.projects) {
+    for (const e of p.environments) {
+      if (e.connections.some((c) => c.id === id)) {
+        const workspace = catalog.workspaces.find((c) => c.id === p.workspaceId)
+        return { workspace: workspace?.name ?? '', project: p.name, environment: e.name }
+      }
+    }
+  }
+  return undefined
 }
 
 function sanitizeConnection(c: ConnectionConfig): ConnectionConfig {
@@ -127,7 +187,7 @@ export function resolveFormConfig(config: ConnectionConfig): ConnectionConfig {
 function findConnection(
   id: string
 ): { connection: ConnectionConfig; environmentId: string } | undefined {
-  for (const p of workspace.projects) {
+  for (const p of catalog.projects) {
     for (const e of p.environments) {
       const connection = e.connections.find((c) => c.id === id)
       if (connection) return { connection, environmentId: e.id }
@@ -136,73 +196,135 @@ function findConnection(
   return undefined
 }
 
+// ---- workspaces --------------------------------------------------------------
+
+/** The workspace projects land in when none was chosen; created on first use so
+ * a catalog that never touches workspaces keeps working exactly as before. */
+function defaultWorkspace(): Workspace {
+  let home = catalog.workspaces.find((c) => c.name === 'Default')
+  if (!home) {
+    home = { id: randomUUID(), name: 'Default' }
+    catalog.workspaces.unshift(home)
+  }
+  catalog.activeWorkspaceId ??= home.id
+  return home
+}
+
+export function addWorkspace(name: string): Catalog {
+  const workspace: Workspace = { id: randomUUID(), name: name.trim() || 'Untitled Workspace' }
+  catalog.workspaces.push(workspace)
+  catalog.activeWorkspaceId = workspace.id
+  persist()
+  return catalogForRenderer()
+}
+
+export function renameWorkspace(id: string, name: string): Catalog {
+  const c = catalog.workspaces.find((x) => x.id === id)
+  if (c) c.name = name.trim() || c.name
+  persist()
+  return catalogForRenderer()
+}
+
+/** Delete a workspace together with all of its projects. */
+export function deleteWorkspace(id: string): Catalog {
+  catalog.workspaces = catalog.workspaces.filter((c) => c.id !== id)
+  catalog.projects = catalog.projects.filter((p) => p.workspaceId !== id)
+  if (catalog.activeWorkspaceId === id) catalog.activeWorkspaceId = catalog.workspaces[0]?.id
+  persist()
+  return catalogForRenderer()
+}
+
+export function setActiveWorkspace(id: string): Catalog {
+  if (catalog.workspaces.some((c) => c.id === id)) catalog.activeWorkspaceId = id
+  persist()
+  return catalogForRenderer()
+}
+
+export function moveProject(projectId: string, workspaceId: string): Catalog {
+  const p = catalog.projects.find((x) => x.id === projectId)
+  if (p && catalog.workspaces.some((c) => c.id === workspaceId)) p.workspaceId = workspaceId
+  persist()
+  return catalogForRenderer()
+}
+
 // ---- mutations --------------------------------------------------------------
 
-export function addProject(name: string): Workspace {
-  workspace.projects.push({ id: randomUUID(), name: name.trim() || 'Untitled Project', environments: [] })
+export function addProject(input: NewProjectInput): Catalog {
+  const workspaceId = catalog.workspaces.some((c) => c.id === input.workspaceId)
+    ? input.workspaceId
+    : (catalog.activeWorkspaceId ?? defaultWorkspace().id)
+  catalog.projects.push({
+    id: randomUUID(),
+    name: input.name.trim() || 'Untitled Project',
+    workspaceId,
+    environments: (input.environments ?? [])
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .map((name) => ({ id: randomUUID(), name, connections: [] }))
+  })
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function renameProject(id: string, name: string): Workspace {
-  const p = workspace.projects.find((x) => x.id === id)
+export function renameProject(id: string, name: string): Catalog {
+  const p = catalog.projects.find((x) => x.id === id)
   if (p) p.name = name.trim() || p.name
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function deleteProject(id: string): Workspace {
-  workspace.projects = workspace.projects.filter((p) => p.id !== id)
+export function deleteProject(id: string): Catalog {
+  catalog.projects = catalog.projects.filter((p) => p.id !== id)
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
 // ---- replication topologies -------------------------------------------------
 
 /** Create or update a topology (upsert by id; a blank id mints a new one). */
-export function saveTopology(topology: Topology): Workspace {
-  workspace.topologies ??= []
+export function saveTopology(topology: Topology): Catalog {
+  catalog.topologies ??= []
   const incoming: Topology = { ...topology, id: topology.id || randomUUID() }
-  const idx = workspace.topologies.findIndex((t) => t.id === incoming.id)
-  if (idx >= 0) workspace.topologies[idx] = incoming
-  else workspace.topologies.push(incoming)
+  const idx = catalog.topologies.findIndex((t) => t.id === incoming.id)
+  if (idx >= 0) catalog.topologies[idx] = incoming
+  else catalog.topologies.push(incoming)
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function deleteTopology(id: string): Workspace {
-  workspace.topologies = (workspace.topologies ?? []).filter((t) => t.id !== id)
+export function deleteTopology(id: string): Catalog {
+  catalog.topologies = (catalog.topologies ?? []).filter((t) => t.id !== id)
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function addEnvironment(projectId: string, name: string): Workspace {
-  const p = workspace.projects.find((x) => x.id === projectId)
+export function addEnvironment(projectId: string, name: string): Catalog {
+  const p = catalog.projects.find((x) => x.id === projectId)
   if (p) p.environments.push({ id: randomUUID(), name: name.trim() || 'New Environment', connections: [] })
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function renameEnvironment(id: string, name: string): Workspace {
-  for (const p of workspace.projects) {
+export function renameEnvironment(id: string, name: string): Catalog {
+  for (const p of catalog.projects) {
     const e = p.environments.find((x) => x.id === id)
     if (e) e.name = name.trim() || e.name
   }
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function deleteEnvironment(id: string): Workspace {
-  for (const p of workspace.projects) {
+export function deleteEnvironment(id: string): Catalog {
+  for (const p of catalog.projects) {
     p.environments = p.environments.filter((e) => e.id !== id)
   }
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
 /** Create (if no id) or update a connection within an environment. */
-export function saveConnection(environmentId: string, config: ConnectionConfig): Workspace {
-  const env = workspace.projects.flatMap((p) => p.environments).find((e) => e.id === environmentId)
+export function saveConnection(environmentId: string, config: ConnectionConfig): Catalog {
+  const env = catalog.projects.flatMap((p) => p.environments).find((e) => e.id === environmentId)
   if (!env) throw new Error('Environment not found')
 
   const prepared: ConnectionConfig = { ...config }
@@ -229,7 +351,7 @@ export function saveConnection(environmentId: string, config: ConnectionConfig):
     // If the connection moved environments, relocate it.
     const current = findConnection(existing.id)
     if (current && current.environmentId !== environmentId) {
-      const from = workspace.projects
+      const from = catalog.projects
         .flatMap((p) => p.environments)
         .find((e) => e.id === current.environmentId)
       if (from) from.connections = from.connections.filter((c) => c.id !== existing.id)
@@ -241,24 +363,24 @@ export function saveConnection(environmentId: string, config: ConnectionConfig):
   }
 
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
-export function deleteConnection(id: string): Workspace {
-  for (const p of workspace.projects) {
+export function deleteConnection(id: string): Catalog {
+  for (const p of catalog.projects) {
     for (const e of p.environments) {
       e.connections = e.connections.filter((c) => c.id !== id)
     }
   }
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
 /** Duplicate an existing connection within the same environment. */
-export function duplicateConnection(id: string): Workspace {
+export function duplicateConnection(id: string): Catalog {
   const found = findConnection(id)
   if (!found) throw new Error('Connection not found')
-  const env = workspace.projects
+  const env = catalog.projects
     .flatMap((p) => p.environments)
     .find((e) => e.id === found.environmentId)
   if (!env) throw new Error('Environment not found')
@@ -269,7 +391,7 @@ export function duplicateConnection(id: string): Workspace {
   }
   env.connections.push(clone)
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }
 
 // ---- share: export / import connection definitions (no secrets) -------------
@@ -288,19 +410,24 @@ const TRANSIENT = [
 
 /** Cleaned, secret-free, id-free tree suitable for sharing. */
 export function connectionsForExport(): unknown {
+  const exportProject = (p: Project): unknown => ({
+    name: p.name,
+    environments: p.environments.map((e) => ({
+      name: e.name,
+      connections: e.connections.map((c) => {
+        const clean: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(c)) if (!TRANSIENT.includes(k)) clean[k] = v
+        return clean
+      })
+    }))
+  })
   return {
     datadock: 'connections',
-    version: 1,
-    projects: workspace.projects.map((p) => ({
-      name: p.name,
-      environments: p.environments.map((e) => ({
-        name: e.name,
-        connections: e.connections.map((c) => {
-          const clean: Record<string, unknown> = {}
-          for (const [k, v] of Object.entries(c)) if (!TRANSIENT.includes(k)) clean[k] = v
-          return clean
-        })
-      }))
+    version: 2,
+    workspaces: catalog.workspaces.map((workspace) => ({
+      name: workspace.name,
+      color: workspace.color,
+      projects: catalog.projects.filter((p) => p.workspaceId === workspace.id).map(exportProject)
     }))
   }
 }
@@ -310,19 +437,55 @@ interface ImportProject {
   environments?: { name?: string; connections?: ConnectionConfig[] }[]
 }
 
-/** Merge imported projects (new ids, no secrets) into the workspace. */
-export function importConnections(data: { projects?: ImportProject[] }): Workspace {
-  for (const p of data.projects ?? []) {
-    const project: Project = { id: randomUUID(), name: p.name || 'Imported', environments: [] }
-    for (const e of p.environments ?? []) {
-      project.environments.push({
-        id: randomUUID(),
-        name: e.name || 'Imported',
-        connections: (e.connections ?? []).map((c) => ({ ...c, id: randomUUID() }))
-      })
+interface ImportWorkspace {
+  name?: string
+  color?: string
+  projects?: ImportProject[]
+}
+
+/**
+ * Merge an exported tree (new ids, no secrets) into the catalog. Version 2
+ * files carry workspaces, which merge by name into existing ones; the older
+ * project-only format lands in the active workspace.
+ */
+export function importConnections(data: {
+  workspaces?: ImportWorkspace[]
+  projects?: ImportProject[]
+}): Catalog {
+  const importInto = (workspaceId: string, projects: ImportProject[]): void => {
+    for (const p of projects) {
+      const project: Project = { id: randomUUID(), name: p.name || 'Imported', workspaceId, environments: [] }
+      for (const e of p.environments ?? []) {
+        project.environments.push({
+          id: randomUUID(),
+          name: e.name || 'Imported',
+          connections: (e.connections ?? []).map((c) => ({ ...c, id: randomUUID() }))
+        })
+      }
+      catalog.projects.push(project)
     }
-    workspace.projects.push(project)
   }
+
+  for (const c of data.workspaces ?? []) {
+    const name = c.name?.trim() || 'Imported'
+    let workspace = catalog.workspaces.find((x) => x.name === name)
+    if (!workspace) {
+      workspace = { id: randomUUID(), name, color: c.color }
+      catalog.workspaces.push(workspace)
+    }
+    importInto(workspace.id, c.projects ?? [])
+  }
+
+  if (data.projects?.length) {
+    if (!catalog.activeWorkspaceId) {
+      const workspace: Workspace = { id: randomUUID(), name: 'Imported' }
+      catalog.workspaces.push(workspace)
+      catalog.activeWorkspaceId = workspace.id
+    }
+    importInto(catalog.activeWorkspaceId, data.projects)
+  }
+
+  migrateWorkspaces()
   persist()
-  return workspaceForRenderer()
+  return catalogForRenderer()
 }

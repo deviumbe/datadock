@@ -63,7 +63,8 @@ import type {
   ReplicationStatus,
   InvestigationType,
   InvestigationReport,
-  Workspace
+  Catalog,
+  NewProjectInput
 } from '@shared/types'
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
@@ -80,23 +81,30 @@ const api = {
     ipcRenderer.on('menu:action', listener)
     return () => ipcRenderer.removeListener('menu:action', listener)
   },
-  workspace: {
-    get: () => invoke<Workspace>('workspace:get'),
-    addProject: (name: string) => invoke<Workspace>('workspace:addProject', name),
+  catalog: {
+    get: () => invoke<Catalog>('catalog:get'),
+    addWorkspace: (name: string) => invoke<Catalog>('catalog:addWorkspace', name),
+    renameWorkspace: (id: string, name: string) =>
+      invoke<Catalog>('catalog:renameWorkspace', id, name),
+    deleteWorkspace: (id: string) => invoke<Catalog>('catalog:deleteWorkspace', id),
+    setActiveWorkspace: (id: string) => invoke<Catalog>('catalog:setActiveWorkspace', id),
+    moveProject: (projectId: string, workspaceId: string) =>
+      invoke<Catalog>('catalog:moveProject', projectId, workspaceId),
+    addProject: (input: NewProjectInput) => invoke<Catalog>('catalog:addProject', input),
     renameProject: (id: string, name: string) =>
-      invoke<Workspace>('workspace:renameProject', id, name),
-    deleteProject: (id: string) => invoke<Workspace>('workspace:deleteProject', id),
+      invoke<Catalog>('catalog:renameProject', id, name),
+    deleteProject: (id: string) => invoke<Catalog>('catalog:deleteProject', id),
     addEnvironment: (projectId: string, name: string) =>
-      invoke<Workspace>('workspace:addEnvironment', projectId, name),
+      invoke<Catalog>('catalog:addEnvironment', projectId, name),
     renameEnvironment: (id: string, name: string) =>
-      invoke<Workspace>('workspace:renameEnvironment', id, name),
-    deleteEnvironment: (id: string) => invoke<Workspace>('workspace:deleteEnvironment', id),
+      invoke<Catalog>('catalog:renameEnvironment', id, name),
+    deleteEnvironment: (id: string) => invoke<Catalog>('catalog:deleteEnvironment', id),
     saveConnection: (environmentId: string, config: ConnectionConfig) =>
-      invoke<Workspace>('workspace:saveConnection', environmentId, config),
-    deleteConnection: (id: string) => invoke<Workspace>('workspace:deleteConnection', id),
-    duplicateConnection: (id: string) => invoke<Workspace>('workspace:duplicateConnection', id),
-    saveTopology: (topology: Topology) => invoke<Workspace>('workspace:saveTopology', topology),
-    deleteTopology: (id: string) => invoke<Workspace>('workspace:deleteTopology', id)
+      invoke<Catalog>('catalog:saveConnection', environmentId, config),
+    deleteConnection: (id: string) => invoke<Catalog>('catalog:deleteConnection', id),
+    duplicateConnection: (id: string) => invoke<Catalog>('catalog:duplicateConnection', id),
+    saveTopology: (topology: Topology) => invoke<Catalog>('catalog:saveTopology', topology),
+    deleteTopology: (id: string) => invoke<Catalog>('catalog:deleteTopology', id)
   },
   db: {
     test: (config: ConnectionConfig) => invoke<boolean>('db:test', config),
@@ -198,7 +206,7 @@ const api = {
       invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table),
     exportConnections: () => invoke<FileResult>('io:exportConnections'),
     importConnections: () =>
-      invoke<{ canceled?: boolean; workspace?: Workspace }>('io:importConnections'),
+      invoke<{ canceled?: boolean; catalog?: Catalog }>('io:importConnections'),
     saveFile: (name: string, data: string, binary: boolean) =>
       invoke<FileResult>('io:saveFile', name, data, binary),
     saveFiles: (files: { filename: string; content: string }[]) =>

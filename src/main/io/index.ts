@@ -61,7 +61,7 @@ export async function nativeToolsAvailable(driver: string): Promise<boolean> {
 }
 import type { DbAdapter } from '../db/types'
 import * as store from '../storage'
-import type { Workspace } from '@shared/types'
+import type { Catalog } from '@shared/types'
 import { buildCsv, buildInserts, buildJson, buildXlsx, csvCell, jsonObject, quoteIdent, type Dialect } from './format'
 
 const EXT: Record<ExportFormat, string> = { csv: 'csv', json: 'json', xlsx: 'xlsx', sql: 'sql' }
@@ -475,14 +475,14 @@ export async function exportConnections(): Promise<FileResult> {
   return { canceled: false, path: filePath }
 }
 
-export async function importConnections(): Promise<{ canceled?: boolean; workspace?: Workspace }> {
+export async function importConnections(): Promise<{ canceled?: boolean; catalog?: Catalog }> {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [{ name: 'JSON', extensions: ['json'] }]
   })
   if (canceled || !filePaths[0]) return { canceled: true }
   const data = JSON.parse(await readFile(filePaths[0], 'utf-8'))
-  return { workspace: store.importConnections(data) }
+  return { catalog: store.importConnections(data) }
 }
 
 /** Save arbitrary text or base64-binary content via a save dialog. */

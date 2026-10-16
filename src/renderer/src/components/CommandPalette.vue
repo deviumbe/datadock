@@ -21,6 +21,8 @@ interface PaletteItem {
   label: string
   icon: string
   category: 'Connections' | 'Tables' | 'Actions'
+  /** Secondary text, e.g. the project / environment a connection lives in. */
+  hint?: string
   action: () => void
 }
 
@@ -34,6 +36,7 @@ const allItems = computed<PaletteItem[]>(() => {
         items.push({
           id: `conn-${conn.id}`,
           label: conn.name,
+          hint: `${project.name} / ${env.name}`,
           icon: 'database',
           category: 'Connections',
           action: () => {
@@ -273,6 +276,15 @@ const allItems = computed<PaletteItem[]>(() => {
     })
   }
 
+  for (const c of ws.workspaces) {
+    if (c.id === ws.activeWorkspaceId) continue
+    actions.push({
+      label: `Switch to ${c.name}`,
+      icon: 'building',
+      handler: () => void ws.setActiveWorkspace(c.id)
+    })
+  }
+
   for (const a of actions) {
     items.push({
       id: `action-${a.label}`,
@@ -294,7 +306,9 @@ const filtered = computed<PaletteItem[]>(() => {
   if (!q) return allItems.value
   return allItems.value.filter(
     (item) =>
-      item.label.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+      item.label.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q) ||
+      !!item.hint?.toLowerCase().includes(q)
   )
 })
 
@@ -385,6 +399,7 @@ onMounted(() => {
               >
                 <span class="item-icon"><Icon :name="item.icon" :size="14" /></span>
                 <span class="item-label">{{ item.label }}</span>
+                <span v-if="item.hint" class="item-hint">{{ item.hint }}</span>
                 <span class="item-badge">{{ item.category }}</span>
               </div>
             </template>
@@ -495,6 +510,14 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.item-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
 }
 .item-badge {
   font-size: 10px;

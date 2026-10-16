@@ -29,15 +29,27 @@ function visibleConnections(): ConnectionConfig[] {
   return store.allConnections().filter((c) => !c.mcpExcluded)
 }
 
-/** Resolve an agent-supplied identifier (id or unique name) to a connection. */
+/** "Workspace / Project / Environment / Connection": the unambiguous name of a connection. */
+function pathOf(c: ConnectionConfig): string {
+  const p = store.connectionPath(c.id)
+  return p ? [p.workspace, p.project, p.environment, c.name].filter(Boolean).join(' / ') : c.name
+}
+
+/** Resolve an agent-supplied identifier (id, full path, or unique name) to a connection. */
 function resolveTarget(identifier: string): ConnectionConfig {
   const conns = visibleConnections()
   const byId = conns.find((c) => c.id === identifier)
   if (byId) return byId
-  const byName = conns.filter((c) => c.name === identifier)
+  const wanted = identifier.trim().toLowerCase()
+  const byPath = conns.find((c) => pathOf(c).toLowerCase() === wanted)
+  if (byPath) return byPath
+  const byName = conns.filter((c) => c.name.toLowerCase() === wanted)
   if (byName.length === 1) return byName[0]
   if (byName.length > 1) {
-    throw new Error(`Multiple connections named "${identifier}" — use the connection id instead.`)
+    throw new Error(
+      `Multiple connections named "${identifier}" — use the full path ` +
+        `(${byName.map(pathOf).join(' | ')}) or the connection id instead.`
+    )
   }
   throw new Error(`No accessible connection "${identifier}". Call list_connections first.`)
 }
@@ -84,9 +96,11 @@ function buildServer(): McpServer {
     { name: 'datadock', version: '0.1.1' },
     {
       instructions:
-        'DataDock exposes the user\'s database connections. Call list_connections to ' +
-        'discover them, then list_tables / describe_table / run_query against a connection ' +
-        'by its id or name. Queries are read-only unless the user has enabled writes.'
+        'DataDock exposes the user\'s database connections, organised as ' +
+        'workspace / project / environment / connection. Call list_connections to discover ' +
+        'them, then list_tables / describe_table / run_query against a connection by its id, ' +
+        'its full path or its (unique) name. Queries are read-only unless the user has ' +
+        'enabled writes.'
     }
   )
 
@@ -95,14 +109,16 @@ function buildServer(): McpServer {
     {
       title: 'List database connections',
       description:
-        'List the database connections the user has shared with MCP (id, name, engine, ' +
-        'database, and whether currently connected).',
+        'List the database connections the user has shared with MCP (id, name, path, ' +
+        'workspace, project, environment, engine, database, and whether currently connected).',
       inputSchema: {}
     },
     async () => {
       const list = visibleConnections().map((c) => ({
         id: c.id,
         name: c.name,
+        path: pathOf(c),
+        ...store.connectionPath(c.id),
         driver: c.driver,
         database: c.database ?? c.filePath ?? null,
         connected: db.isConnected(c.id),
@@ -118,7 +134,7 @@ function buildServer(): McpServer {
     {
       title: 'List tables',
       description: 'List the tables/collections in a connection (id or name).',
-      inputSchema: { connection: z.string().describe('Connection id or name') }
+      inputSchema: { connection: z.string().describe('Connection id, full path or name') }
     },
     async ({ connection }) => {
       const conn = resolveTarget(connection)
@@ -134,7 +150,7 @@ function buildServer(): McpServer {
       title: 'Describe a table',
       description: 'Return columns, types, primary keys, foreign keys and indexes for a table.',
       inputSchema: {
-        connection: z.string().describe('Connection id or name'),
+        connection: z.string().describe('Connection id, full path or name'),
         table: z.string().describe('Table name'),
         schema: z.string().optional().describe('Schema name, if the engine uses schemas')
       }
@@ -160,7 +176,7 @@ function buildServer(): McpServer {
         'Run a single SQL statement (or engine command) against a connection and return rows. ' +
         'Read-only unless the user has enabled writes for MCP.',
       inputSchema: {
-        connection: z.string().describe('Connection id or name'),
+        connection: z.string().describe('Connection id, full path or name'),
         sql: z.string().describe('A single SQL statement / engine command to execute')
       }
     },

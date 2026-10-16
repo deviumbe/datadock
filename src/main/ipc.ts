@@ -18,7 +18,14 @@ import type {
   Topology,
   TruncateOptions
 } from '@shared/types'
-import type { HistoryEntry, RowVersionInput, Snippet, QueueAction, QueueJobState } from '@shared/types'
+import type {
+  HistoryEntry,
+  NewProjectInput,
+  RowVersionInput,
+  Snippet,
+  QueueAction,
+  QueueJobState
+} from '@shared/types'
 import type { MaskConfig } from '@shared/mask'
 import * as store from './storage'
 import * as db from './db'
@@ -124,25 +131,32 @@ export function registerIpc(): void {
   )
   db.startHeartbeat()
 
-  // Workspace tree
-  handle('workspace:get', () => store.workspaceForRenderer())
-  handle('workspace:addProject', (name: string) => store.addProject(name))
-  handle('workspace:renameProject', (id: string, name: string) => store.renameProject(id, name))
-  handle('workspace:deleteProject', (id: string) => store.deleteProject(id))
-  handle('workspace:addEnvironment', (projectId: string, name: string) =>
+  // Catalog tree
+  handle('catalog:get', () => store.catalogForRenderer())
+  handle('catalog:addWorkspace', (name: string) => store.addWorkspace(name))
+  handle('catalog:renameWorkspace', (id: string, name: string) => store.renameWorkspace(id, name))
+  handle('catalog:deleteWorkspace', (id: string) => store.deleteWorkspace(id))
+  handle('catalog:setActiveWorkspace', (id: string) => store.setActiveWorkspace(id))
+  handle('catalog:moveProject', (projectId: string, workspaceId: string) =>
+    store.moveProject(projectId, workspaceId)
+  )
+  handle('catalog:addProject', (input: NewProjectInput) => store.addProject(input))
+  handle('catalog:renameProject', (id: string, name: string) => store.renameProject(id, name))
+  handle('catalog:deleteProject', (id: string) => store.deleteProject(id))
+  handle('catalog:addEnvironment', (projectId: string, name: string) =>
     store.addEnvironment(projectId, name)
   )
-  handle('workspace:renameEnvironment', (id: string, name: string) =>
+  handle('catalog:renameEnvironment', (id: string, name: string) =>
     store.renameEnvironment(id, name)
   )
-  handle('workspace:deleteEnvironment', (id: string) => store.deleteEnvironment(id))
-  handle('workspace:saveConnection', (environmentId: string, config: ConnectionConfig) =>
+  handle('catalog:deleteEnvironment', (id: string) => store.deleteEnvironment(id))
+  handle('catalog:saveConnection', (environmentId: string, config: ConnectionConfig) =>
     store.saveConnection(environmentId, config)
   )
-  handle('workspace:deleteConnection', (id: string) => store.deleteConnection(id))
-  handle('workspace:duplicateConnection', (id: string) => store.duplicateConnection(id))
-  handle('workspace:saveTopology', (topology: Topology) => store.saveTopology(topology))
-  handle('workspace:deleteTopology', (id: string) => store.deleteTopology(id))
+  handle('catalog:deleteConnection', (id: string) => store.deleteConnection(id))
+  handle('catalog:duplicateConnection', (id: string) => store.duplicateConnection(id))
+  handle('catalog:saveTopology', (topology: Topology) => store.saveTopology(topology))
+  handle('catalog:deleteTopology', (id: string) => store.deleteTopology(id))
 
   // Database operations
   handle('db:test', async (config: ConnectionConfig) => {
