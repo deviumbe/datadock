@@ -63,6 +63,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 🌐 | **Replication topology** | Group connections into a replication set and watch it **live** — primary/replica roles, per-link lag (green/amber/red), node health badges and click-through to any node's workspace |
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
 | 🔐 | **SSH tunneling** | Reach databases behind a bastion via private key, password or agent |
+| 🔒 | **Vault & Touch ID** | Keep connections, SSH profiles and AI keys in one AES-256-GCM encrypted `.ddvault` file you can sync (Proton Drive, iCloud, …) and open on another Mac with the passphrase — unlock with Touch ID, auto-lock on idle or sleep |
 | 📊 | **Spreadsheet-style editing** | Paginate, sort, filter, inline- and bulk-edit — every change committed in a transaction |
 | 🔗 | **Visual exploration** | Click-through foreign keys, a record Explorer, a related-records overview, an interactive ER diagram and a dependency map |
 | 🧱 | **Structure editor** | Create / drop tables and edit columns, types, foreign keys & indexes — no hand-written DDL |
@@ -99,6 +100,14 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 #### 🔐 SSH tunneling
 - Reach databases that only live behind a bastion: **connect via SSH (private key, password, or agent), then to the DB** — exactly how you'd hit a prod/staging box.
 
+#### 🔒 Vault & Touch ID
+- **One encrypted file instead of plain JSON** — Settings → Vault → *Create vault…* seals your whole catalog (workspaces, projects, environments, connections) plus every secret-bearing setting (SSH profiles, AI provider keys, MCP token) into a single `.ddvault` file, then deletes the plaintext `datadock.json`. Hosts, usernames and passwords are all inside the ciphertext.
+- **Portable by design** — AES-256-GCM with a key derived from your passphrase (scrypt). Drop the file in a synced folder such as Proton Drive and use *Open existing vault…* on a second Mac: nothing is bound to one machine's keychain. There is no recovery — a forgotten passphrase means a lost vault.
+- **Touch ID unlock** — opt in per Mac and the vault key is kept in that Mac's keychain (Electron `safeStorage`), released after a fingerprint. The passphrase prompt is always there as a fallback, and is what another Mac uses the first time.
+- **Lock screen & auto-lock** — DataDock starts locked when a vault is configured. It locks again after a configurable idle period, when the Mac sleeps or its screen locks, or on demand (`⌘⇧L`); locking closes every database connection and drops the key from memory.
+- **Multi-device safe** — the file carries a revision counter in its header. When another machine writes a newer revision, DataDock reloads it and tells you; it never silently overwrites a newer revision with an older one.
+- Without a vault nothing changes: secrets stay encrypted at rest with the OS keychain as before.
+
 #### 📊 Browse & edit data like a spreadsheet
 - Fast result grid with **pagination, sorting and column filters**.
 - **Double-click any cell to edit**, or pop open the **row detail panel** on the side.
@@ -122,6 +131,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 #### ⚙️ Settings (⌘,)
 - **AI Providers** — add keys for Anthropic, Google, Mistral or xAI (Grok), or point at a local **Ollama** server (no key needed); pick the active provider and model, and **Test** the connection.
 - **Appearance** — dark / light / follow-system mode, a colour preset per mode (or a custom theme built from seven base colours), interface and code fonts, icon set and weight, interface scale (zoom), comfortable/compact row density, and the default page size.
+- **Vault** — create or open an encrypted `.ddvault` file, toggle Touch ID unlock for this Mac, set the idle auto-lock, or lock right away.
 - **About** — a little love from [Devium](https://devium.be/): built with a smile for everybody. 🙂
 
 #### 🎨 Comfortable to live in
@@ -274,6 +284,7 @@ npm run build
 |---|---|
 | `⌘K` / `Ctrl+K` | Open command palette |
 | `⌘,` / `Ctrl+,` | Open settings |
+| `⌘⇧L` / `Ctrl+⇧L` | Lock the vault |
 | `⌘⇧A` / `Ctrl+⇧A` | Chat with your data |
 | `⌘T` / `Ctrl+T` | New query tab |
 | `⌘↵` / `Ctrl+↵` | Run query |
@@ -303,6 +314,7 @@ AI: `@anthropic-ai/sdk` + `openai` (OpenAI-compatible endpoints for Gemini, Mist
 | Area | Highlights |
 |---|---|
 | 🗄️ **Connections** | Workspaces → projects → environments hierarchy · workspace switcher · duplicate · **one-click engine presets** (Postgres · MySQL/MariaDB · SQL Server · Mongo · Redis · SQLite) · read-only safe mode (with timed 15-min write-unlock) · production banners · export / import (secrets stripped) |
+| 🔒 **Vault** | Encrypted portable `.ddvault` (AES-256-GCM · scrypt passphrase) holding the catalog, SSH profiles, AI keys and MCP token · create / open on another Mac · **Touch ID unlock** (per-Mac keychain key, passphrase fallback) · lock screen on launch · auto-lock on idle, sleep and screen lock · revision-aware reload when another device writes the file |
 | 📊 **Data editing** | Spreadsheet grid (paginate · sort · filter) · inline + row-detail editing · transactional commit · bulk edit · duplicate row · generate INSERT/UPDATE · undo / redo · **soft-delete recovery** (find & restore rows hidden by `deleted_at` / `archived_at` / `removed_at`) · **time-travel row history** (right-click a row → Row history: a timeline of every edit you've made to it, with before→after diffs and one-click restore of earlier values) |
 | 🔗 **Explore** | Click-through FK navigation · record Explorer · related-records overview (everything linked to one record, drill-down) · ER diagram (drag · zoom · fit · export SVG/PNG) · dependency explorer · universal search (find any value across every table, with per-connection table exclusions) |
 | 🧱 **Schema** | Create / drop tables · column · type · nullable · FK & index editing · **environment diff** (tables · columns · indexes · data, with optional checks) · schema diff · data diff · data generator · migration-script generator (diff → `ALTER`) |

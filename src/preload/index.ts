@@ -64,7 +64,9 @@ import type {
   InvestigationType,
   InvestigationReport,
   Catalog,
-  NewProjectInput
+  NewProjectInput,
+  VaultConfigInput,
+  VaultStatus
 } from '@shared/types'
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
@@ -388,6 +390,37 @@ const api = {
     setConfig: (cfg: Partial<Pick<McpSettings, 'port' | 'allowWrites'>>) =>
       invoke<McpInfo>('mcp:setConfig', cfg),
     regenerateToken: () => invoke<McpInfo>('mcp:regenerateToken')
+  },
+  vault: {
+    status: () => invoke<VaultStatus>('vault:status'),
+    create: (path: string, passphrase: string, touchId: boolean) =>
+      invoke<VaultStatus>('vault:create', path, passphrase, touchId),
+    open: (path: string, passphrase: string, touchId: boolean) =>
+      invoke<VaultStatus>('vault:open', path, passphrase, touchId),
+    unlock: (passphrase: string, rememberTouchId: boolean) =>
+      invoke<VaultStatus>('vault:unlock', passphrase, rememberTouchId),
+    unlockTouchId: () => invoke<VaultStatus>('vault:unlockTouchId'),
+    lock: () => invoke<VaultStatus>('vault:lock'),
+    setConfig: (input: VaultConfigInput) => invoke<VaultStatus>('vault:setConfig', input),
+    pickLocation: (mode: 'create' | 'open') =>
+      invoke<string | null>('vault:pickLocation', mode),
+    /** The vault was locked (auto-lock, sleep, menu). */
+    onLocked: (cb: (status: VaultStatus & { reason?: string }) => void): (() => void) => {
+      const l = (_e: unknown, s: VaultStatus & { reason?: string }): void => cb(s)
+      ipcRenderer.on('vault:locked', l)
+      return () => ipcRenderer.removeListener('vault:locked', l)
+    },
+    onUnlocked: (cb: (status: VaultStatus) => void): (() => void) => {
+      const l = (_e: unknown, s: VaultStatus): void => cb(s)
+      ipcRenderer.on('vault:unlocked', l)
+      return () => ipcRenderer.removeListener('vault:unlocked', l)
+    },
+    /** Another machine wrote a newer revision; the catalog and settings were reloaded. */
+    onChanged: (cb: (status: VaultStatus) => void): (() => void) => {
+      const l = (_e: unknown, s: VaultStatus): void => cb(s)
+      ipcRenderer.on('vault:changed', l)
+      return () => ipcRenderer.removeListener('vault:changed', l)
+    }
   },
   updates: {
     // main → renderer events (each returns an unsubscribe fn)

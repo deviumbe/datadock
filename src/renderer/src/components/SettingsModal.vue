@@ -4,6 +4,8 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useSettings } from '../stores/settings'
 import { useUi } from '../stores/ui'
 import { useTheme } from '../stores/theme'
+import { useVault } from '../stores/vault'
+import { useWorkspace } from '../stores/workspace'
 import {
   presetsFor,
   UI_FONTS,
@@ -30,7 +32,7 @@ const ui = useUi()
 const theme = useTheme()
 const emit = defineEmits<{ close: [] }>()
 
-type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'about'
+type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'vault' | 'about'
 const section = ref<Section>('ai')
 
 // Escape closes settings — unless a confirm dialog is stacked on top.
@@ -296,6 +298,85 @@ function setSshAuth(m: SshAuthMethod): void {
   sshDraft.value.authMethod = m
 }
 
+// Encrypted vault
+const vault = useVault()
+const ws = useWorkspace()
+const vaultStatus = computed(() => vault.status)
+const vaultMode = ref<'idle' | 'create' | 'open'>('idle')
+const vaultPath = ref('')
+const vaultPass = ref('')
+const vaultPass2 = ref('')
+const vaultTouchId = ref(true)
+const vaultBusy = ref(false)
+const vaultError = ref('')
+const AUTO_LOCK_CHOICES = [0, 5, 15, 30, 60, 240]
+
+onMounted(() => void vault.refresh())
+
+function fmtWhen(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString()
+}
+
+async function startVault(mode: 'create' | 'open'): Promise<void> {
+  vaultError.value = ''
+  const path = await vault.pickLocation(mode)
+  if (!path) return
+  vaultPath.value = path
+  vaultPass.value = ''
+  vaultPass2.value = ''
+  vaultTouchId.value = !!vaultStatus.value?.touchIdAvailable
+  vaultMode.value = mode
+}
+function cancelVault(): void {
+  vaultMode.value = 'idle'
+  vaultPass.value = ''
+  vaultPass2.value = ''
+  vaultError.value = ''
+}
+const canSubmitVault = computed(() => {
+  if (vaultBusy.value || !vaultPath.value || vaultPass.value.length < 8) return false
+  return vaultMode.value === 'open' || vaultPass.value === vaultPass2.value
+})
+async function submitVault(): Promise<void> {
+  if (!canSubmitVault.value) return
+  vaultBusy.value = true
+  vaultError.value = ''
+  try {
+    if (vaultMode.value === 'create') {
+      await vault.create(vaultPath.value, vaultPass.value, vaultTouchId.value)
+    } else {
+      await vault.open(vaultPath.value, vaultPass.value, vaultTouchId.value)
+    }
+    cancelVault()
+    await Promise.all([ws.load(), settings.load(), settings.loadMcp()])
+  } catch (e) {
+    vaultError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    vaultBusy.value = false
+  }
+}
+async function toggleVaultTouchId(): Promise<void> {
+  vaultError.value = ''
+  try {
+    await vault.setConfig({ touchId: !vaultStatus.value?.touchIdEnabled })
+  } catch (e) {
+    vaultError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+async function setAutoLock(e: Event): Promise<void> {
+  await vault.setConfig({ autoLockMinutes: Number((e.target as HTMLSelectElement).value) })
+}
+function autoLockLabel(minutes: number): string {
+  if (minutes === 0) return 'Never'
+  if (minutes < 60) return `${minutes} min`
+  return minutes === 60 ? '1 hour' : `${minutes / 60} hours`
+}
+async function lockNow(): Promise<void> {
+  await vault.lock()
+  emit('close')
+}
 </script>
 
 <template>
@@ -308,6 +389,7 @@ function setSshAuth(m: SshAuthMethod): void {
           <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'"><Icon name="palette" :size="13" /> Appearance</button>
           <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'"><Icon name="lock" :size="13" /> SSH Tunnels</button>
           <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'"><Icon name="bolt" :size="13" /> MCP Server</button>
+          <button :class="{ on: section === 'vault' }" @click="section = 'vault'"><Icon name="folder" :size="13" /> Vault</button>
           <button :class="{ on: section === 'about' }" @click="section = 'about'"><Icon name="info" :size="13" /> About</button>
           <div class="nav-spacer" />
           <button class="close-x" @click="emit('close')">Close <Icon name="x" :size="12" /></button>
@@ -841,6 +923,117 @@ function setSshAuth(m: SshAuthMethod): void {
                 </p>
               </div>
             </template>
+          </section>
+
+          <!-- Encrypted vault -->
+          <section v-else-if="section === 'vault'">
+            <h2>Vault</h2>
+            <p class="lead">
+              Keep your connections, SSH profiles and AI keys in <strong>one encrypted file</strong>
+              (AES-256-GCM, key derived from your passphrase) instead of plain JSON. Put it in a
+              synced folder such as Proton Drive and open the same vault on another Mac with
+              nothing but the passphrase. Touch ID is a per-Mac shortcut on top; the passphrase
+              always works.
+            </p>
+
+            <template v-if="vaultStatus?.configured">
+              <div class="vault-box">
+                <div class="vault-box-main">
+                  <Icon :name="vaultStatus.unlocked ? 'unlock' : 'lock'" :size="15" />
+                  <div>
+                    <div class="vault-path" :title="vaultStatus.path">{{ vaultStatus.path }}</div>
+                    <small v-if="vaultStatus.revision">
+                      Revision {{ vaultStatus.revision }}
+                      <template v-if="vaultStatus.updatedAt"> · written {{ fmtWhen(vaultStatus.updatedAt) }}</template>
+                    </small>
+                    <small v-if="!vaultStatus.fileExists" class="vault-missing">File not found — is the synced folder mounted?</small>
+                  </div>
+                </div>
+                <button class="btn btn-ghost" @click="lockNow">Lock now</button>
+              </div>
+
+              <div v-if="vaultStatus.touchIdAvailable" class="setting">
+                <div class="setting-label">
+                  <span>Unlock with Touch ID on this Mac</span>
+                  <small>Stores the vault key in this Mac's keychain, released after a fingerprint. Other Macs still need the passphrase.</small>
+                </div>
+                <div class="setting-control">
+                  <button
+                    class="toggle"
+                    :class="{ on: vaultStatus.touchIdEnabled }"
+                    role="switch"
+                    :aria-checked="vaultStatus.touchIdEnabled"
+                    @click="toggleVaultTouchId"
+                  >
+                    <span class="knob" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="setting">
+                <div class="setting-label">
+                  <span>Auto-lock when idle</span>
+                  <small>The vault also locks when the Mac sleeps or its screen locks. Locking closes every database connection.</small>
+                </div>
+                <div class="setting-control">
+                  <select class="input" :value="vaultStatus.autoLockMinutes" @change="setAutoLock">
+                    <option v-for="m in AUTO_LOCK_CHOICES" :key="m" :value="m">{{ autoLockLabel(m) }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="vault-actions">
+                <button class="btn btn-ghost" :disabled="vaultMode !== 'idle'" @click="startVault('open')">Switch to another vault…</button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="vault-actions">
+                <button class="btn btn-primary" :disabled="vaultMode !== 'idle'" @click="startVault('create')">Create vault…</button>
+                <button class="btn" :disabled="vaultMode !== 'idle'" @click="startVault('open')">Open existing vault…</button>
+              </div>
+              <p class="hint">
+                <strong>Create</strong> moves everything stored on this Mac into the new file and deletes
+                the plaintext <code>datadock.json</code>. <strong>Open existing</strong> is for a second
+                Mac: the vault's contents replace what is stored locally.
+              </p>
+            </template>
+
+            <form v-if="vaultMode !== 'idle'" class="vault-editor" @submit.prevent="submitVault">
+              <h3>{{ vaultMode === 'create' ? 'New vault' : 'Open vault' }}</h3>
+              <div class="vault-path mono" :title="vaultPath">{{ vaultPath }}</div>
+              <div class="form-grid">
+                <div class="field span2">
+                  <label>Passphrase</label>
+                  <input
+                    class="input"
+                    type="password"
+                    v-model="vaultPass"
+                    autocomplete="new-password"
+                    placeholder="at least 8 characters"
+                    autofocus
+                  />
+                </div>
+                <div v-if="vaultMode === 'create'" class="field span2">
+                  <label>Repeat passphrase</label>
+                  <input class="input" type="password" v-model="vaultPass2" autocomplete="new-password" />
+                </div>
+                <label v-if="vaultStatus?.touchIdAvailable" class="check span2">
+                  <input type="checkbox" v-model="vaultTouchId" />
+                  Unlock with Touch ID on this Mac
+                </label>
+              </div>
+              <p v-if="vaultMode === 'create'" class="ssh-note">
+                There is no recovery: a forgotten passphrase means the vault cannot be opened anywhere.
+              </p>
+              <div class="ssh-editor-actions">
+                <button class="btn btn-primary" type="submit" :disabled="!canSubmitVault">
+                  {{ vaultBusy ? 'Working…' : vaultMode === 'create' ? 'Create vault' : 'Open vault' }}
+                </button>
+                <button class="btn btn-ghost" type="button" :disabled="vaultBusy" @click="cancelVault">Cancel</button>
+              </div>
+            </form>
+            <p v-if="vaultError" class="ssh-err">{{ vaultError }}</p>
           </section>
 
           <!-- About -->
@@ -1505,6 +1698,74 @@ h2 {
   font-size: 11px;
   color: var(--text-faint);
   line-height: 1.5;
+}
+.vault-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.vault-box-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--accent);
+}
+.vault-box-main > div {
+  min-width: 0;
+  color: var(--text);
+}
+.vault-box > .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.vault-box-main small {
+  display: block;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+.vault-missing {
+  color: var(--warn) !important;
+}
+.vault-path {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vault-path.mono {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.vault-actions {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.vault-editor {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.vault-editor h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 12.5px;
 }
 .ssh-err {
   margin-top: 10px;

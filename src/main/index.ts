@@ -12,6 +12,7 @@ import { disconnectAll, verifyAll } from './db'
 import { startMcp, stopMcp } from './mcp'
 import { buildMenu } from './menu'
 import { setupUpdater } from './updater'
+import * as vaultOps from './vaultOps'
 
 // NOTE: we deliberately do NOT call app.setName('DataDock') here. On macOS,
 // safeStorage derives its keychain encryption key from the app name, so renaming
@@ -78,7 +79,10 @@ app.whenReady().then(() => {
   // Waking from sleep is the most common cause of a "green but dead" socket.
   powerMonitor.on('resume', () => void verifyAll())
 
+  // With a vault configured the app starts locked: the catalog and secrets only
+  // load after Touch ID / passphrase, and the MCP server starts on unlock.
   loadWorkspace()
+  vaultOps.init()
   registerIpc()
   buildMenu()
   startScheduler()

@@ -1270,3 +1270,27 @@ export interface AnalyticsState {
     refreshSec?: number
   }[]
 }
+
+// ---- encrypted vault ----------------------------------------------------------
+
+/** What the renderer needs to know about the vault: lock screen, settings section. */
+export interface VaultStatus {
+  /** A vault file has been chosen on this machine (vault mode). */
+  configured: boolean
+  unlocked: boolean
+  path?: string
+  fileExists: boolean
+  /** macOS with a Touch ID sensor that can prompt right now. */
+  touchIdAvailable: boolean
+  /** The user opted in and a key is stored in this Mac's keychain. */
+  touchIdEnabled: boolean
+  /** Idle minutes before the vault relocks; 0 disables idle locking. */
+  autoLockMinutes: number
+  revision?: number
+  updatedAt?: string
+}
+
+export interface VaultConfigInput {
+  touchId?: boolean
+  autoLockMinutes?: number
+}

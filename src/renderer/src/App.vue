@@ -16,7 +16,9 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
 import TaskTray from './components/TaskTray.vue'
+import LockScreen from './components/LockScreen.vue'
 import { useUpdates } from './stores/updates'
+import { useVault } from './stores/vault'
 import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 
 const ws = useWorkspace()
@@ -24,19 +26,65 @@ const tabs = useTabs()
 const ui = useUi()
 const settings = useSettings()
 const updates = useUpdates()
+const vault = useVault()
 
 const sidebarWidth = computed(() => (ui.sidebarCollapsed ? '0px' : '264px'))
 
-onMounted(() => {
-  ws.load()
-  settings.load()
+onMounted(async () => {
+  // Appearance is local, so the lock screen is themed; the catalog waits for unlock.
+  await vault.refresh()
+  void settings.load()
+  if (!vault.locked) void ws.load()
   updates.init()
 })
+
+// ---- vault lock / unlock ----------------------------------------------------
+const vaultNotice = ref('')
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+function showVaultNotice(text: string): void {
+  vaultNotice.value = text
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (vaultNotice.value = ''), 4000)
+}
+
+async function reloadFromVault(): Promise<void> {
+  await Promise.all([ws.load(), settings.load(), settings.loadMcp()])
+}
+
+let unlistenVault: (() => void) | undefined
+onMounted(() => {
+  unlistenVault = vault.listen(() => {
+    void reloadFromVault()
+    showVaultNotice('Vault reloaded: it was changed on another device.')
+  })
+})
+onBeforeUnmount(() => unlistenVault?.())
+
+watch(
+  () => vault.locked,
+  (locked, wasLocked) => {
+    if (locked) {
+      for (const p of ws.allProjects)
+        for (const e of p.environments) for (const c of e.connections) tabs.closeForConnection(c.id)
+      ws.activeConnectionId = null
+      ui.settingsOpen = false
+      ui.closePalette()
+      ui.closeTopology()
+      void ws.load()
+    } else if (wasLocked) {
+      void reloadFromVault()
+    }
+  }
+)
 
 // ---- native menu actions ----------------------------------------------------
 function handleMenu(action: string): void {
   if (action === 'toggleSidebar') {
     ui.toggleSidebar()
+    return
+  }
+  if (action === 'lockVault') {
+    void vault.lock()
     return
   }
   if (action === 'toggleTheme') {
@@ -391,6 +439,10 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     <ConfirmModal />
     <UpdateNotice />
     <TaskTray />
+    <Transition name="notice">
+      <div v-if="vaultNotice" class="vault-notice">{{ vaultNotice }}</div>
+    </Transition>
+    <LockScreen v-if="vault.locked" />
   </div>
 </template>
 
@@ -405,5 +457,28 @@ function onDuplicateConnection(c: ConnectionConfig): void {
 }
 .sidebar-slot {
   overflow: hidden;
+}
+.vault-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 250;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-pop);
+}
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity var(--dur-2), transform var(--dur-2);
+}
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 8px);
 }
 </style>

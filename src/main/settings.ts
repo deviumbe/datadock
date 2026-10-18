@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { randomBytes, randomUUID } from 'crypto'
 import { join } from 'path'
 import type {
@@ -13,18 +13,21 @@ import type {
   ThemeSettings
 } from '@shared/types'
 import { DEFAULT_THEME } from '@shared/themeDefaults'
+import * as vault from './vault'
 
 // Application settings — AI provider keys (encrypted at rest with safeStorage,
 // exactly like connection secrets and never sent to the renderer in plaintext)
 // plus appearance preferences. The renderer only ever receives a sanitized view
-// (key presence as a boolean, model + Ollama URL).
+// (key presence as a boolean, model + Ollama URL). In vault mode the
+// secret-bearing parts (AI keys, SSH profiles, MCP token) move into the vault
+// and settings.json keeps only appearance.
 
 interface RawProvider {
   apiKey?: string
   model?: string
   baseUrl?: string
 }
-interface RawSshProfile {
+export interface RawSshProfile {
   id: string
   name: string
   host: string
@@ -41,6 +44,9 @@ interface RawSettings {
   mcp: McpSettings
   sshProfiles: RawSshProfile[]
 }
+
+/** The settings that carry secrets and therefore live inside the vault. */
+export type VaultSettings = Pick<RawSettings, 'ai' | 'mcp' | 'sshProfiles'>
 
 export const PROVIDER_META: Record<
   AiProvider,
@@ -95,12 +101,15 @@ function path(): string {
   return settingsPath
 }
 
+// Inside a vault, secrets are stored as-is (see storage.ts for the reasoning).
 function encrypt(plain: string): string {
+  if (vault.isActive()) return plain
   if (!safeStorage.isEncryptionAvailable()) return `plain:${plain}`
   return `enc:${safeStorage.encryptString(plain).toString('base64')}`
 }
 function decrypt(stored: string | undefined): string | undefined {
   if (!stored) return undefined
+  if (vault.isActive()) return stored
   try {
     if (stored.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(stored.slice(4), 'base64'))
     if (stored.startsWith('plain:')) return stored.slice(6)
@@ -156,14 +165,79 @@ function load(): RawSettings {
       s = blank()
     }
   }
-  migrateLegacyKey(s)
+  if (vault.isConfigured()) {
+    // Whatever secrets settings.json may still hold are ignored in vault mode;
+    // the vault is the only source once unlocked.
+    const part = vault.isUnlocked() ? vault.getPayload().settings : blank()
+    s.ai = part.ai
+    s.mcp = { ...DEFAULT_MCP, ...part.mcp }
+    s.sshProfiles = part.sshProfiles
+  } else {
+    migrateLegacyKey(s)
+  }
   cache = s
   return s
 }
 
+function vaultPart(s: RawSettings): VaultSettings {
+  return { ai: s.ai, mcp: s.mcp, sshProfiles: s.sshProfiles }
+}
+
 function save(): void {
   if (!cache) return
-  writeFileSync(path(), JSON.stringify(cache, null, 2), 'utf-8')
+  if (!vault.isConfigured()) {
+    writeFileSync(path(), JSON.stringify(cache, null, 2), 'utf-8')
+    return
+  }
+  writeFileSync(path(), JSON.stringify({ appearance: cache.appearance }, null, 2), 'utf-8')
+  if (vault.isUnlocked()) vault.save({ settings: vaultPart(cache) })
+}
+
+// ---- vault mode ---------------------------------------------------------------
+
+/** Take over the secret-bearing settings that were just decrypted from the vault. */
+export function adoptVault(part: VaultSettings): void {
+  const s = load()
+  s.ai = part.ai
+  s.mcp = { ...DEFAULT_MCP, ...part.mcp }
+  s.sshProfiles = part.sshProfiles
+}
+
+/** Drop the in-memory copy so the next read sees the locked state. */
+export function reset(): void {
+  cache = undefined
+}
+
+/**
+ * A deep copy of the secret-bearing settings with every secret decrypted, ready
+ * to be sealed into a vault. Must run while the vault is not yet active.
+ */
+export function exportForVault(): VaultSettings {
+  const s = load()
+  const copy = JSON.parse(JSON.stringify(vaultPart(s))) as VaultSettings
+  for (const cfg of Object.values(copy.ai.providers)) {
+    if (!cfg) continue
+    const plain = decrypt(cfg.apiKey)
+    if (plain) cfg.apiKey = plain
+    else delete cfg.apiKey
+  }
+  for (const p of copy.sshProfiles) {
+    const passphrase = decrypt(p.passphrase)
+    const password = decrypt(p.password)
+    if (passphrase) p.passphrase = passphrase
+    else delete p.passphrase
+    if (password) p.password = password
+    else delete p.password
+  }
+  return copy
+}
+
+/** Rewrite settings.json without secrets and drop the legacy ai.json. */
+export function stripVaultPartsFromDisk(): void {
+  const s = load()
+  writeFileSync(path(), JSON.stringify({ appearance: s.appearance }, null, 2), 'utf-8')
+  const legacy = join(app.getPath('userData'), 'ai.json')
+  if (existsSync(legacy)) unlinkSync(legacy)
 }
 
 function providerInfo(p: AiProvider, raw: RawSettings): ProviderInfo {

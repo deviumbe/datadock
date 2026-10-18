@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
 import { join, dirname } from 'path'
 import { randomUUID } from 'crypto'
 import type {
@@ -10,6 +10,7 @@ import type {
   Topology,
   Catalog
 } from '@shared/types'
+import * as vault from './vault'
 
 const SECRET_FIELDS = ['password', 'token', 'sshPassword', 'sshPassphrase'] as const
 
@@ -26,6 +27,12 @@ function file(): string {
 }
 
 export function loadWorkspace(): void {
+  if (vault.isConfigured()) {
+    // Vault mode: the catalog lives inside the vault and arrives via adoptVault()
+    // once it is unlocked. Until then there is nothing to show.
+    catalog = vault.isUnlocked() ? vault.getPayload().catalog : emptyCatalog()
+    return
+  }
   const path = file()
   if (existsSync(path)) {
     try {
@@ -68,20 +75,68 @@ function migrateWorkspaces(): boolean {
 }
 
 function persist(): void {
+  if (vault.isConfigured()) {
+    vault.save({ catalog })
+    return
+  }
   const path = file()
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(catalog, null, 2), 'utf-8')
 }
 
+// ---- vault mode ---------------------------------------------------------------
+
+/** Take over the catalog that was just decrypted from the vault. */
+export function adoptVault(c: Catalog): void {
+  catalog = c
+  if (!Array.isArray(catalog.projects)) catalog = emptyCatalog()
+  if (migrateWorkspaces()) persist()
+}
+
+/** Forget everything in memory (the vault was locked). */
+export function reset(): void {
+  catalog = emptyCatalog()
+}
+
+/**
+ * A deep copy of the catalog with every connection secret decrypted, ready to
+ * be sealed into a vault. Must run while the vault is not yet active, so the
+ * safeStorage path of decryptSecret is still taken.
+ */
+export function exportForVault(): Catalog {
+  const copy = JSON.parse(JSON.stringify(catalog)) as Catalog
+  for (const p of copy.projects) {
+    for (const e of p.environments) {
+      for (const c of e.connections) {
+        for (const f of SECRET_FIELDS) {
+          const plain = decryptSecret(c[f])
+          if (plain) c[f] = plain
+          else delete c[f]
+        }
+      }
+    }
+  }
+  return copy
+}
+
+/** Remove the plaintext catalog once its contents live in the vault. */
+export function removePlaintextFile(): void {
+  if (existsSync(file())) unlinkSync(file())
+}
+
 // ---- secret encryption -----------------------------------------------------
 
+// Inside a vault, secrets are stored as-is: the vault key protects them, and a
+// safeStorage-wrapped value would be bound to one machine's keychain.
 function encryptSecret(plain: string): string {
+  if (vault.isActive()) return plain
   if (!safeStorage.isEncryptionAvailable()) return `plain:${plain}`
   return `enc:${safeStorage.encryptString(plain).toString('base64')}`
 }
 
 function decryptSecret(stored: string | undefined): string | undefined {
   if (!stored) return undefined
+  if (vault.isActive()) return stored
   if (stored.startsWith('plain:')) return stored.slice(6)
   if (stored.startsWith('enc:')) {
     try {

@@ -45,6 +45,7 @@ import { runReport } from './scheduler'
 import * as ai from './ai'
 import * as settings from './settings'
 import * as mcp from './mcp'
+import * as vaultOps from './vaultOps'
 import { prepareStatement } from './sqlGuard'
 import { testProvider, listModels } from './aiProviders'
 import type { RunSql } from './aiProviders'
@@ -53,7 +54,8 @@ import type {
   AppearanceSettings,
   McpSettings,
   QueryResult,
-  SshProfileInput
+  SshProfileInput,
+  VaultConfigInput
 } from '@shared/types'
 
 type Handler<T> = (...args: any[]) => Promise<T> | T
@@ -468,6 +470,22 @@ export function registerIpc(): void {
     mcp.setConfig(cfg)
   )
   handle('mcp:regenerateToken', () => mcp.regenerateToken())
+
+  // Encrypted vault (portable catalog + secrets; Touch ID or passphrase unlock)
+  handle('vault:status', () => vaultOps.status())
+  handle('vault:create', (path: string, passphrase: string, touchId: boolean) =>
+    vaultOps.createVault(path, passphrase, touchId)
+  )
+  handle('vault:open', (path: string, passphrase: string, touchId: boolean) =>
+    vaultOps.openVault(path, passphrase, touchId)
+  )
+  handle('vault:unlock', (passphrase: string, rememberTouchId: boolean) =>
+    vaultOps.unlockWithPassphrase(passphrase, rememberTouchId)
+  )
+  handle('vault:unlockTouchId', () => vaultOps.unlockWithTouchId())
+  handle('vault:lock', () => vaultOps.lock())
+  handle('vault:setConfig', (input: VaultConfigInput) => vaultOps.setConfig(input))
+  handle('vault:pickLocation', (mode: 'create' | 'open') => vaultOps.pickLocation(mode))
 
   handle('app:version', () => app.getVersion())
   handle('window:setBackground', (hex: string) => {
