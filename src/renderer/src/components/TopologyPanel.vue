@@ -680,7 +680,7 @@ const sinceTimer = setInterval(() => {
 /* ---- AI advisor drawer ---- */
 .btn.ai {
   color: var(--accent);
-  border-color: rgba(45, 212, 191, 0.4);
+  border-color: var(--accent-ring);
 }
 .advisor {
   position: absolute;

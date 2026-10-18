@@ -4,11 +4,14 @@
 import type { EChartsCoreOption } from 'echarts'
 import type { ChartType, MetricFormat, QueryResult } from '@shared/types'
 
-// Mock-aligned palette: teal · blue · amber · purple, then supporting hues.
-const PALETTE = [
-  '#2dd4bf', '#5b8def', '#e0a14a', '#b07fd6', '#5eead4',
-  '#22d3ee', '#f59e0b', '#ec4899', '#a3e635', '#8b5cf6'
+const FALLBACK_PALETTE = [
+  '#2dd4bf', '#5b8def', '#e0a14a', '#b07fd6', '#22d3ee', '#ec4899', '#a3e635', '#f59e0b'
 ]
+
+/** Series colours from the active theme (--chart-1 … --chart-8). */
+function chartPalette(): string[] {
+  return FALLBACK_PALETTE.map((fb, i) => cssVar(`--chart-${i + 1}`, fb))
+}
 
 function cssVar(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback
@@ -47,7 +50,8 @@ function vGradient(color: string, topA: number, botA: number): Record<string, un
 
 /** Apply the mock's visual styling to one series based on the chart type. */
 function decorate(s: Record<string, unknown>, type: ChartType, idx: number): Record<string, unknown> {
-  const color = PALETTE[idx % PALETTE.length]
+  const pal = chartPalette()
+  const color = pal[idx % pal.length]
   if (type === 'bar' || type === 'hbar') {
     const r = type === 'hbar' ? [0, 4, 4, 0] : [4, 4, 0, 0]
     s.itemStyle = { borderRadius: r, color: vGradient(color, 1, 0.55) }
@@ -107,7 +111,7 @@ function cartesian(
     splitLine: { lineStyle: { color: c.border, type: 'dashed' as const } }
   }
   return {
-    color: PALETTE,
+    color: chartPalette(),
     grid: { left: 8, right: 16, top: series.length > 1 ? 38 : 14, bottom: 6, containLabel: true },
     tooltip: {
       trigger: 'axis',
@@ -126,7 +130,7 @@ function cartesian(
 function pie(data: { name: string; value: number }[], donut: boolean): EChartsCoreOption {
   const c = palette()
   return {
-    color: PALETTE,
+    color: chartPalette(),
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',

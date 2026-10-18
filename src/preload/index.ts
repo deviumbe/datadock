@@ -423,6 +423,8 @@ const api = {
     openReleases: (): void => ipcRenderer.send('update:openReleases')
   },
   setZoom: (factor: number) => webFrame.setZoomFactor(factor),
+  /** Keep the native window chrome in step with the theme (no flash on resize). */
+  setWindowBackground: (hex: string) => invoke<void>('window:setBackground', hex),
   getVersion: () => invoke<string>('app:version'),
   pickFile: () => invoke<string | null>('app:pickFile')
 }

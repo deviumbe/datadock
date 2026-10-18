@@ -1666,7 +1666,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   background: var(--bg-hover);
 }
 .vqb-col.checked {
-  background: rgba(45, 212, 191, 0.06);
+  background: var(--accent-tint);
 }
 .vqb-col-main {
   display: flex;

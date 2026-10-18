@@ -9,6 +9,8 @@ import type {
   SshProfile,
   SshProfileInput
 } from '@shared/types'
+import { DEFAULT_THEME } from '@shared/themeDefaults'
+import { useTheme } from './theme'
 
 export const useSettings = defineStore('settings', () => {
   const data = ref<AppSettings | null>(null)
@@ -19,6 +21,7 @@ export const useSettings = defineStore('settings', () => {
     // Interface scale via Electron zoom factor + density attribute for CSS.
     window.api.setZoom?.(s.appearance.fontScale)
     document.documentElement.setAttribute('data-density', s.appearance.density)
+    useTheme().hydrate(s.appearance.theme)
   }
 
   async function load(): Promise<void> {
@@ -34,7 +37,7 @@ export const useSettings = defineStore('settings', () => {
   const providers = computed<ProviderInfo[]>(() => data.value?.ai.providers ?? [])
   const activeProvider = computed<AiProvider>(() => data.value?.ai.activeProvider ?? 'anthropic')
   const appearance = computed<AppearanceSettings>(
-    () => data.value?.appearance ?? { fontScale: 1, density: 'comfortable', pageSize: 200, theme: 'dark' }
+    () => data.value?.appearance ?? { fontScale: 1, density: 'comfortable', pageSize: 200, theme: DEFAULT_THEME }
   )
   const pageSize = computed(() => appearance.value.pageSize)
   const sshProfiles = computed<SshProfile[]>(() => data.value?.sshProfiles ?? [])

@@ -74,7 +74,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 | 📦 | **Import & export** | CSV · Excel · JSON · SQL · zipped whole-DB dumps · result → new table |
 | 🎭 | **Data masking** | Anonymize chosen columns with realistic fake data on export — safely copy production into a local database |
 | 🛠️ | **Server tools** | Databases, users & roles and a process list (with kill) |
-| 🎨 | **Comfortable to live in** | Dark / light themes, a ⌘K command palette and collapsible panels |
+| 🎨 | **Comfortable to live in** | Themes (12 colour presets or your own colours, 8 interface fonts, 6 code fonts, 5 icon sets), a ⌘K command palette and collapsible panels |
 
 <details>
 <summary><b>📖 Expand for the full feature tour</b></summary>
@@ -121,11 +121,11 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 #### ⚙️ Settings (⌘,)
 - **AI Providers** — add keys for Anthropic, Google, Mistral or xAI (Grok), or point at a local **Ollama** server (no key needed); pick the active provider and model, and **Test** the connection.
-- **Appearance** — interface scale (zoom), light/dark theme, comfortable/compact row density, and the default page size.
+- **Appearance** — dark / light / follow-system mode, a colour preset per mode (or a custom theme built from seven base colours), interface and code fonts, icon set and weight, interface scale (zoom), comfortable/compact row density, and the default page size.
 - **About** — a little love from [Devium](https://devium.be/): built with a smile for everybody. 🙂
 
 #### 🎨 Comfortable to live in
-- **Dark and light themes**, remembered between sessions.
+- **Themes** — seven dark and five light colour presets, or a custom palette; bundled fonts (Inter, Geist, IBM Plex, Source Sans, Manrope, DM Sans, Space Grotesk; JetBrains Mono, Geist Mono, Fira Code, Source Code Pro, IBM Plex Mono) and five icon sets (Lucide, Tabler, Phosphor, Heroicons, Material), all remembered between sessions.
 - **Automatic updates** — DataDock checks GitHub Releases on launch; when a newer version is out you get a *"New version — Update now"* prompt that downloads and installs it in place (or *Check for Updates…* from the app menu anytime).
 - Collapsible sidebar and table list to maximize screen for data.
 - **Command palette (⌘K)** — fuzzy-search connections, tables and actions from anywhere in the app. Jump to any table, open a query tab, switch themes, open the ER diagram — all without touching the mouse. Navigate with ↑↓, confirm with ↵, dismiss with Esc.

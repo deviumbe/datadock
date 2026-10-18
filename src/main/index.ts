@@ -30,7 +30,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 560,
     show: false,
-    backgroundColor: '#1b1d23',
+    backgroundColor: '#0c1322',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     title: 'DataDock',
     icon: iconPath,

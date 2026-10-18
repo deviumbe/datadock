@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { useTheme } from './theme'
+import { ref, computed } from 'vue'
 
 /** Options for the in-app confirm modal (dangerous-query guard, etc.). */
 export interface ConfirmOpts {
@@ -72,19 +73,13 @@ export const useUi = defineStore('ui', () => {
 
   const isMac = window.api?.platform === 'darwin'
 
-  // Theme (persisted to localStorage; applied to <html data-theme>).
-  const theme = ref<'dark' | 'light'>(
-    (localStorage.getItem('datadock-theme') as 'dark' | 'light') || 'dark'
-  )
-  function applyTheme(): void {
-    document.documentElement.setAttribute('data-theme', theme.value)
-  }
+  // Theme lives in the theme store; these stay as the façade the rest of the
+  // UI already calls (resolved mode + toggle).
+  const themeStore = useTheme()
+  const theme = computed(() => themeStore.mode)
   function toggleTheme(): void {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
-    localStorage.setItem('datadock-theme', theme.value)
-    applyTheme()
+    void themeStore.toggle()
   }
-  applyTheme()
 
   function toggleSidebar(): void {
     sidebarCollapsed.value = !sidebarCollapsed.value

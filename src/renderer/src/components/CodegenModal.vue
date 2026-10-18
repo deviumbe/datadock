@@ -496,25 +496,25 @@ async function saveAll(): Promise<void> {
 }
 /* Syntax highlight tokens (palette matches the SQL editor). */
 .cg-code :deep(.hl-kw) {
-  color: #57f1db;
+  color: var(--syn-keyword);
   font-weight: 600;
 }
 .cg-code :deep(.hl-str) {
-  color: #a5d6a7;
+  color: var(--syn-string);
 }
 .cg-code :deep(.hl-num),
 .cg-code :deep(.hl-lit) {
-  color: #f0b429;
+  color: var(--syn-number);
 }
 .cg-code :deep(.hl-com) {
-  color: #66728f;
+  color: var(--syn-comment);
   font-style: italic;
 }
 .cg-code :deep(.hl-fn) {
-  color: #c8b4f6;
+  color: var(--syn-function);
 }
 .cg-code :deep(.hl-type) {
-  color: #2dd4bf;
+  color: var(--syn-type);
 }
 .cg-code :deep(.hl-dec) {
   color: #e0a458;

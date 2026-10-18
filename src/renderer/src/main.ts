@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
+import './fonts.css'
 import './styles.css'
 import { installHorizontalWheel } from './lib/hscroll'
 

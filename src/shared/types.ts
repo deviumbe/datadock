@@ -922,12 +922,42 @@ export interface ProviderInfo {
 
 export type Density = 'comfortable' | 'compact'
 
+export type ThemeMode = 'dark' | 'light' | 'system'
+export type IconWeight = 'light' | 'regular' | 'bold'
+
+/** The seven base colours a theme is built from; every other token is derived. */
+export interface ThemeColors {
+  /** App canvas. */
+  bg: string
+  /** Panels, inputs and cards. */
+  surface: string
+  text: string
+  accent: string
+  danger: string
+  warn: string
+  ok: string
+}
+
+export interface ThemeSettings {
+  mode: ThemeMode
+  /** Preset id used while in dark mode ('custom' = `customDark`). */
+  darkPreset: string
+  /** Preset id used while in light mode ('custom' = `customLight`). */
+  lightPreset: string
+  customDark?: ThemeColors
+  customLight?: ThemeColors
+  uiFont: string
+  codeFont: string
+  iconSet: string
+  iconWeight: IconWeight
+}
+
 export interface AppearanceSettings {
   /** UI zoom factor (1 = 100%). */
   fontScale: number
   density: Density
   pageSize: number
-  theme: 'dark' | 'light'
+  theme: ThemeSettings
 }
 
 export interface AppSettings {

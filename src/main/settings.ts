@@ -9,8 +9,10 @@ import type {
   McpSettings,
   ProviderInfo,
   SshProfile,
-  SshProfileInput
+  SshProfileInput,
+  ThemeSettings
 } from '@shared/types'
+import { DEFAULT_THEME } from '@shared/themeDefaults'
 
 // Application settings — AI provider keys (encrypted at rest with safeStorage,
 // exactly like connection secrets and never sent to the renderer in plaintext)
@@ -61,7 +63,18 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   fontScale: 1,
   density: 'comfortable',
   pageSize: 200,
-  theme: 'dark'
+  theme: { ...DEFAULT_THEME }
+}
+
+/** Older settings files stored `theme` as a bare 'dark' | 'light' string. */
+function normalizeAppearance(parsed: Partial<AppearanceSettings> | undefined): AppearanceSettings {
+  const a = { ...DEFAULT_APPEARANCE, ...(parsed ?? {}) }
+  const t = a.theme as unknown
+  a.theme =
+    typeof t === 'string'
+      ? { ...DEFAULT_THEME, mode: t === 'light' ? 'light' : 'dark' }
+      : { ...DEFAULT_THEME, ...((t as Partial<ThemeSettings>) ?? {}) }
+  return a
 }
 
 // MCP is off by default; a token is generated lazily the first time it's enabled.
@@ -135,7 +148,7 @@ function load(): RawSettings {
           activeProvider: parsed.ai?.activeProvider ?? 'anthropic',
           providers: parsed.ai?.providers ?? {}
         },
-        appearance: { ...DEFAULT_APPEARANCE, ...(parsed.appearance ?? {}) },
+        appearance: normalizeAppearance(parsed.appearance),
         mcp: { ...DEFAULT_MCP, ...(parsed.mcp ?? {}) },
         sshProfiles: parsed.sshProfiles ?? []
       }
@@ -304,6 +317,7 @@ export function setProviderConfig(
 export function setAppearance(partial: Partial<AppearanceSettings>): AppSettings {
   const raw = load()
   raw.appearance = { ...raw.appearance, ...partial }
+  if (partial.theme) raw.appearance.theme = { ...DEFAULT_THEME, ...partial.theme }
   save()
   return getSettings()
 }

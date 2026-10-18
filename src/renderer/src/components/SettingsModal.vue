@@ -3,11 +3,30 @@ import Icon from './Icon.vue'
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useSettings } from '../stores/settings'
 import { useUi } from '../stores/ui'
-import type { AiProvider, SshAuthMethod, SshProfile, SshProfileInput } from '@shared/types'
+import { useTheme } from '../stores/theme'
+import {
+  presetsFor,
+  UI_FONTS,
+  CODE_FONTS,
+  ICON_WEIGHTS,
+  iconSetSupportsWeight,
+  type ThemePreset
+} from '../lib/theme'
+import { ICON_SETS } from '../lib/iconSets'
+import type {
+  AiProvider,
+  IconWeight,
+  SshAuthMethod,
+  SshProfile,
+  SshProfileInput,
+  ThemeColors,
+  ThemeMode
+} from '@shared/types'
 import deviumLogo from '../assets/devium-logo.png'
 
 const settings = useSettings()
 const ui = useUi()
+const theme = useTheme()
 const emit = defineEmits<{ close: [] }>()
 
 type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'about'
@@ -119,6 +138,52 @@ function setDensity(d: 'comfortable' | 'compact'): void {
 function setPageSize(n: number): void {
   void settings.setAppearance({ pageSize: n })
 }
+
+// Theme
+const presetChoices = computed(() => presetsFor(theme.mode))
+function presetStyle(p: ThemePreset): Record<string, string> {
+  return {
+    '--p-bg': p.colors.bg,
+    '--p-surface': p.colors.surface,
+    '--p-accent': p.colors.accent,
+    '--p-text': p.colors.text
+  }
+}
+const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
+  { key: 'bg', label: 'Background' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'text', label: 'Text' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'danger', label: 'Danger' },
+  { key: 'warn', label: 'Warning' },
+  { key: 'ok', label: 'Success' }
+]
+function setColor(key: keyof ThemeColors, e: Event): void {
+  void theme.setCustomColor(key, (e.target as HTMLInputElement).value)
+}
+function setMode(mode: ThemeMode): void {
+  void theme.update({ mode })
+}
+function setUiFont(e: Event): void {
+  void theme.update({ uiFont: (e.target as HTMLSelectElement).value })
+}
+function setCodeFont(e: Event): void {
+  void theme.update({ codeFont: (e.target as HTMLSelectElement).value })
+}
+function setIconSet(iconSet: string): void {
+  void theme.update({ iconSet })
+}
+function setIconWeight(iconWeight: IconWeight): void {
+  void theme.update({ iconWeight })
+}
+const uiFontStack = computed(
+  () => UI_FONTS.find((f) => f.id === theme.settings.uiFont)?.stack ?? UI_FONTS[0].stack
+)
+const codeFontStack = computed(
+  () => CODE_FONTS.find((f) => f.id === theme.settings.codeFont)?.stack ?? CODE_FONTS[0].stack
+)
+const iconSetIds = Object.keys(ICON_SETS)
+const PREVIEW_ICONS = ['database', 'table', 'search', 'plus', 'pencil', 'trash', 'refresh', 'sparkles', 'filter', 'chart']
 
 // MCP server
 const mcp = computed(() => settings.mcp)
@@ -236,7 +301,7 @@ function setSshAuth(m: SshAuthMethod): void {
         <nav class="nav">
           <div class="nav-title">Settings</div>
           <button :class="{ on: section === 'ai' }" @click="section = 'ai'"><Icon name="sparkles" :size="13" /> AI Providers</button>
-          <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'"><Icon name="sun" :size="13" /> Appearance</button>
+          <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'"><Icon name="palette" :size="13" /> Appearance</button>
           <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'"><Icon name="lock" :size="13" /> SSH Tunnels</button>
           <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'"><Icon name="bolt" :size="13" /> MCP Server</button>
           <button :class="{ on: section === 'about' }" @click="section = 'about'"><Icon name="info" :size="13" /> About</button>
@@ -372,7 +437,135 @@ function setSshAuth(m: SshAuthMethod): void {
           <!-- Appearance -->
           <section v-else-if="section === 'appearance'">
             <h2>Appearance</h2>
-            <p class="lead">Tune how DataDock looks and feels.</p>
+            <p class="lead">Colours, fonts and icons. Everything applies instantly.</p>
+
+            <div class="setting">
+              <div class="setting-label">
+                <span>Mode</span>
+                <small>Follow the system, or pin dark or light.</small>
+              </div>
+              <div class="setting-control">
+                <div class="seg">
+                  <button :class="{ on: theme.settings.mode === 'dark' }" @click="setMode('dark')">Dark</button>
+                  <button :class="{ on: theme.settings.mode === 'light' }" @click="setMode('light')">Light</button>
+                  <button :class="{ on: theme.settings.mode === 'system' }" @click="setMode('system')">System</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting col">
+              <div class="setting-label">
+                <span>{{ theme.mode === 'dark' ? 'Dark' : 'Light' }} theme</span>
+                <small>Used while in {{ theme.mode }} mode. Switch mode above to pick the other one.</small>
+              </div>
+              <div class="preset-grid">
+                <button
+                  v-for="p in presetChoices"
+                  :key="p.id"
+                  class="preset"
+                  :class="{ on: theme.activePresetId === p.id }"
+                  :style="presetStyle(p)"
+                  @click="theme.selectPreset(p.id)"
+                >
+                  <span class="preset-art">
+                    <i class="art-side" />
+                    <i class="art-bar" />
+                    <i class="art-dot" />
+                  </span>
+                  <span class="preset-name">{{ p.label }}</span>
+                </button>
+                <button
+                  class="preset custom"
+                  :class="{ on: theme.isCustom }"
+                  :style="theme.isCustom ? presetStyle(theme.preset) : undefined"
+                  @click="theme.isCustom || theme.customize()"
+                >
+                  <span class="preset-art">
+                    <Icon name="palette" :size="18" />
+                  </span>
+                  <span class="preset-name">Custom</span>
+                </button>
+              </div>
+
+              <div v-if="theme.isCustom && theme.customColors" class="custom-colors">
+                <label v-for="f in COLOR_FIELDS" :key="f.key" class="color-field">
+                  <input type="color" :value="theme.customColors[f.key]" @input="setColor(f.key, $event)" />
+                  <span class="color-name">{{ f.label }}</span>
+                  <code>{{ theme.customColors[f.key] }}</code>
+                </label>
+                <p class="hint-models">Surfaces, borders and text tiers are derived from these seven colours.</p>
+              </div>
+            </div>
+
+            <div class="setting">
+              <div class="setting-label">
+                <span>Interface font</span>
+                <small :style="{ fontFamily: uiFontStack, fontSize: '13px', color: 'var(--text-dim)' }">
+                  The quick brown fox jumps over the lazy dog
+                </small>
+              </div>
+              <div class="setting-control">
+                <select class="select" :value="theme.settings.uiFont" @change="setUiFont">
+                  <option v-for="f in UI_FONTS" :key="f.id" :value="f.id">{{ f.label }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="setting">
+              <div class="setting-label">
+                <span>Code font</span>
+                <small :style="{ fontFamily: codeFontStack, fontSize: '12.5px', color: 'var(--text-dim)' }">
+                  SELECT id, name FROM users WHERE id = 0;
+                </small>
+              </div>
+              <div class="setting-control">
+                <select class="select" :value="theme.settings.codeFont" @change="setCodeFont">
+                  <option v-for="f in CODE_FONTS" :key="f.id" :value="f.id">{{ f.label }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="setting col">
+              <div class="setting-label">
+                <span>Icons</span>
+                <small>The icon set used throughout the app.</small>
+              </div>
+              <div class="icon-sets">
+                <button
+                  v-for="id in iconSetIds"
+                  :key="id"
+                  class="icon-set"
+                  :class="{ on: theme.settings.iconSet === id }"
+                  @click="setIconSet(id)"
+                >
+                  <span class="icon-row">
+                    <Icon v-for="n in PREVIEW_ICONS" :key="n" :name="n" :set="id" :weight="theme.settings.iconWeight" :size="15" />
+                  </span>
+                  <span class="preset-name">{{ ICON_SETS[id].label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting">
+              <div class="setting-label">
+                <span>Icon weight</span>
+                <small v-if="iconSetSupportsWeight(theme.settings.iconSet)">Stroke thickness of the icons.</small>
+                <small v-else>{{ ICON_SETS[theme.settings.iconSet]?.label }} comes in one weight.</small>
+              </div>
+              <div class="setting-control">
+                <div class="seg" :class="{ disabled: !iconSetSupportsWeight(theme.settings.iconSet) }">
+                  <button
+                    v-for="w in ICON_WEIGHTS"
+                    :key="w.id"
+                    :class="{ on: theme.settings.iconWeight === w.id }"
+                    :disabled="!iconSetSupportsWeight(theme.settings.iconSet)"
+                    @click="setIconWeight(w.id)"
+                  >
+                    {{ w.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div class="setting">
               <div class="setting-label">
@@ -382,19 +575,6 @@ function setSshAuth(m: SshAuthMethod): void {
               <div class="setting-control range">
                 <input type="range" min="80" max="150" step="5" v-model.number="scalePct" />
                 <span class="val">{{ scalePct }}%</span>
-              </div>
-            </div>
-
-            <div class="setting">
-              <div class="setting-label">
-                <span>Theme</span>
-                <small>Light or dark.</small>
-              </div>
-              <div class="setting-control">
-                <div class="seg">
-                  <button :class="{ on: ui.theme === 'dark' }" @click="ui.theme !== 'dark' && ui.toggleTheme()">Dark</button>
-                  <button :class="{ on: ui.theme === 'light' }" @click="ui.theme !== 'light' && ui.toggleTheme()">Light</button>
-                </div>
               </div>
             </div>
 
@@ -867,6 +1047,146 @@ h2 {
 .seg button.on {
   background: var(--bg-active);
   color: var(--accent);
+}
+.seg.disabled {
+  opacity: 0.45;
+}
+.seg button:disabled {
+  cursor: default;
+}
+
+/* Theme pickers */
+.setting.col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.preset-grid,
+.icon-sets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.preset,
+.icon-set {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  text-align: left;
+  transition: border-color var(--dur-1), box-shadow var(--dur-1), transform var(--dur-1) var(--ease-out);
+}
+.preset:hover,
+.icon-set:hover {
+  border-color: var(--accent-ring);
+}
+.preset.on,
+.icon-set.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.preset-art {
+  position: relative;
+  display: block;
+  height: 44px;
+  border-radius: 5px;
+  background: var(--p-bg, var(--bg-app));
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.preset-art .art-side {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--p-surface, var(--bg-panel));
+  border-right: 1px solid rgba(127, 127, 127, 0.2);
+}
+.preset-art .art-bar {
+  position: absolute;
+  left: 40%;
+  right: 12%;
+  top: 11px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--p-text, var(--text));
+  opacity: 0.55;
+}
+.preset-art .art-dot {
+  position: absolute;
+  left: 40%;
+  bottom: 9px;
+  width: 26%;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--p-accent, var(--accent));
+}
+.preset.custom .preset-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--p-accent, var(--text-dim));
+}
+.preset-name {
+  font-size: 12px;
+  color: var(--text);
+}
+.custom-colors {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.custom-colors .hint-models {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.color-field input[type='color'] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+.color-field input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.color-field input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+.color-field .color-name {
+  flex: 1;
+}
+.color-field code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.icon-sets {
+  grid-template-columns: repeat(3, 1fr);
+}
+.icon-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--text);
+  min-height: 36px;
+  align-content: flex-start;
 }
 /* MCP toggle + fields */
 .toggle {

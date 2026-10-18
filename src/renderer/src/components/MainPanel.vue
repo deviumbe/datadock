@@ -2034,7 +2034,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 55% 45% at 50% 42%, rgba(45, 212, 191, 0.07), transparent 70%),
+    radial-gradient(ellipse 55% 45% at 50% 42%, var(--accent-tint), transparent 70%),
     radial-gradient(ellipse 85% 70% at 50% 50%, rgba(44, 70, 119, 0.16), transparent 72%);
 }
 .welcome-card {
@@ -2063,14 +2063,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   position: absolute;
   inset: 4px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.28), rgba(44, 70, 119, 0.12) 55%, transparent 70%);
+  background: radial-gradient(circle, var(--accent-glow), rgba(44, 70, 119, 0.12) 55%, transparent 70%);
   filter: blur(10px);
 }
 .welcome-logo {
   width: 92px;
   height: 92px;
   position: relative;
-  filter: drop-shadow(0 16px 40px rgba(45, 212, 191, 0.22)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 16px 40px var(--accent-glow)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.55));
 }
 .welcome-card h1 {
   font-size: 28px;

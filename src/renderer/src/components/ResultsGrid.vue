@@ -529,8 +529,8 @@ tbody tr.multi-selected td {
   user-select: none;
 }
 tbody td.cell-sel {
-  background: rgba(45, 212, 191, 0.22) !important;
-  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.5);
+  background: var(--accent-selection) !important;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
 .selcol {
   position: sticky;

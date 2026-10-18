@@ -470,6 +470,10 @@ export function registerIpc(): void {
   handle('mcp:regenerateToken', () => mcp.regenerateToken())
 
   handle('app:version', () => app.getVersion())
+  handle('window:setBackground', (hex: string) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setBackgroundColor(hex)
+  })
 
   // File picker (e.g. SSH private key)
   handle('app:pickFile', async (): Promise<string | null> => {
