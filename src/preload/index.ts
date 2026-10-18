@@ -66,7 +66,9 @@ import type {
   Catalog,
   NewProjectInput,
   VaultConfigInput,
-  VaultStatus
+  VaultStatus,
+  DataGripPreview,
+  DataGripImportResult
 } from '@shared/types'
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
@@ -367,6 +369,13 @@ const api = {
       ipcRenderer.on('ai:chatDelta', listener)
       return () => ipcRenderer.removeListener('ai:chatDelta', listener)
     }
+  },
+  datagrip: {
+    pickFolder: () => invoke<{ canceled: boolean; folder?: string }>('datagrip:pickFolder'),
+    preview: (folder: string, workspaceId?: string) =>
+      invoke<DataGripPreview>('datagrip:preview', folder, workspaceId),
+    import: (folder: string, workspaceId: string | undefined, sourceIds: string[]) =>
+      invoke<DataGripImportResult>('datagrip:import', folder, workspaceId, sourceIds)
   },
   settings: {
     get: () => invoke<AppSettings>('settings:get'),

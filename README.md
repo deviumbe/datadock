@@ -58,7 +58,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 
 | | Area | What you get |
 |:--:|---|---|
-| 🗄️ | **Organized connections** | Workspaces → projects → environment folders → connections — one workspace in view at a time, color-coded, encrypted at rest, shareable, with a read-only safe mode |
+| 🗄️ | **Organized connections** | Workspaces → projects → environment folders → connections — one workspace in view at a time, color-coded, encrypted at rest, shareable, importable from DataGrip, with a read-only safe mode |
 | 🔌 | **Fifteen engines** | PostgreSQL · MySQL / MariaDB · SQLite · SQL Server · Oracle · CockroachDB · TimescaleDB · Amazon Redshift · MongoDB · Redis · InfluxDB · **DuckDB · ClickHouse · Snowflake · Google BigQuery** |
 | 🌐 | **Replication topology** | Group connections into a replication set and watch it **live** — primary/replica roles, per-link lag (green/amber/red), node health badges and click-through to any node's workspace |
 | 📨 | **Redis & live queues** | Browse keys by prefix, inspect any value type, run commands — plus a realtime, framework-agnostic queue dashboard (Laravel/Horizon · BullMQ · Sidekiq · RQ · Celery) |
@@ -90,6 +90,7 @@ Everything here ships **today**. Scan the table for the lay of the land, then ex
 - Credentials **encrypted at rest** with the OS keychain (Electron `safeStorage`) — never stored in plain text.
 - **Read-only "safe mode"** per connection — guard production by blocking edits, inserts/deletes, DDL, imports and mutating SQL, with a clear 🔒 badge.
 - **Share connections** — export your project/environment/connection tree to JSON (secrets stripped) and import it on another machine.
+- **Import from DataGrip** — point DataDock at a DataGrip project folder and its data sources become projects, environments and connections (`prod@shop` → *Shop / Production*), SSH tunnels become reusable SSH profiles, and a preview with per-connection checkboxes shows exactly what will be added before anything is written. Passwords stay in DataGrip's keychain, so you enter them on first connect.
 
 #### 🔌 Multi-engine
 - **PostgreSQL · MySQL / MariaDB · SQLite · Microsoft SQL Server · Oracle Database · MongoDB · Redis · InfluxDB · DuckDB · ClickHouse · Snowflake · Google BigQuery** — all from one app, plus the Postgres-wire engines **CockroachDB · TimescaleDB · Amazon Redshift**.

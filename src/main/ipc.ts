@@ -31,6 +31,7 @@ import * as store from './storage'
 import * as db from './db'
 import * as investigations from './investigations'
 import * as io from './io'
+import * as datagrip from './io/datagrip'
 import * as history from './history'
 import * as sizeHistory from './sizeHistory'
 import * as snippets from './snippets'
@@ -308,6 +309,13 @@ export function registerIpc(): void {
     io.exportHtmlToPdf(name, html, landscape)
   )
   handle('io:pickFolder', () => io.pickFolder())
+
+  // DataGrip project import (preview first, then apply the chosen data sources)
+  handle('datagrip:pickFolder', () => datagrip.pickFolder())
+  handle('datagrip:preview', (folder: string, workspaceId?: string) => datagrip.preview(folder, workspaceId))
+  handle('datagrip:import', (folder: string, workspaceId: string | undefined, sourceIds: string[]) =>
+    datagrip.apply(folder, workspaceId, sourceIds)
+  )
 
   // Clone a connection's schema/data into a local SQLite file
   handle('clone:toSqlite', (id: string, opts: CloneOptions) => cloneToSqlite(id, opts))

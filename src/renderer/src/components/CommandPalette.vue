@@ -82,6 +82,7 @@ const allItems = computed<PaletteItem[]>(() => {
       }
     },
     { label: 'Settings', icon: 'sliders', handler: () => (ui.settingsOpen = true) },
+    { label: 'Import from DataGrip…', icon: 'folder', handler: () => (ui.dataGripImportOpen = true) },
     { label: 'Toggle Theme', icon: 'sun', handler: () => ui.toggleTheme() },
     { label: 'Toggle Sidebar', icon: 'menu', handler: () => ui.toggleSidebar() },
     {

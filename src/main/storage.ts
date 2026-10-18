@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import type {
   Workspace,
   ConnectionConfig,
+  Environment,
   NewProjectInput,
   Project,
   Topology,
@@ -298,6 +299,55 @@ export function setActiveWorkspace(id: string): Catalog {
 export function moveProject(projectId: string, workspaceId: string): Catalog {
   const p = catalog.projects.find((x) => x.id === projectId)
   if (p && catalog.workspaces.some((c) => c.id === workspaceId)) p.workspaceId = workspaceId
+  persist()
+  return catalogForRenderer()
+}
+
+// ---- name matching (used by the importers) -----------------------------------
+
+/** Project names compare without case, spaces or punctuation: "orbix-connector"
+ * and "Orbix connector" are the same project. */
+export function normalizeProjectName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+export function findProjectByName(workspaceId: string, name: string): Project | undefined {
+  const key = normalizeProjectName(name)
+  return catalog.projects.find((p) => p.workspaceId === workspaceId && normalizeProjectName(p.name) === key)
+}
+
+export function findEnvironmentByName(project: Project, name: string): Environment | undefined {
+  const key = name.trim().toLowerCase()
+  return project.environments.find((e) => e.name.trim().toLowerCase() === key)
+}
+
+export interface MergeProject {
+  name: string
+  environments: { name: string; connections: ConnectionConfig[] }[]
+}
+
+/**
+ * Add connections to a workspace, reusing projects (normalised name) and
+ * environments (case-insensitive) that already exist. Connections get fresh
+ * ids; the caller has already decided which ones to add.
+ */
+export function mergeIntoWorkspace(workspaceId: string, projects: MergeProject[]): Catalog {
+  if (!catalog.workspaces.some((w) => w.id === workspaceId)) throw new Error('Workspace not found')
+  for (const incoming of projects) {
+    let project = findProjectByName(workspaceId, incoming.name)
+    if (!project) {
+      project = { id: randomUUID(), name: incoming.name, workspaceId, environments: [] }
+      catalog.projects.push(project)
+    }
+    for (const env of incoming.environments) {
+      let environment = findEnvironmentByName(project, env.name)
+      if (!environment) {
+        environment = { id: randomUUID(), name: env.name, connections: [] }
+        project.environments.push(environment)
+      }
+      for (const c of env.connections) environment.connections.push({ ...c, id: randomUUID() })
+    }
+  }
   persist()
   return catalogForRenderer()
 }

@@ -43,6 +43,7 @@ export function buildMenu(): void {
         { type: 'separator' },
         { label: 'Export Connections…', click: () => send('exportConnections') },
         { label: 'Import Connections…', click: () => send('importConnections') },
+        { label: 'Import from DataGrip…', click: () => send('importDataGrip') },
         ...(isMac
           ? []
           : [

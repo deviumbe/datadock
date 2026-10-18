@@ -1294,3 +1294,65 @@ export interface VaultConfigInput {
   touchId?: boolean
   autoLockMinutes?: number
 }
+
+// ---- DataGrip import --------------------------------------------------------
+
+export type DataGripItemStatus = 'new' | 'duplicate'
+
+/** One DataGrip data source as it would land in DataDock. */
+export interface DataGripPlannedConnection {
+  /** DataGrip data-source uuid; the id the renderer selects with. */
+  sourceId: string
+  name: string
+  driver: DriverType
+  host?: string
+  port?: number
+  database?: string
+  user?: string
+  filePath?: string
+  production?: boolean
+  /** Display name of the SSH profile the connection will use, if any. */
+  sshProfile?: string
+  status: DataGripItemStatus
+  /** For a duplicate: the connection it duplicates, as "Project / Env / name". */
+  duplicateOf?: string
+  warnings: string[]
+}
+
+export interface DataGripPlannedEnvironment {
+  name: string
+  exists: boolean
+  connections: DataGripPlannedConnection[]
+}
+
+export interface DataGripPlannedProject {
+  name: string
+  exists: boolean
+  environments: DataGripPlannedEnvironment[]
+}
+
+export interface DataGripSshProfilePlan {
+  name: string
+  host: string
+  user: string
+  exists: boolean
+}
+
+export interface DataGripPreview {
+  folder: string
+  /** The DataGrip project's folder name. */
+  projectName: string
+  workspaceId: string
+  projects: DataGripPlannedProject[]
+  /** Data sources that cannot be imported, with the reason. */
+  skipped: { name: string; reason: string }[]
+  sshProfiles: DataGripSshProfilePlan[]
+  notes: string[]
+  counts: { sources: number; new: number; duplicates: number; skipped: number }
+}
+
+export interface DataGripImportResult {
+  catalog: Catalog
+  imported: number
+  sshProfilesCreated: number
+}

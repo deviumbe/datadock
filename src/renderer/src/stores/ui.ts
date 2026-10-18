@@ -41,6 +41,7 @@ export const useUi = defineStore('ui', () => {
   const recoverOpen = ref(false)
   const cloneSqliteOpen = ref(false)
   const settingsOpen = ref(false)
+  const dataGripImportOpen = ref(false)
 
   // Replication topology monitor (full-window overlay view).
   const topologyId = ref<string | null>(null)
@@ -111,6 +112,7 @@ export const useUi = defineStore('ui', () => {
     recoverOpen,
     cloneSqliteOpen,
     settingsOpen,
+    dataGripImportOpen,
     topologyId,
     openTopology,
     closeTopology,

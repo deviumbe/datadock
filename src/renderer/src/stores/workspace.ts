@@ -331,12 +331,15 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   async function importConnections(): Promise<void> {
     const res = await window.api.io.importConnections()
-    if (res && !res.canceled && res.catalog) {
-      applyCatalog(res.catalog)
-      for (const p of res.catalog.projects) {
-        expandedProjects.add(p.id)
-        for (const e of p.environments) expandedEnvs.add(e.id)
-      }
+    if (res && !res.canceled && res.catalog) applyImportedCatalog(res.catalog)
+  }
+  /** Take over a catalog returned by an importer and expand the whole tree so
+   * what just arrived is visible. */
+  function applyImportedCatalog(catalog: Catalog): void {
+    applyCatalog(catalog)
+    for (const p of catalog.projects) {
+      expandedProjects.add(p.id)
+      for (const e of p.environments) expandedEnvs.add(e.id)
     }
   }
 
@@ -404,6 +407,7 @@ export const useWorkspace = defineStore('workspace', () => {
     refreshTables,
     exportConnections,
     importConnections,
+    applyImportedCatalog,
     topologies,
     saveTopology,
     deleteTopology

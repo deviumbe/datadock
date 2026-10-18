@@ -14,6 +14,7 @@ import NewProjectModal from './components/NewProjectModal.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import DataGripImportModal from './components/DataGripImportModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
 import TaskTray from './components/TaskTray.vue'
 import LockScreen from './components/LockScreen.vue'
@@ -101,6 +102,10 @@ function handleMenu(action: string): void {
   }
   if (action === 'openSettings') {
     ui.settingsOpen = true
+    return
+  }
+  if (action === 'importDataGrip') {
+    ui.dataGripImportOpen = true
     return
   }
   if (action === 'checkForUpdates') {
@@ -430,6 +435,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
     />
     <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
     <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+    <DataGripImportModal v-if="ui.dataGripImportOpen" @close="ui.dataGripImportOpen = false" />
     <NewProjectModal
       v-if="newProject"
       :workspace-name="ws.workspaces.length > 1 ? ws.activeWorkspace?.name : undefined"
