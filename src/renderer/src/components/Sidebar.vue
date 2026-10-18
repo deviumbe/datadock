@@ -244,7 +244,7 @@ const DRIVER_LABEL: Record<string, string> = {
 .side-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px 8px 14px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -260,6 +260,10 @@ const DRIVER_LABEL: Record<string, string> = {
   letter-spacing: 0.02em;
   font-size: 13px;
   flex: 1;
+  margin-right: auto;
+}
+.side-head .icon + .icon {
+  margin-left: -4px;
 }
 .side-head .icon {
   -webkit-app-region: no-drag;
@@ -545,8 +549,12 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 /* ---- Explorer layout: a flat, dense tree with indent guides, in the style of
    a file explorer. Every rule below only narrows the comfortable layout. ---- */
+/* Only the vertical/right padding tightens; the left padding stays as set
+   globally (it clears the macOS traffic lights). */
 .explorer .side-head {
-  padding: 6px 8px 6px 12px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  padding-right: 8px;
   min-height: 36px;
 }
 .explorer .brand {

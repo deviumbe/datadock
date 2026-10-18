@@ -118,7 +118,7 @@
 
 /* macOS: clear the window traffic lights in the sidebar header. */
 .layout.mac .side-head {
-  padding-left: 74px;
+  padding-left: 90px;
 }
 
 html,
