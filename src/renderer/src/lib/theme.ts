@@ -314,5 +314,6 @@ export function applyTheme(s: ThemeSettings, mode: Mode): AppliedTheme {
   root.style.setProperty('--mono', fontStack(CODE_FONTS, s.codeFont))
   root.style.colorScheme = mode
   root.setAttribute('data-theme', mode)
+  root.setAttribute('data-sidebar', s.sidebarLayout)
   return { mode, preset, background: preset.colors.bg }
 }

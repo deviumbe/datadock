@@ -924,6 +924,8 @@ export type Density = 'comfortable' | 'compact'
 
 export type ThemeMode = 'dark' | 'light' | 'system'
 export type IconWeight = 'light' | 'regular' | 'bold'
+/** 'comfortable' = rounded, roomy rows; 'explorer' = dense flat tree with indent guides. */
+export type SidebarLayout = 'comfortable' | 'explorer'
 
 /** The seven base colours a theme is built from; every other token is derived. */
 export interface ThemeColors {
@@ -950,6 +952,7 @@ export interface ThemeSettings {
   codeFont: string
   iconSet: string
   iconWeight: IconWeight
+  sidebarLayout: SidebarLayout
 }
 
 export interface AppearanceSettings {

@@ -18,6 +18,7 @@ import type {
   IconWeight,
   SshAuthMethod,
   SshProfile,
+  SidebarLayout,
   SshProfileInput,
   ThemeColors,
   ThemeMode
@@ -175,6 +176,9 @@ function setIconSet(iconSet: string): void {
 }
 function setIconWeight(iconWeight: IconWeight): void {
   void theme.update({ iconWeight })
+}
+function setSidebarLayout(sidebarLayout: SidebarLayout): void {
+  void theme.update({ sidebarLayout })
 }
 const uiFontStack = computed(
   () => UI_FONTS.find((f) => f.id === theme.settings.uiFont)?.stack ?? UI_FONTS[0].stack
@@ -564,6 +568,39 @@ function setSshAuth(m: SshAuthMethod): void {
                     {{ w.label }}
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div class="setting col">
+              <div class="setting-label">
+                <span>Sidebar layout</span>
+                <small>How projects, environments and connections are listed.</small>
+              </div>
+              <div class="layout-grid">
+                <button class="layout-card" :class="{ on: theme.settings.sidebarLayout === 'comfortable' }" @click="setSidebarLayout('comfortable')">
+                  <span class="layout-art comfortable">
+                    <i class="la-row head" />
+                    <i class="la-row w60" />
+                    <i class="la-row w50 in1" />
+                    <i class="la-row w55 in2 on" />
+                    <i class="la-row w45 in2" />
+                  </span>
+                  <span class="preset-name">Comfortable</span>
+                  <small>Rounded rows with roomy spacing.</small>
+                </button>
+                <button class="layout-card" :class="{ on: theme.settings.sidebarLayout === 'explorer' }" @click="setSidebarLayout('explorer')">
+                  <span class="layout-art explorer">
+                    <i class="la-row head" />
+                    <i class="la-row w60" />
+                    <i class="la-row w50 in1" />
+                    <i class="la-row w55 in2 on" />
+                    <i class="la-row w45 in2" />
+                    <i class="la-row w40 in2" />
+                    <i class="la-row w50 in1" />
+                  </span>
+                  <span class="preset-name">Explorer</span>
+                  <small>Dense flat tree with indent guides, like a file explorer.</small>
+                </button>
               </div>
             </div>
 
@@ -1179,6 +1216,75 @@ h2 {
 }
 .icon-sets {
   grid-template-columns: repeat(3, 1fr);
+}
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.layout-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  text-align: left;
+  transition: border-color var(--dur-1), box-shadow var(--dur-1);
+}
+.layout-card:hover {
+  border-color: var(--accent-ring);
+}
+.layout-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.layout-card small {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.layout-art {
+  display: flex;
+  flex-direction: column;
+  height: 72px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  background: var(--bg-app);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.layout-art.comfortable {
+  gap: 5px;
+}
+.layout-art.explorer {
+  gap: 3px;
+}
+.la-row {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--text);
+  opacity: 0.22;
+}
+.layout-art.explorer .la-row {
+  height: 5px;
+  border-radius: 1px;
+}
+.la-row.head {
+  width: 35%;
+  opacity: 0.45;
+}
+.la-row.w60 { width: 60%; }
+.la-row.w55 { width: 55%; }
+.la-row.w50 { width: 50%; }
+.la-row.w45 { width: 45%; }
+.la-row.w40 { width: 40%; }
+.la-row.in1 { margin-left: 10px; }
+.la-row.in2 { margin-left: 20px; }
+.la-row.on {
+  background: var(--accent);
+  opacity: 0.9;
 }
 .icon-row {
   display: flex;

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
+import { useTheme } from '../stores/theme'
 import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 import logoUrl from '../assets/logo.png'
 import Icon from './Icon.vue'
@@ -9,6 +10,8 @@ import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
 const ws = useWorkspace()
 const ui = useUi()
+const theme = useTheme()
+const explorer = computed(() => theme.settings.sidebarLayout === 'explorer')
 
 const emit = defineEmits<{
   newProject: []
@@ -113,7 +116,7 @@ const DRIVER_LABEL: Record<string, string> = {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ explorer }">
     <div class="side-head">
       <img class="logo" :src="logoUrl" alt="DataDock" />
       <span class="brand">DataDock</span>
@@ -177,7 +180,8 @@ const DRIVER_LABEL: Record<string, string> = {
                 :class="{ active: ws.activeConnectionId === conn.id }"
                 @click="open(conn)"
               >
-                <span class="dot" :style="{ background: conn.color || 'var(--text-faint)' }" />
+                <span v-if="explorer" class="conn-icon" :style="{ color: conn.color || 'var(--text-faint)' }"><Icon name="database" :size="13" /></span>
+                <span v-else class="dot" :style="{ background: conn.color || 'var(--text-faint)' }" />
                 <span class="label">{{ conn.name }}</span>
                 <span class="badge">{{ DRIVER_LABEL[conn.driver] }}</span>
                 <span
@@ -210,6 +214,7 @@ const DRIVER_LABEL: Record<string, string> = {
         :class="{ active: ui.topologyId === t.id }"
         @click="ui.openTopology(t.id)"
       >
+        <span v-if="explorer" class="caret"><Icon name="chevronRight" :size="11" style="visibility: hidden" /></span>
         <span class="topo-dot"><Icon name="diagram" :size="12" /></span>
         <span class="topo-name">{{ t.name }}</span>
         <span class="topo-count">{{ t.nodes.length }}</span>
@@ -537,5 +542,168 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .link:hover {
   color: var(--accent);
+}
+/* ---- Explorer layout: a flat, dense tree with indent guides, in the style of
+   a file explorer. Every rule below only narrows the comfortable layout. ---- */
+.explorer .side-head {
+  padding: 6px 8px 6px 12px;
+  min-height: 36px;
+}
+.explorer .brand {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.explorer .workspace-row {
+  margin: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.explorer .workspace-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.explorer .tree {
+  padding: 4px 0 16px;
+}
+.explorer .empty {
+  padding: 28px 12px;
+}
+.explorer .row {
+  height: 22px;
+  gap: 5px;
+  padding: 0 8px 0 var(--indent, 8px);
+  border-radius: 0;
+  font-size: 12px;
+}
+.explorer .project-row {
+  --indent: 8px;
+}
+.explorer .project-row .label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+}
+.explorer .env-row {
+  --indent: 20px;
+}
+.explorer .conn-row {
+  --indent: 38px;
+}
+.explorer .conn-row .label {
+  color: var(--text-dim);
+}
+.explorer .conn-row:hover .label,
+.explorer .conn-row.active .label {
+  color: var(--text);
+}
+.explorer .conn-row.active {
+  background: var(--bg-active);
+}
+.explorer .conn-row.active::before {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 0;
+}
+.explorer .children {
+  position: relative;
+  padding-left: 0;
+}
+.explorer .children::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 13px;
+  width: 1px;
+  background: var(--border-strong);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.explorer .env > .children::before {
+  left: 25px;
+}
+.explorer .caret {
+  width: 11px;
+}
+.explorer .folder {
+  color: var(--text-dim);
+}
+.explorer .conn-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.explorer .badge {
+  padding: 0;
+  background: transparent;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.explorer .row-actions {
+  right: 4px;
+  padding: 0;
+  gap: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.explorer .row:hover .badge,
+.explorer .row:hover .state,
+.explorer .row:focus-within .badge,
+.explorer .row:focus-within .state {
+  opacity: 0;
+}
+.explorer .badge,
+.explorer .state {
+  transition: opacity var(--dur-1);
+}
+.explorer .icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+.explorer .project > .children > .hint-row {
+  padding: 1px 8px 2px 20px;
+}
+.explorer .env > .children > .hint-row {
+  padding: 1px 8px 2px 38px;
+}
+.explorer .topo-section {
+  padding: 0 0 8px;
+}
+.explorer .topo-head {
+  height: 24px;
+  padding: 0 8px;
+}
+.explorer .topo-row {
+  height: 22px;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 0;
+  font-size: 12px;
+}
+.explorer .topo-row.active {
+  background: var(--bg-active);
+}
+.explorer .topo-name {
+  font-size: 12px;
+}
+.explorer .topo-empty {
+  padding: 2px 8px 4px 22px;
 }
 </style>

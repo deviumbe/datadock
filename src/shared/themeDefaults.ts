@@ -7,5 +7,6 @@ export const DEFAULT_THEME: ThemeSettings = {
   uiFont: 'inter',
   codeFont: 'jetbrains-mono',
   iconSet: 'lucide',
-  iconWeight: 'regular'
+  iconWeight: 'regular',
+  sidebarLayout: 'comfortable'
 }
