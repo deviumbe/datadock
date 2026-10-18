@@ -62,10 +62,13 @@ export const useTheme = defineStore('theme', () => {
 
   async function update(partial: Partial<ThemeSettings>): Promise<void> {
     settings.value = { ...settings.value, ...partial }
+    // IPC structured-clones its arguments, which rejects Vue's reactive proxies;
+    // send a plain copy.
+    const plain = JSON.parse(JSON.stringify(settings.value)) as ThemeSettings
     try {
-      await window.api.settings.setAppearance({ theme: settings.value })
-    } catch {
-      /* main unavailable — the localStorage mirror still holds the choice */
+      await window.api.settings.setAppearance({ theme: plain })
+    } catch (e) {
+      console.warn('Theme not saved to settings.json', e)
     }
   }
 
