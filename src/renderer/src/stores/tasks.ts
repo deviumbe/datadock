@@ -9,6 +9,8 @@ export interface BgTask {
   id: string
   kind: TaskKind
   title: string
+  /** Connection the task writes to or reads from, so its row can show progress. */
+  connId?: string
   status: TaskStatus
   progress: IoProgress | null
   message?: string
@@ -22,6 +24,14 @@ export interface TaskResult {
   message?: string
   errors?: string[]
   canceled?: boolean
+}
+
+export function progressPercent(p: IoProgress | null): number | null {
+  if (!p) return null
+  if (p.phase === 'dump' && p.totalRows && p.totalRows > 0)
+    return Math.min(100, Math.round(((p.doneRows ?? 0) / p.totalRows) * 100))
+  if (p.total > 0) return Math.min(100, Math.round((p.current / p.total) * 100))
+  return null
 }
 
 export const useTasks = defineStore('tasks', () => {
@@ -42,6 +52,7 @@ export const useTasks = defineStore('tasks', () => {
   function start(opts: {
     kind: TaskKind
     title: string
+    connId?: string
     run: (opId: string) => Promise<TaskResult | void>
   }): string {
     const id = crypto.randomUUID()
@@ -51,6 +62,7 @@ export const useTasks = defineStore('tasks', () => {
       id,
       kind: opts.kind,
       title: opts.title,
+      connId: opts.connId,
       status: 'running',
       progress: null,
       startedAt: Date.now()
@@ -79,6 +91,10 @@ export const useTasks = defineStore('tasks', () => {
     return id
   }
 
+  function runningFor(connId: string): BgTask | undefined {
+    return running.value.find((t) => t.connId === connId)
+  }
+
   function cancel(id: string): void {
     const t = tasks.find((t) => t.id === id)
     if (!t || t.status !== 'running') return
@@ -97,5 +113,5 @@ export const useTasks = defineStore('tasks', () => {
     }
   }
 
-  return { tasks, running, hasActive, start, cancel, dismiss, clearFinished }
+  return { tasks, running, hasActive, start, runningFor, cancel, dismiss, clearFinished }
 })

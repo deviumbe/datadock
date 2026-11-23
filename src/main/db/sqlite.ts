@@ -195,7 +195,7 @@ export class SQLiteAdapter implements DbAdapter {
     if (off) this.db!.pragma('foreign_keys = OFF')
     try {
       const txn = this.db!.transaction(() => {
-        for (const t of tables) this.db!.exec(`drop table if exists ${q(t.name)}`)
+        for (const t of tables) this.db!.exec(`drop ${t.type === 'view' ? 'view' : 'table'} if exists ${q(t.name)}`)
       })
       txn()
     } finally {

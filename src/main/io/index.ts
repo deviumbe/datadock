@@ -20,6 +20,7 @@ import type {
   TransferResult
 } from '@shared/types'
 import { isSqlDriver, sqlDialect } from '@shared/types'
+import { debugLog } from '../debugLog'
 
 /** Progress reporter for a long export/transfer (opId is attached by the IPC layer). */
 export type ProgressFn = (p: Omit<IoProgress, 'opId'>) => void
@@ -573,27 +574,42 @@ export async function pickFolder(): Promise<FileResult> {
 /**
  * Incremental SQL statement splitter. Fed file chunks, it emits complete
  * statements as their terminating `;` is seen — so we never hold the whole
- * (potentially multi-GB) script in memory. Respects single/double quotes,
- * line (`--`) and block (`/* *\/`) comments across chunk boundaries by carrying
- * the trailing char (which may need one-char lookahead) into the next chunk.
+ * (potentially multi-GB) script in memory. Respects quotes, line (`--`) and
+ * block comments across chunk boundaries by carrying the last LOOKAHEAD chars
+ * into the next chunk.
+ *
+ * In MySQL mode a backslash escapes the next char inside a string (dumps write
+ * `\'` for a quote), backticks quote identifiers, and versioned comments
+ * (`/*!40014 SET FOREIGN_KEY_CHECKS=0 *\/`) are kept: the server executes them.
  */
+const LOOKAHEAD = 2
+
 class SqlSplitter {
   private buf = ''
   private carry = ''
   private inSingle = false
   private inDouble = false
+  private inBacktick = false
   private inLine = false
   private inBlock = false
   private skipNext = false
+  private escaped = false
+
+  constructor(private readonly mysql = false) {}
 
   private process(s: string, hasMore: boolean): string[] {
     const out: string[] = []
-    const end = hasMore ? s.length - 1 : s.length
+    const end = hasMore ? Math.max(0, s.length - LOOKAHEAD) : s.length
     for (let i = 0; i < end; i++) {
       const ch = s[i]
       const next = s[i + 1]
       if (this.skipNext) {
         this.skipNext = false
+        continue
+      }
+      if (this.escaped) {
+        this.escaped = false
+        this.buf += ch
         continue
       }
       if (this.inLine) {
@@ -607,21 +623,29 @@ class SqlSplitter {
         }
         continue
       }
-      if (!this.inSingle && !this.inDouble) {
+      const quoted = this.inSingle || this.inDouble || this.inBacktick
+      if (!quoted) {
         if (ch === '-' && next === '-') {
           this.inLine = true
           continue
         }
-        if (ch === '/' && next === '*') {
+        if (ch === '/' && next === '*' && !(this.mysql && s[i + 2] === '!')) {
           this.inBlock = true
           this.skipNext = true
           continue
         }
       }
-      if (ch === "'" && !this.inDouble) this.inSingle = !this.inSingle
-      else if (ch === '"' && !this.inSingle) this.inDouble = !this.inDouble
+      if (this.mysql && ch === '\\' && (this.inSingle || this.inDouble)) {
+        this.escaped = true
+      } else if (ch === "'" && !this.inDouble && !this.inBacktick) {
+        this.inSingle = !this.inSingle
+      } else if (ch === '"' && !this.inSingle && !this.inBacktick) {
+        this.inDouble = !this.inDouble
+      } else if (this.mysql && ch === '`' && !this.inSingle && !this.inDouble) {
+        this.inBacktick = !this.inBacktick
+      }
 
-      if (ch === ';' && !this.inSingle && !this.inDouble) {
+      if (ch === ';' && !quoted) {
         const t = this.buf.trim()
         if (t) out.push(t)
         this.buf = ''
@@ -658,7 +682,7 @@ async function execSqlFile(
   signal?: AbortSignal
 ): Promise<ImportResult> {
   const { size } = await stat(filePath)
-  const splitter = new SqlSplitter()
+  const splitter = new SqlSplitter(sqlDialect(adapter.config.driver) === 'mysql')
   let ran = 0
   let bytesRead = 0
   let lastEmit = 0
@@ -670,7 +694,9 @@ async function execSqlFile(
       await adapter.query(stmt)
       ran++
     } catch (e) {
-      errors.push(`${e instanceof Error ? e.message : String(e)} — near: ${stmt.slice(0, 60)}…`)
+      const msg = `${e instanceof Error ? e.message : String(e)} — near: ${stmt.slice(0, 60)}…`
+      errors.push(msg)
+      debugLog('sql', `statement ${ran + errors.length} failed: ${msg}`)
     }
   }
 
@@ -689,14 +715,21 @@ async function execSqlFile(
   return { statements: ran, errors }
 }
 
-export async function importSql(connId: string): Promise<ImportResult & { canceled?: boolean }> {
-  const adapter = getAdapter(connId)
+export async function pickSqlFile(): Promise<string | null> {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [{ name: 'SQL', extensions: ['sql'] }]
   })
-  if (canceled || !filePaths[0]) return { canceled: true, statements: 0, errors: [] }
-  return execSqlFile(adapter, filePaths[0])
+  return canceled || !filePaths[0] ? null : filePaths[0]
+}
+
+export async function importSql(
+  connId: string,
+  filePath: string,
+  onProgress?: ProgressFn,
+  signal?: AbortSignal
+): Promise<ImportResult> {
+  return execSqlFile(getAdapter(connId), filePath, onProgress, signal)
 }
 
 export async function importCsv(

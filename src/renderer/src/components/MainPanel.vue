@@ -16,6 +16,7 @@ import TransferModal from './TransferModal.vue'
 import NamePrompt from './NamePrompt.vue'
 import CreateTableModal from './CreateTableModal.vue'
 import DropTablesModal from './DropTablesModal.vue'
+import DropAllObjectsModal from './DropAllObjectsModal.vue'
 import TruncateTablesModal from './TruncateTablesModal.vue'
 import CellValueModal from './CellValueModal.vue'
 import ColumnStatsModal from './ColumnStatsModal.vue'
@@ -63,7 +64,7 @@ type MenuItem = {
   action?: () => void
   children?: MenuItem[]
 }
-import { sqlDialect, type FilterOp, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
+import { serverDatabaseId, sqlDialect, supportsDropAllObjects, type FilterOp, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
 import { lintSql } from '../lib/sqlLint'
 import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
@@ -517,6 +518,16 @@ const tableKey = (t: TableInfo): string => `${t.schema ?? ''}.${t.name}`
 const isSelected = (t: TableInfo): boolean => selectedTables.value.includes(tableKey(t))
 const multiSelect = computed(() => selectedTables.value.length > 1)
 
+// Keyboard shortcuts (⌘A, ⌫, Esc) act on the list only after it was last clicked,
+// so they don't hijack select-all or row deletion in the grid and editor.
+const tableListEl = ref<HTMLElement | null>(null)
+const tableListActive = ref(false)
+function trackTableListFocus(e: PointerEvent): void {
+  tableListActive.value = !!tableListEl.value?.contains(e.target as Node)
+}
+onMounted(() => window.addEventListener('pointerdown', trackTableListFocus, true))
+onBeforeUnmount(() => window.removeEventListener('pointerdown', trackTableListFocus, true))
+
 function onTableClick(t: TableInfo, idx: number, e: MouseEvent): void {
   const key = tableKey(t)
   if (e.shiftKey && selAnchor >= 0) {
@@ -583,6 +594,8 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
         action: openDropModal
       }
     )
+    if (supportsDropAllObjects(activeConn.value?.driver ?? ''))
+      items.push({ label: 'Drop all objects…', danger: true, action: () => (ui.dropAllOpen = true) })
   }
   ctx.value = { x: e.clientX, y: e.clientY, items }
 }
@@ -625,7 +638,9 @@ function openRelatedTable(name: string): void {
 const dropTargets = ref<TableInfo[] | null>(null)
 function openDropModal(): void {
   const sel = ws.tables.filter((t) => selectedTables.value.includes(tableKey(t)))
-  if (sel.length) dropTargets.value = sel.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
+  // Views first: they may depend on the tables being dropped.
+  const ordered = [...sel.filter((t) => t.type === 'view'), ...sel.filter((t) => t.type !== 'view')]
+  if (ordered.length) dropTargets.value = ordered.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
 }
 async function performDrop(opts: DropTableOptions): Promise<void> {
   const conn = activeConn.value
@@ -643,6 +658,14 @@ async function performDrop(opts: DropTableOptions): Promise<void> {
   } catch (e) {
     ws.error = e instanceof Error ? e.message : String(e)
   }
+}
+
+async function onDroppedAll(connId: string): Promise<void> {
+  for (const tab of tabsStore.forConnection(connId)) {
+    if (tab.kind === 'table') tabsStore.closeTab(tab.id)
+  }
+  selectedTables.value = []
+  await ws.refreshTables(connId)
 }
 
 // ---- truncate modal --------------------------------------------------------
@@ -858,8 +881,25 @@ function inEditableField(): boolean {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 }
 
+function onTableListKeydown(e: KeyboardEvent): boolean {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+    selectedTables.value = filteredTables.value.map(tableKey)
+    selAnchor = 0
+  } else if (e.key === 'Escape' && selectedTables.value.length) {
+    selectedTables.value = []
+  } else if ((e.key === 'Backspace' || e.key === 'Delete') && selectedTables.value.length) {
+    if (!nonSql.value && !readOnly.value && !dropTargets.value) openDropModal()
+  } else {
+    return false
+  }
+  e.preventDefault()
+  return true
+}
+
 function onKeydown(e: KeyboardEvent): void {
   const a = active.value
+
+  if (tableListActive.value && !inEditableField() && onTableListKeydown(e)) return
 
   // Format SQL (⌘⇧F) in the active query tab.
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -963,6 +1003,7 @@ async function createDatabase(tab: Tab): Promise<void> {
     newDbName.value = ''
     await tabsStore.run(tab)
     ws.refreshTables(tab.connectionId)
+    syncServerDatabases(tab.connectionId)
   } catch (e) {
     tab.error = e instanceof Error ? e.message : String(e)
   }
@@ -972,9 +1013,13 @@ async function dropDatabase(tab: Tab, name: string): Promise<void> {
   try {
     await window.api.db.dropDatabase(tab.connectionId, name)
     await tabsStore.run(tab)
+    syncServerDatabases(tab.connectionId)
   } catch (e) {
     tab.error = e instanceof Error ? e.message : String(e)
   }
+}
+function syncServerDatabases(connId: string): void {
+  if (ws.findConnection(connId)?.serverMode) void ws.loadServerDatabases(connId)
 }
 function useHistoryEntry(sql: string): void {
   if (ws.activeConnectionId) tabsStore.openQueryWith(ws.activeConnectionId, sql)
@@ -1098,7 +1143,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <button v-if="!nonSql" class="icon-btn sm" title="Generate code (whole database)" :disabled="!activeConn || !ws.tables.length" @click="openDbCodegen($event)"><Icon name="code" :size="14" /></button>
             <button class="icon-btn sm" title="Collapse list" @click="ui.toggleTables()"><Icon name="chevronLeft" :size="14" /></button>
           </div>
-          <div class="table-list">
+          <div ref="tableListEl" class="table-list">
             <div
               v-for="(t, idx) in filteredTables"
               :key="(t.schema || '') + t.name"
@@ -1117,7 +1162,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             </div>
             <div v-if="filteredTables.length === 0" class="no-tables">No tables</div>
           </div>
-          <div v-if="multiSelect" class="sel-hint">{{ selectedTables.length }} selected · ⌫ to delete</div>
+          <div v-if="multiSelect" class="sel-hint">{{ selectedTables.length }} selected · ⌫ to delete · esc to clear</div>
         </div>
         <div
           v-show="!ui.tablesCollapsed"
@@ -1419,8 +1464,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
             <div v-if="active.error" class="run-error">{{ active.error }}</div>
             <div class="db-list">
               <div v-for="db in active.databases" :key="db" class="db-row">
-                <span class="db-icon">🗄</span>
-                <span class="db-name">{{ db }}</span>
+                <span class="db-icon"><Icon name="database" :size="13" /></span>
+                <button
+                  v-if="activeConn?.serverMode"
+                  class="db-name db-open"
+                  title="Open this database"
+                  @click="ws.connectAndOpen(serverDatabaseId(active.connectionId, db))"
+                >{{ db }}</button>
+                <span v-else class="db-name">{{ db }}</span>
                 <button class="btn-ghost drop" @click="dropDatabase(active, db)">Drop</button>
               </div>
             </div>
@@ -1641,6 +1692,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         :conn-id="activeConn.id"
         :tables="ws.tables"
         @close="ui.exportDbOpen = false"
+      />
+      <DropAllObjectsModal
+        v-if="ui.dropAllOpen"
+        :conn-id="activeConn.id"
+        @close="ui.dropAllOpen = false"
+        @done="onDroppedAll(activeConn.id)"
       />
       <ImportModal
         v-if="ui.importOpen"
@@ -2118,6 +2175,10 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .state.error {
   background: var(--danger);
+}
+.state.idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ok);
 }
 .spacer {
   flex: 1;
@@ -3087,9 +3148,26 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .db-row:hover {
   background: var(--bg-hover);
 }
+.db-row .db-icon {
+  display: inline-flex;
+  color: var(--text-faint);
+}
 .db-name {
   flex: 1;
   font-family: var(--mono);
+}
+.db-open {
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: inherit;
+  cursor: pointer;
+}
+.db-open:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 .drop {
   color: var(--danger);

@@ -4,6 +4,7 @@ import { computed, reactive, ref, onMounted, onBeforeUnmount, nextTick, watch } 
 import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
 import type { ReplicationStatus, Topology, TopologyNode } from '@shared/types'
+import { isConnectionOpen } from '@shared/types'
 
 const props = defineProps<{ topologyId: string }>()
 const emit = defineEmits<{ edit: [topology: Topology] }>()
@@ -206,7 +207,7 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 async function pollNode(node: TopologyNode): Promise<void> {
   const id = node.connectionId
-  if (ws.connStates[id] !== 'connected') {
+  if (!isConnectionOpen(ws.connStates[id])) {
     states[id] = { phase: 'offline' }
     return
   }

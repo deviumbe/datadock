@@ -67,6 +67,7 @@ function run(): void {
   tasks.start({
     kind: 'export',
     title: `Export ${props.tables.length} table(s)`,
+    connId: props.connId,
     run: async (opId) => {
       const res = await window.api.io.exportDatabase(props.connId, specs, fmt, mask, addDrops.value, opId)
       if (res.canceled) return { canceled: true }

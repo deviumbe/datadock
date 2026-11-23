@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useUi } from '../stores/ui'
 import { useTheme } from '../stores/theme'
+import { useTabs } from '../stores/tabs'
 import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
+import { isConnectionOpen, serverDatabaseId } from '@shared/types'
 import logoUrl from '../assets/logo.png'
 import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import ConnTaskIndicator from './ConnTaskIndicator.vue'
 
 const ws = useWorkspace()
 const ui = useUi()
+const tabs = useTabs()
 const theme = useTheme()
 const explorer = computed(() => theme.settings.sidebarLayout === 'explorer')
 
@@ -81,13 +85,96 @@ function open(conn: ConnectionConfig): void {
   ws.connectAndOpen(conn.id)
 }
 
+/** A server row opens its Databases overview; only the caret collapses it. */
+async function openServer(conn: ConnectionConfig): Promise<void> {
+  await ws.connectAndOpen(conn.id)
+  if (!ws.expandedServers.has(conn.id)) ws.toggleServer(conn.id)
+  if (isConnectionOpen(ws.connStates[conn.id])) tabs.openServer(conn.id, 'databases')
+}
+
+const DB_FILTER_THRESHOLD = 8
+const dbFilter = reactive<Record<string, string>>({})
+
+function visibleDatabases(serverId: string): string[] {
+  const all = ws.serverDatabases[serverId] ?? []
+  const needle = dbFilter[serverId]?.trim().toLowerCase()
+  return needle ? all.filter((d) => d.toLowerCase().includes(needle)) : all
+}
+
+// ---- workspace filter --------------------------------------------------------
+
+const query = ref('')
+const needle = computed(() => query.value.trim().toLowerCase())
+const hits = (name: string): boolean => name.toLowerCase().includes(needle.value)
+
+interface ConnNode {
+  conn: ConnectionConfig
+  databases: string[]
+  open: boolean
+}
+interface EnvNode {
+  env: Environment
+  conns: ConnNode[]
+  open: boolean
+}
+interface ProjectNode {
+  project: Project
+  envs: EnvNode[]
+  open: boolean
+}
+
+/**
+ * The visible tree. A match on a project or environment keeps everything below
+ * it; otherwise only matching connections (or a server's matching databases)
+ * survive. While filtering every surviving branch is shown expanded.
+ */
+const tree = computed<ProjectNode[]>(() => {
+  const filtering = !!needle.value
+  const out: ProjectNode[] = []
+  for (const project of ws.projects) {
+    const projectHit = !filtering || hits(project.name)
+    const envs: EnvNode[] = []
+    for (const env of project.environments) {
+      const envHit = projectHit || hits(env.name)
+      const conns: ConnNode[] = []
+      for (const conn of env.connections) {
+        const all = conn.serverMode ? visibleDatabases(conn.id) : []
+        const connHit = envHit || hits(conn.name)
+        const databases = connHit ? all : all.filter(hits)
+        if (!connHit && !databases.length) continue
+        conns.push({ conn, databases, open: ws.expandedServers.has(conn.id) || !connHit })
+      }
+      if (!envHit && !conns.length) continue
+      envs.push({ env, conns, open: filtering || ws.expandedEnvs.has(env.id) })
+    }
+    if (!projectHit && !envs.length) continue
+    out.push({ project, envs, open: filtering || ws.expandedProjects.has(project.id) })
+  }
+  return out
+})
+
+// Database names only exist once a server is listed, so filtering lists the
+// servers that haven't been yet. Production servers are left alone: typing in
+// a filter shouldn't open connections to them.
+watch(needle, (n) => {
+  if (!n) return
+  for (const p of ws.projects)
+    for (const e of p.environments)
+      for (const c of e.connections) {
+        if (!c.serverMode || c.production) continue
+        if (ws.serverDatabases[c.id] || ws.serverLoading[c.id] || ws.serverErrors[c.id]) continue
+        void ws.loadServerDatabases(c.id)
+      }
+})
+
 const STATE_LABEL: Record<string, string> = {
   disconnected: 'Disconnected',
   connecting: 'Connecting…',
   connected: 'Connected',
   reconnecting: 'Reconnecting…',
   unhealthy: 'Connection lost',
-  error: 'Connection failed'
+  error: 'Connection failed',
+  idle: 'Idle, closed to save resources; reconnects on use'
 }
 
 function stateTitle(id: string): string {
@@ -130,20 +217,33 @@ const DRIVER_LABEL: Record<string, string> = {
       <span class="workspace-caret"><Icon name="chevronDown" :size="12" /></span>
     </button>
 
+    <div v-if="!empty" class="filter">
+      <Icon name="search" :size="12" class="filter-icon" />
+      <input
+        v-model="query"
+        class="filter-input"
+        placeholder="Filter projects, connections, databases"
+        spellcheck="false"
+        @keydown.esc="query = ''"
+      />
+      <button v-if="query" class="btn-ghost icon filter-clear" title="Clear filter" @click="query = ''"><Icon name="x" :size="11" /></button>
+    </div>
+
     <div class="tree">
+      <div v-if="!empty && needle && !tree.length" class="hint-row muted no-match">No matches for “{{ query.trim() }}”.</div>
       <div v-if="empty" class="empty">
         <p v-if="multiWorkspace && ws.activeWorkspace">No projects for {{ ws.activeWorkspace.name }} yet.</p>
         <p v-else>No projects yet.</p>
         <button class="btn btn-primary" @click="emit('newProject')">Create your first project</button>
       </div>
 
-      <div v-for="project in ws.projects" :key="project.id" class="project">
+      <div v-for="{ project, envs, open: projectOpen } in tree" :key="project.id" class="project">
         <div
           class="row project-row"
           @click="ws.toggleProject(project.id)"
           @contextmenu.prevent="openProjectMenu($event, project)"
         >
-          <span class="caret" :class="{ open: ws.expandedProjects.has(project.id) }"><Icon name="chevronRight" :size="11" /></span>
+          <span class="caret" :class="{ open: projectOpen }"><Icon name="chevronRight" :size="11" /></span>
           <span class="label">{{ project.name }}</span>
           <div class="row-actions" @click.stop>
             <button class="btn-ghost icon" title="New environment" @click="emit('newEnvironment', project.id)"><Icon name="plus" :size="13" /></button>
@@ -152,14 +252,14 @@ const DRIVER_LABEL: Record<string, string> = {
           </div>
         </div>
 
-        <div v-show="ws.expandedProjects.has(project.id)" class="children">
+        <div v-show="projectOpen" class="children">
           <div v-if="project.environments.length === 0" class="hint-row">
             <button class="link" @click="emit('newEnvironment', project.id)">+ Add environment</button>
           </div>
 
-          <div v-for="env in project.environments" :key="env.id" class="env">
+          <div v-for="{ env, conns, open: envOpen } in envs" :key="env.id" class="env">
             <div class="row env-row" @click="ws.toggleEnv(env.id)">
-              <span class="caret" :class="{ open: ws.expandedEnvs.has(env.id) }"><Icon name="chevronRight" :size="11" /></span>
+              <span class="caret" :class="{ open: envOpen }"><Icon name="chevronRight" :size="11" /></span>
               <span class="folder"><Icon name="folder" :size="12" /></span>
               <span class="label">{{ env.name }}</span>
               <div class="row-actions" @click.stop>
@@ -169,20 +269,28 @@ const DRIVER_LABEL: Record<string, string> = {
               </div>
             </div>
 
-            <div v-show="ws.expandedEnvs.has(env.id)" class="children">
+            <div v-show="envOpen" class="children">
               <div v-if="env.connections.length === 0" class="hint-row">
                 <button class="link" @click="emit('newConnection', env.id)">+ Add connection</button>
               </div>
+              <template v-for="{ conn, databases, open: serverOpen } in conns" :key="conn.id">
               <div
-                v-for="conn in env.connections"
-                :key="conn.id"
                 class="row conn-row"
-                :class="{ active: ws.activeConnectionId === conn.id }"
-                @click="open(conn)"
+                :class="{ active: ws.activeConnectionId === conn.id, server: conn.serverMode }"
+                @click="conn.serverMode ? openServer(conn) : open(conn)"
               >
-                <span v-if="explorer" class="conn-icon" :style="{ color: conn.color || 'var(--text-faint)' }"><Icon name="database" :size="13" /></span>
+                <span
+                  v-if="conn.serverMode"
+                  class="caret server-caret"
+                  :class="{ open: serverOpen }"
+                  title="Show or hide databases"
+                  @click.stop="ws.toggleServer(conn.id)"
+                ><Icon name="chevronRight" :size="11" /></span>
+                <span v-if="conn.serverMode" class="conn-icon" :style="{ color: conn.color || 'var(--text-faint)' }"><Icon name="server" :size="13" /></span>
+                <span v-else-if="explorer" class="conn-icon" :style="{ color: conn.color || 'var(--text-faint)' }"><Icon name="database" :size="13" /></span>
                 <span v-else class="dot" :style="{ background: conn.color || 'var(--text-faint)' }" />
                 <span class="label">{{ conn.name }}</span>
+                <ConnTaskIndicator :conn-id="conn.id" />
                 <span class="badge">{{ DRIVER_LABEL[conn.driver] }}</span>
                 <span
                   class="state"
@@ -190,11 +298,44 @@ const DRIVER_LABEL: Record<string, string> = {
                   :title="stateTitle(conn.id)"
                 />
                 <div class="row-actions" @click.stop>
+                  <button v-if="conn.serverMode" class="btn-ghost icon" title="Refresh databases" @click="ws.loadServerDatabases(conn.id)"><Icon name="refresh" :size="12" /></button>
                   <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)"><Icon name="copy" :size="12" /></button>
                   <button class="btn-ghost icon" title="Edit" @click="emit('editConnection', conn, env.id)"><Icon name="pencil" :size="12" /></button>
                   <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteConnection', conn)"><Icon name="trash" :size="12" /></button>
                 </div>
               </div>
+              <div v-if="conn.serverMode" v-show="serverOpen" class="children server-dbs">
+                <input
+                  v-if="(ws.serverDatabases[conn.id]?.length ?? 0) > DB_FILTER_THRESHOLD"
+                  v-model="dbFilter[conn.id]"
+                  class="input db-filter"
+                  placeholder="Filter databases…"
+                  @keydown.esc="dbFilter[conn.id] = ''"
+                />
+                <div v-if="ws.serverLoading[conn.id] && !ws.serverDatabases[conn.id]" class="hint-row muted">Loading databases…</div>
+                <div v-else-if="ws.serverErrors[conn.id]" class="hint-row error" :title="ws.serverErrors[conn.id]">
+                  Could not list databases.
+                  <button class="link" @click="ws.loadServerDatabases(conn.id)">Retry</button>
+                </div>
+                <div v-else-if="ws.serverDatabases[conn.id]?.length === 0" class="hint-row muted">No databases.</div>
+                <div
+                  v-for="db in databases"
+                  :key="db"
+                  class="row conn-row db-row"
+                  :class="{ active: ws.activeConnectionId === serverDatabaseId(conn.id, db) }"
+                  @click="ws.connectAndOpen(serverDatabaseId(conn.id, db))"
+                >
+                  <span class="conn-icon db-icon"><Icon name="database" :size="12" /></span>
+                  <span class="label">{{ db }}</span>
+                  <ConnTaskIndicator :conn-id="serverDatabaseId(conn.id, db)" />
+                  <span
+                    class="state"
+                    :class="ws.connStates[serverDatabaseId(conn.id, db)] || 'disconnected'"
+                    :title="stateTitle(serverDatabaseId(conn.id, db))"
+                  />
+                </div>
+              </div>
+              </template>
             </div>
           </div>
         </div>
@@ -424,6 +565,10 @@ const DRIVER_LABEL: Record<string, string> = {
 .state.error {
   background: var(--danger);
 }
+.state.idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ok);
+}
 @keyframes pulse {
   50% {
     opacity: 0.3;
@@ -472,6 +617,97 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .hint-row {
   padding: 2px 8px 4px 26px;
+}
+.hint-row.muted {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.hint-row.error {
+  color: var(--danger);
+  font-size: 12px;
+}
+.db-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.db-filter {
+  width: calc(100% - 16px);
+  margin: 2px 8px 4px;
+  height: 24px;
+  font-size: 12px;
+}
+.explorer .db-row {
+  --indent: 56px;
+}
+.explorer .server-dbs > .hint-row {
+  padding-left: 56px;
+}
+.explorer .server-dbs > .db-filter {
+  margin-left: 56px;
+  width: calc(100% - 64px);
+}
+.explorer .server-dbs::before {
+  left: 43px;
+}
+.explorer .conn-row.server {
+  --indent: 22px;
+}
+.conn-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.server-caret {
+  height: 100%;
+}
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 6px 0;
+  padding: 0 4px 0 8px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  transition: border-color var(--dur-1);
+}
+.filter:focus-within {
+  border-color: var(--accent);
+}
+.filter-icon {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.filter-input::placeholder {
+  color: var(--text-faint);
+}
+.filter-clear {
+  width: 18px;
+  height: 18px;
+}
+.no-match {
+  padding: 10px 12px;
+}
+.explorer .filter {
+  margin: 0;
+  height: 26px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 /* ---- topologies footer section ---- */
 .topo-section {

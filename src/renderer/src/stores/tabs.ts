@@ -18,7 +18,7 @@ import type {
   TableInfo,
   TableStructure
 } from '@shared/types'
-import { isSqlDriver } from '@shared/types'
+import { isSqlDriver, parseServerDatabaseId } from '@shared/types'
 import { useSettings } from './settings'
 
 export type TabKind =
@@ -564,9 +564,12 @@ export const useTabs = defineStore('tabs', () => {
     }
   }
 
+  /** Close a connection's tabs, including those of its databases when it is a server. */
   function closeForConnection(connId: string): void {
-    tabs.value = tabs.value.filter((t) => t.connectionId !== connId)
-    delete activeByConn.value[connId]
+    const belongs = (id: string): boolean =>
+      id === connId || parseServerDatabaseId(id)?.serverId === connId
+    tabs.value = tabs.value.filter((t) => !belongs(t.connectionId))
+    for (const id of Object.keys(activeByConn.value)) if (belongs(id)) delete activeByConn.value[id]
   }
 
   /** First load of a table tab: detect primary keys, then fetch the first page. */

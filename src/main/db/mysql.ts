@@ -4,6 +4,9 @@ import type {
   ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
+  DbObject,
+  DbObjectInventory,
+  DbObjectKind,
   DropTableOptions,
   TruncateOptions,
   QueryResult,
@@ -580,10 +583,53 @@ export class MySQLAdapter implements DbAdapter {
     const off = !!(opts.ignoreForeignKeys || opts.cascade)
     if (off) await this.conn!.query('set foreign_key_checks = 0')
     try {
-      for (const t of tables) await this.conn!.query(`drop table if exists ${q(t.name)}`)
+      for (const t of tables) await this.conn!.query(`drop ${t.type === 'view' ? 'view' : 'table'} if exists ${q(t.name)}`)
     } finally {
       if (off) await this.conn!.query('set foreign_key_checks = 1')
     }
+  }
+
+  async listAllObjects(): Promise<DbObjectInventory> {
+    const [dbRows] = await this.conn!.query('select database() as db')
+    const database = (dbRows as { db: string | null }[])[0]?.db
+    if (!database) throw new Error('No database selected on this connection')
+    // Three queries rather than a UNION: information_schema columns and string
+    // literals carry different collations, which MySQL refuses to mix.
+    const [tables] = await this.conn!.query(
+      `select table_name as name, table_type as type from information_schema.tables where table_schema = database()`
+    )
+    const [routines] = await this.conn!.query(
+      `select routine_name as name, routine_type as type from information_schema.routines where routine_schema = database()`
+    )
+    const [events] = await this.conn!.query(
+      `select event_name as name from information_schema.events where event_schema = database()`
+    )
+    const objects: DbObject[] = [
+      ...(tables as { name: string; type: string }[]).map((r) => ({
+        kind: (r.type === 'VIEW' ? 'view' : 'table') as DbObjectKind,
+        name: r.name
+      })),
+      ...(routines as { name: string; type: string }[]).map((r) => ({
+        kind: (r.type === 'PROCEDURE' ? 'procedure' : 'function') as DbObjectKind,
+        name: r.name
+      })),
+      ...(events as { name: string }[]).map((r) => ({ kind: 'event' as DbObjectKind, name: r.name }))
+    ]
+    return { database, objects }
+  }
+
+  async dropAllObjects(): Promise<number> {
+    const { objects } = await this.listAllObjects()
+    const order: DbObjectKind[] = ['view', 'table', 'procedure', 'function', 'event']
+    await this.conn!.query('set foreign_key_checks = 0')
+    try {
+      for (const kind of order)
+        for (const o of objects.filter((o) => o.kind === kind))
+          await this.conn!.query(`drop ${kind} if exists ${q(o.name)}`)
+    } finally {
+      await this.conn!.query('set foreign_key_checks = 1')
+    }
+    return objects.length
   }
 
   async truncateTables(tables: TableInfo[], opts: TruncateOptions): Promise<void> {

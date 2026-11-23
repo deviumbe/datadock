@@ -22,6 +22,7 @@ import type {
   CreateTableSpec,
   DropTableOptions,
   TruncateOptions,
+  DbObjectInventory,
   DumpFormat,
   ErModel,
   SchemaSnapshot,
@@ -161,7 +162,9 @@ const api = {
     dropTables: (id: string, tables: TableInfo[], opts: DropTableOptions) =>
       invoke<void>('db:dropTables', id, tables, opts),
     truncateTables: (id: string, tables: TableInfo[], opts: TruncateOptions) =>
-      invoke<void>('db:truncateTables', id, tables, opts)
+      invoke<void>('db:truncateTables', id, tables, opts),
+    listAllObjects: (id: string) => invoke<DbObjectInventory>('db:listAllObjects', id),
+    dropAllObjects: (id: string) => invoke<number>('db:dropAllObjects', id)
   },
   redis: {
     keyValue: (id: string, key: string) => invoke<RedisKeyValue>('redis:keyValue', id, key),
@@ -205,7 +208,9 @@ const api = {
       return () => ipcRenderer.removeListener('io:progress', l)
     },
     cancel: (opId: string) => invoke<boolean>('io:cancel', opId),
-    importSql: (id: string) => invoke<ImportResult & { canceled?: boolean }>('io:importSql', id),
+    pickSqlFile: () => invoke<string | null>('io:pickSqlFile'),
+    importSql: (id: string, filePath: string, opId?: string) =>
+      invoke<ImportResult>('io:importSql', id, filePath, opId),
     importCsv: (id: string, table: TableInfo) =>
       invoke<ImportResult & { canceled?: boolean }>('io:importCsv', id, table),
     exportConnections: () => invoke<FileResult>('io:exportConnections'),

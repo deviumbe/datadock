@@ -4,6 +4,9 @@ import type {
   ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
+  DbObject,
+  DbObjectInventory,
+  DbObjectKind,
   DropTableOptions,
   TruncateOptions,
   QueryResult,
@@ -21,6 +24,44 @@ import type { ErModel, ReplicaLink, ReplicationStatus, SchemaSnapshot } from '@s
 // and dates as ISO strings so they serialize cleanly over IPC.
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => v) // bigint -> string
 pg.types.setTypeParser(pg.types.builtins.NUMERIC, (v) => v)
+
+/**
+ * Every user object outside system schemas. Objects owned by an extension (and
+ * extension schemas such as TimescaleDB's) are left alone so the extension keeps
+ * working; partitions, serial/identity sequences and table row types go with
+ * their parent table.
+ */
+const ALL_OBJECTS_SQL = `
+with ext as (select objid from pg_depend where deptype = 'e'),
+ns as (
+  select oid, nspname from pg_namespace
+   where nspname not in ('pg_catalog', 'information_schema')
+     and nspname not like 'pg\\_%'
+     and oid not in (select objid from ext)
+)
+select case c.relkind when 'v' then 'view' when 'm' then 'materialized view'
+                      when 'S' then 'sequence' else 'table' end as kind,
+       ns.nspname as schema, c.relname as name, null as args
+  from pg_class c join ns on ns.oid = c.relnamespace
+ where c.relkind in ('r', 'p', 'v', 'm', 'S')
+   and not c.relispartition
+   and c.oid not in (select objid from ext)
+   and not (c.relkind = 'S' and exists (
+         select 1 from pg_depend d
+          where d.objid = c.oid and d.classid = 'pg_class'::regclass and d.deptype in ('a', 'i')))
+union all
+select case p.prokind when 'p' then 'procedure' else 'function' end,
+       ns.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
+  from pg_proc p join ns on ns.oid = p.pronamespace
+ where p.prokind in ('f', 'p')
+   and p.oid not in (select objid from ext)
+union all
+select case t.typtype when 'd' then 'domain' else 'type' end, ns.nspname, t.typname, null
+  from pg_type t join ns on ns.oid = t.typnamespace
+ where (t.typtype in ('e', 'd', 'r')
+        or (t.typtype = 'c' and (select relkind from pg_class where oid = t.typrelid) = 'c'))
+   and t.oid not in (select objid from ext)
+ order by 1, 2, 3`
 
 export class PostgresAdapter implements DbAdapter {
   private pool?: pg.Pool
@@ -627,7 +668,7 @@ export class PostgresAdapter implements DbAdapter {
     const client = await this.pool!.connect()
     try {
       await client.query('begin')
-      for (const t of tables) await client.query(`drop table if exists ${this.ident(t)}${cascade}`)
+      for (const t of tables) await client.query(`drop ${t.type === 'view' ? 'view' : 'table'} if exists ${this.ident(t)}${cascade}`)
       await client.query('commit')
     } catch (err) {
       await client.query('rollback')
@@ -635,6 +676,45 @@ export class PostgresAdapter implements DbAdapter {
     } finally {
       client.release()
     }
+  }
+
+  async listAllObjects(): Promise<DbObjectInventory> {
+    const [db, res] = await Promise.all([
+      this.pool!.query('select current_database() as db'),
+      this.pool!.query(ALL_OBJECTS_SQL)
+    ])
+    const objects: DbObject[] = res.rows.map((r) => ({
+      kind: r.kind as DbObjectKind,
+      schema: r.schema as string,
+      name: r.name as string,
+      args: (r.args as string | null) ?? undefined
+    }))
+    return { database: db.rows[0].db as string, objects }
+  }
+
+  async dropAllObjects(): Promise<number> {
+    const { objects } = await this.listAllObjects()
+    const order: DbObjectKind[] = [
+      'materialized view', 'view', 'table', 'sequence', 'procedure', 'function', 'domain', 'type'
+    ]
+    const client = await this.pool!.connect()
+    try {
+      await client.query('begin')
+      // CASCADE can remove a later object first; IF EXISTS makes that a no-op.
+      for (const kind of order)
+        for (const o of objects.filter((o) => o.kind === kind)) {
+          const target = `${quoteIdent(o.schema ?? 'public')}.${quoteIdent(o.name)}`
+          const args = o.args !== undefined ? `(${o.args})` : ''
+          await client.query(`drop ${kind} if exists ${target}${args} cascade`)
+        }
+      await client.query('commit')
+    } catch (err) {
+      await client.query('rollback')
+      throw err
+    } finally {
+      client.release()
+    }
+    return objects.length
   }
 
   async truncateTables(tables: TableInfo[], opts: TruncateOptions): Promise<void> {

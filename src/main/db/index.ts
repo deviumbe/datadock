@@ -1,4 +1,5 @@
 import type { ConnectionConfig, ConnectionState, ConnStatePayload, PlanNode } from '@shared/types'
+import { autoDisconnectMinutes, parseServerDatabaseId } from '@shared/types'
 import { DbAdapter } from './types'
 import { PostgresAdapter } from './postgres'
 import { MySQLAdapter } from './mysql'
@@ -23,8 +24,16 @@ interface LiveConnection {
   state: ConnectionState
   error?: string
   verifiedAt?: number
-  /** In-flight heal, so concurrent failures don't reconnect in parallel. */
+  /** In-flight heal or wake, so concurrent callers don't reconnect in parallel. */
   healing?: Promise<void>
+  /** Epoch ms of the last operation started or finished through getAdapter. */
+  lastUsedAt: number
+  /** Operations currently running through getAdapter. */
+  busy: number
+  /** An explicit transaction is open; closing would silently roll it back. */
+  inTxn: boolean
+  /** Closed for idleness (or new settings) but kept, so the next use reconnects. */
+  parked: boolean
 }
 
 /** Live, connected adapters keyed by connection id. */
@@ -125,13 +134,15 @@ async function rebuild(conn: LiveConnection): Promise<void> {
   }
   conn.adapter = adapter
   conn.tunnel = tunnel
+  conn.inTxn = false
   adapter.onConnectionLost = (err) => void markUnhealthy(id, err)
 }
 
 /** Mark a connection unhealthy and (unless it's production) heal it. */
 function markUnhealthy(id: string, err: unknown): Promise<void> {
   const conn = live.get(id)
-  if (!conn) return Promise.resolve()
+  // Parking closes the link on purpose; its close events are not failures.
+  if (!conn || conn.parked) return Promise.resolve()
   const message = err instanceof Error ? err.message : String(err)
   // Production connections don't auto-reconnect — a drop is a deliberate event.
   if (conn.config.production) {
@@ -255,7 +266,11 @@ export async function connect(config: ConnectionConfig): Promise<void> {
       tunnel,
       config,
       state: 'connected',
-      verifiedAt: Date.now()
+      verifiedAt: Date.now(),
+      lastUsedAt: Date.now(),
+      busy: 0,
+      inTxn: false,
+      parked: false
     }
     adapter.onConnectionLost = (err) => void markUnhealthy(config.id, err)
     live.set(config.id, conn)
@@ -266,7 +281,11 @@ export async function connect(config: ConnectionConfig): Promise<void> {
   }
 }
 
+/** Disconnect a connection; for a server this includes every database opened on it. */
 export async function disconnect(id: string): Promise<void> {
+  for (const childId of [...live.keys()]) {
+    if (parseServerDatabaseId(childId)?.serverId === id) await disconnect(childId)
+  }
   const conn = live.get(id)
   if (!conn) return
   live.delete(id)
@@ -279,12 +298,72 @@ export async function disconnect(id: string): Promise<void> {
   emitState({ id, state: 'disconnected' })
 }
 
+// ---- idle parking -------------------------------------------------------------
+
+async function park(id: string, conn: LiveConnection): Promise<void> {
+  // Detach before awaiting, so a wake that starts meanwhile never has its fresh
+  // tunnel closed or its state overwritten by this teardown.
+  const { adapter, tunnel } = conn
+  conn.parked = true
+  conn.tunnel = undefined
+  setState(id, 'idle')
+  try {
+    await adapter.disconnect()
+  } catch {
+    // best-effort teardown
+  }
+  tunnel?.close()
+}
+
+/** Reopen a parked connection before an operation runs on it. */
+function wake(id: string): Promise<void> {
+  const conn = live.get(id)
+  if (!conn?.parked) return Promise.resolve()
+  if (conn.healing) return conn.healing
+  conn.healing = (async () => {
+    setState(id, 'connecting')
+    try {
+      await rebuild(conn)
+      conn.parked = false
+      setState(id, 'connected')
+    } catch (e) {
+      setState(id, 'error', e instanceof Error ? e.message : String(e))
+      throw e
+    } finally {
+      conn.healing = undefined
+    }
+  })()
+  return conn.healing
+}
+
+function parkIdle(now: number): void {
+  for (const [id, conn] of live) {
+    if (conn.parked || conn.healing || conn.busy || conn.inTxn || conn.state !== 'connected') continue
+    const limit = autoDisconnectMinutes(conn.config) * 60_000
+    if (limit && now - conn.lastUsedAt >= limit) void park(id, conn)
+  }
+}
+
+/**
+ * A connection's settings changed: swap in the new config for it and, for a
+ * server, every database opened on it, then park them so the next use
+ * reconnects with the new settings. Connections mid-query or inside a
+ * transaction keep their link and pick the settings up on their next reconnect.
+ */
+export async function reconfigure(id: string, resolve: (id: string) => ConnectionConfig): Promise<void> {
+  for (const [liveId, conn] of [...live]) {
+    if (liveId !== id && parseServerDatabaseId(liveId)?.serverId !== id) continue
+    conn.config = resolve(liveId)
+    if (!conn.parked && !conn.healing && !conn.busy && !conn.inTxn) await park(liveId, conn)
+  }
+}
+
 // ---- liveness: heartbeat + on-demand verification ---------------------------
 
 /** Ping one connection and reconcile its state. */
 async function verify(id: string): Promise<void> {
   const conn = live.get(id)
-  if (!conn || conn.healing) return
+  if (!conn || conn.healing || conn.parked) return
   try {
     // Adapters without a cheap probe (some newer engines) are assumed alive here;
     // a failing real query will still mark them unhealthy on its own.
@@ -305,8 +384,10 @@ let heartbeat: ReturnType<typeof setInterval> | undefined
 export function startHeartbeat(): void {
   if (heartbeat) return
   heartbeat = setInterval(() => {
-    if (!isActive()) return
     const now = Date.now()
+    // Idleness matters most while the app is in the background, so this isn't focus-gated.
+    parkIdle(now)
+    if (!isActive()) return
     for (const [id, conn] of live) {
       if (conn.state !== 'connected' || conn.healing) continue
       if (now - (conn.verifiedAt ?? 0) < STALE_AFTER_MS) continue
@@ -370,9 +451,19 @@ export function getAdapter(id: string): DbAdapter {
       }
       const name = prop
       return async (...args: unknown[]): Promise<unknown> => {
-        const current = live.get(id)?.adapter ?? target
+        // Count the call as busy before waking, so the idle sweep can't park it in between.
+        const record = live.get(id)
+        if (record) {
+          record.busy++
+          record.lastUsedAt = Date.now()
+        }
         try {
-          return await (current[name as keyof DbAdapter] as Function).apply(current, args)
+          await wake(id)
+          const current = record?.adapter ?? target
+          const result = await (current[name as keyof DbAdapter] as Function).apply(current, args)
+          if (record && name === 'beginTransaction') record.inTxn = true
+          if (record && (name === 'commitTransaction' || name === 'rollbackTransaction')) record.inTxn = false
+          return result
         } catch (err) {
           if (!isConnectionError(err)) throw err
           const healed = markUnhealthy(id, err)
@@ -387,6 +478,11 @@ export function getAdapter(id: string): DbAdapter {
             }
           }
           throw err
+        } finally {
+          if (record) {
+            record.busy--
+            record.lastUsedAt = Date.now()
+          }
         }
       }
     }

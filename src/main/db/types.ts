@@ -3,6 +3,7 @@ import type {
   ColumnMeta,
   ConnectionConfig,
   CreateTableSpec,
+  DbObjectInventory,
   DropTableOptions,
   TruncateOptions,
   PoolStats,
@@ -87,6 +88,10 @@ export interface DbAdapter {
   dropTables?(tables: TableInfo[], opts: DropTableOptions): Promise<void>
   /** Empty one or more tables (TRUNCATE / DELETE), honoring FK options. */
   truncateTables?(tables: TableInfo[], opts: TruncateOptions): Promise<void>
+  /** Every user object in the current database (tables, views, routines, …). */
+  listAllObjects?(): Promise<DbObjectInventory>
+  /** Drop every user object regardless of foreign keys; the database itself stays. */
+  dropAllObjects?(): Promise<number>
 
   /** Live replication status for the topology monitor (engines with replication). */
   replicationStatus?(): Promise<import('@shared/types').ReplicationStatus>

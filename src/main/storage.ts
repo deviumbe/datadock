@@ -11,6 +11,7 @@ import type {
   Topology,
   Catalog
 } from '@shared/types'
+import { PG_FAMILY, parseServerDatabaseId, serverDatabaseConfig } from '@shared/types'
 import * as vault from './vault'
 
 const SECRET_FIELDS = ['password', 'token', 'sshPassword', 'sshPassphrase'] as const
@@ -214,11 +215,23 @@ function sanitizeConnection(c: ConnectionConfig): ConnectionConfig {
 
 /** Resolve a stored connection with decrypted secrets, for the driver layer. */
 export function resolveConnection(id: string): ConnectionConfig {
+  const onServer = parseServerDatabaseId(id)
+  if (onServer) {
+    return serverDatabaseConfig(resolveConnection(onServer.serverId), onServer.database)
+  }
   const found = findConnection(id)
   if (!found) throw new Error('Connection not found')
   const c = { ...found.connection }
   for (const f of SECRET_FIELDS) {
     if (c[f]) c[f] = decryptSecret(c[f] as string)
+  }
+  return withServerDefaults(c)
+}
+
+/** Postgres can't connect without a database; a server's listing is readable from any of them. */
+function withServerDefaults(c: ConnectionConfig): ConnectionConfig {
+  if (c.serverMode && !c.database && (PG_FAMILY as string[]).includes(c.driver)) {
+    return { ...c, database: 'postgres' }
   }
   return c
 }
@@ -235,7 +248,7 @@ export function resolveFormConfig(config: ConnectionConfig): ConnectionConfig {
       resolved[f] = decryptSecret(existing[f] as string)
     }
   }
-  return resolved
+  return withServerDefaults(resolved)
 }
 
 // ---- lookups ----------------------------------------------------------------

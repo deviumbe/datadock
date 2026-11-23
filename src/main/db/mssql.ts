@@ -519,7 +519,7 @@ export class MSSQLAdapter implements DbAdapter {
   async dropTables(tables: TableInfo[], _opts: DropTableOptions): Promise<void> {
     // SQL Server has no global FK toggle or CASCADE for DROP TABLE; if a table
     // is referenced by a foreign key the drop will error (the caller is warned).
-    for (const t of tables) await this.pool!.request().query(`drop table if exists ${this.ident(t)}`)
+    for (const t of tables) await this.pool!.request().query(`drop ${t.type === 'view' ? 'view' : 'table'} if exists ${this.ident(t)}`)
   }
 
   async truncateTables(tables: TableInfo[], _opts: TruncateOptions): Promise<void> {

@@ -50,6 +50,7 @@ import * as vaultOps from './vaultOps'
 import { prepareStatement } from './sqlGuard'
 import { testProvider, listModels } from './aiProviders'
 import type { RunSql } from './aiProviders'
+import { debugLog, throttledDebugLog } from './debugLog'
 import type {
   AiProvider,
   AppearanceSettings,
@@ -91,14 +92,18 @@ function handle<T>(channel: string, fn: Handler<T>): void {
     try {
       return { ok: true, data: await fn(...args) }
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      const error = err instanceof Error ? err.message : String(err)
+      debugLog('ipc', `${channel} failed: ${error}`)
+      return { ok: false, error }
     }
   })
 }
 
 /** Broadcast export/transfer progress to all windows, tagged with the op id. */
+const logProgress = throttledDebugLog(5000)
 function progressEmitter(opId: string): (p: Omit<IoProgress, 'opId'>) => void {
   return (p) => {
+    logProgress(opId, 'task', `${opId.slice(0, 8)} ${p.phase} ${p.label ?? ''} ${p.current}/${p.total}`)
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('io:progress', { opId, ...p })
     }
@@ -108,17 +113,35 @@ function progressEmitter(opId: string): (p: Omit<IoProgress, 'opId'>) => void {
 /** Cancellable background ops: one AbortController per op id, cancelled via io:cancel. */
 const aborters = new Map<string, AbortController>()
 async function withAbort<T>(
+  name: string,
   opId: string | undefined,
   fn: (signal?: AbortSignal) => Promise<T>
 ): Promise<T> {
-  if (!opId) return fn(undefined)
-  const ac = new AbortController()
-  aborters.set(opId, ac)
+  const tag = `${name} ${opId?.slice(0, 8) ?? ''}`.trim()
+  const started = Date.now()
+  debugLog('task', `${tag} started`)
+  const ac = opId ? new AbortController() : undefined
+  if (opId && ac) aborters.set(opId, ac)
   try {
-    return await fn(ac.signal)
+    const res = await fn(ac?.signal)
+    debugLog('task', `${tag} finished in ${Math.round((Date.now() - started) / 1000)}s${summarize(res)}`)
+    return res
+  } catch (err) {
+    debugLog('task', `${tag} failed: ${err instanceof Error ? err.message : String(err)}`)
+    throw err
   } finally {
-    aborters.delete(opId)
+    if (opId) aborters.delete(opId)
   }
+}
+
+function summarize(res: unknown): string {
+  if (!res || typeof res !== 'object') return ''
+  const r = res as { statements?: number; tableCount?: number; errors?: string[] }
+  const parts: string[] = []
+  if (r.statements !== undefined) parts.push(`${r.statements} statements`)
+  if (r.tableCount !== undefined) parts.push(`${r.tableCount} tables`)
+  if (r.errors) parts.push(`${r.errors.length} errors`)
+  return parts.length ? ` — ${parts.join(', ')}` : ''
 }
 
 export function registerIpc(): void {
@@ -153,9 +176,11 @@ export function registerIpc(): void {
     store.renameEnvironment(id, name)
   )
   handle('catalog:deleteEnvironment', (id: string) => store.deleteEnvironment(id))
-  handle('catalog:saveConnection', (environmentId: string, config: ConnectionConfig) =>
-    store.saveConnection(environmentId, config)
-  )
+  handle('catalog:saveConnection', async (environmentId: string, config: ConnectionConfig) => {
+    const catalog = store.saveConnection(environmentId, config)
+    if (config.id) await db.reconfigure(config.id, store.resolveConnection)
+    return catalog
+  })
   handle('catalog:deleteConnection', (id: string) => store.deleteConnection(id))
   handle('catalog:duplicateConnection', (id: string) => store.duplicateConnection(id))
   handle('catalog:saveTopology', (topology: Topology) => store.saveTopology(topology))
@@ -243,6 +268,8 @@ export function registerIpc(): void {
   handle('db:dropTables', (id: string, tables: TableInfo[], opts: DropTableOptions) =>
     db.capability(id, 'dropTables')(tables, opts)
   )
+  handle('db:listAllObjects', (id: string) => db.capability(id, 'listAllObjects')())
+  handle('db:dropAllObjects', (id: string) => db.capability(id, 'dropAllObjects')())
   handle('db:truncateTables', (id: string, tables: TableInfo[], opts: TruncateOptions) =>
     db.capability(id, 'truncateTables')(tables, opts)
   )
@@ -264,7 +291,7 @@ export function registerIpc(): void {
       dropTables?: boolean,
       opId?: string
     ) =>
-      withAbort(opId, (signal) =>
+      withAbort('export', opId, (signal) =>
         io.exportDatabase(id, specs, format, maskConfig, dropTables ?? true, opId ? progressEmitter(opId) : undefined, signal, opId)
       )
   )
@@ -284,7 +311,7 @@ export function registerIpc(): void {
       maskConfig?: MaskConfig,
       opId?: string
     ) =>
-      withAbort(opId, (signal) =>
+      withAbort('transfer', opId, (signal) =>
         io.transferDatabase(
           sourceId,
           targetId,
@@ -297,7 +324,12 @@ export function registerIpc(): void {
         )
       )
   )
-  handle('io:importSql', (id: string) => io.importSql(id))
+  handle('io:pickSqlFile', () => io.pickSqlFile())
+  handle('io:importSql', (id: string, filePath: string, opId?: string) =>
+    withAbort('import', opId, (signal) =>
+      io.importSql(id, filePath, opId ? progressEmitter(opId) : undefined, signal)
+    )
+  )
   handle('io:importCsv', (id: string, table: TableInfo) => io.importCsv(id, table))
   handle('io:exportConnections', () => io.exportConnections())
   handle('io:importConnections', () => io.importConnections())

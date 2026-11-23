@@ -12,6 +12,7 @@ import type {
   Topology,
   Catalog
 } from '@shared/types'
+import { SYSTEM_DATABASES, isConnectionOpen, parseServerDatabaseId, serverDatabaseConfig } from '@shared/types'
 import { useTabs } from './tabs'
 
 export const useWorkspace = defineStore('workspace', () => {
@@ -195,6 +196,11 @@ export const useWorkspace = defineStore('workspace', () => {
   }
 
   function findConnection(id: string): ConnectionConfig | undefined {
+    const onServer = parseServerDatabaseId(id)
+    if (onServer) {
+      const server = findConnection(onServer.serverId)
+      return server && serverDatabaseConfig(server, onServer.database)
+    }
     for (const p of allProjects.value) {
       for (const e of p.environments) {
         const c = e.connections.find((x) => x.id === id)
@@ -250,9 +256,14 @@ export const useWorkspace = defineStore('workspace', () => {
   const saveConnection = async (environmentId: string, config: ConnectionConfig) =>
     applyCatalog(await window.api.catalog.saveConnection(environmentId, config))
   async function forgetConnection(id: string): Promise<void> {
-    if (connStates[id] === 'connected') await disconnect(id)
+    for (const childId of Object.keys(connStates)) {
+      if (parseServerDatabaseId(childId)?.serverId === id) await forgetConnection(childId)
+    }
+    if (isConnectionOpen(connStates[id])) await disconnect(id)
     if (activeConnectionId.value === id) activeConnectionId.value = null
     delete tablesPerConn[id]
+    delete serverDatabases[id]
+    expandedServers.delete(id)
   }
   const deleteConnection = async (id: string) => {
     await forgetConnection(id)
@@ -261,10 +272,42 @@ export const useWorkspace = defineStore('workspace', () => {
   const duplicateConnection = async (id: string) =>
     applyCatalog(await window.api.catalog.duplicateConnection(id))
 
+  // ---- server connections ---------------------------------------------------
+  const expandedServers = reactive<Set<string>>(new Set())
+  const serverDatabases = reactive<Record<string, string[]>>({})
+  const serverErrors = reactive<Record<string, string | undefined>>({})
+  const serverLoading = reactive<Record<string, boolean>>({})
+
+  async function loadServerDatabases(id: string): Promise<void> {
+    const server = findConnection(id)
+    if (!server) return
+    serverLoading[id] = true
+    serverErrors[id] = undefined
+    try {
+      await ensureConnected(id)
+      const hidden = SYSTEM_DATABASES[server.driver] ?? []
+      const all = await window.api.db.listDatabases(id)
+      serverDatabases[id] = all.filter((d) => !hidden.includes(d))
+    } catch (e) {
+      serverErrors[id] = e instanceof Error ? e.message : String(e)
+    } finally {
+      serverLoading[id] = false
+    }
+  }
+
+  function toggleServer(id: string): void {
+    if (expandedServers.has(id)) {
+      expandedServers.delete(id)
+      return
+    }
+    expandedServers.add(id)
+    if (!serverDatabases[id]) void loadServerDatabases(id)
+  }
+
   // ---- connecting -----------------------------------------------------------
   /** Connect a node for background monitoring — no tab/active-connection changes. */
   async function ensureConnected(id: string): Promise<void> {
-    if (connStates[id] === 'connected') return
+    if (isConnectionOpen(connStates[id])) return
     connStates[id] = 'connecting'
     try {
       await window.api.db.connect(id)
@@ -278,8 +321,8 @@ export const useWorkspace = defineStore('workspace', () => {
   async function connectAndOpen(id: string): Promise<void> {
     error.value = null
     activeConnectionId.value = id
-    // Healthy and already open — just (re)load the table list.
-    if (connStates[id] === 'connected') {
+    // Open (an idle one reconnects on this call) — just (re)load the table list.
+    if (isConnectionOpen(connStates[id])) {
       await refreshTables(id)
       return
     }
@@ -310,7 +353,7 @@ export const useWorkspace = defineStore('workspace', () => {
       const result = await window.api.db.listTables(id)
       // Guard: only store if this connection is still open/active.
       // Prevents a slow response from overwriting a different connection's list.
-      if (connStates[id] === 'connected') {
+      if (isConnectionOpen(connStates[id])) {
         tablesPerConn[id] = result
       }
     } catch (e) {
@@ -408,6 +451,12 @@ export const useWorkspace = defineStore('workspace', () => {
     exportConnections,
     importConnections,
     applyImportedCatalog,
+    expandedServers,
+    serverDatabases,
+    serverErrors,
+    serverLoading,
+    loadServerDatabases,
+    toggleServer,
     topologies,
     saveTopology,
     deleteTopology

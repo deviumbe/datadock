@@ -462,7 +462,7 @@ export class OracleAdapter implements DbAdapter {
 
   async dropTables(tables: TableInfo[], opts: DropTableOptions): Promise<void> {
     const cascade = opts.cascade || opts.ignoreForeignKeys ? ' cascade constraints' : ''
-    for (const t of tables) await this.exec(`drop table ${this.ident(t)}${cascade}`)
+    for (const t of tables) await this.exec(`drop ${t.type === 'view' ? 'view' : 'table'} ${this.ident(t)}${cascade}`)
   }
 
   async truncateTables(tables: TableInfo[], _opts: TruncateOptions): Promise<void> {

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, nativeImage, powerMonitor } from 'electron'
 import { join } from 'path'
 import { registerIpc } from './ipc'
+import { debugLog } from './debugLog'
 
 // Large database clones/dumps push a lot of transient data through the main
 // process; give V8's old space generous headroom so a big transfer can't trip
@@ -44,6 +45,16 @@ function createWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => win.show())
 
+  if (isDev) {
+    win.webContents.on('console-message', (e) => {
+      if (e.level === 'error' || e.level === 'warning')
+        debugLog('renderer', `${e.level}: ${e.message} (${e.sourceId}:${e.lineNumber})`)
+    })
+    win.webContents.on('render-process-gone', (_e, details) =>
+      debugLog('renderer', `process gone: ${details.reason}`)
+    )
+  }
+
   // Returning to the app is a strong cue to re-check connections (the laptop
   // may have slept, or an idle tunnel timed out while we were away).
   win.on('focus', () => void verifyAll())
@@ -63,6 +74,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  debugLog('app', `started ${app.getVersion()}`)
   app.setAboutPanelOptions({
     applicationName: 'DataDock',
     applicationVersion: `Version ${app.getVersion()}`,

@@ -4,6 +4,7 @@ import { useWorkspace } from '../stores/workspace'
 import { useTabs } from '../stores/tabs'
 import { useUi } from '../stores/ui'
 import Icon from './Icon.vue'
+import { isConnectionOpen, supportsDropAllObjects } from '@shared/types'
 
 const emit = defineEmits<{ close: []; action: [action: string] }>()
 
@@ -50,7 +51,7 @@ const allItems = computed<PaletteItem[]>(() => {
 
   // ---- Tables (only when connected) ----------------------------------------
   const connId = ws.activeConnectionId
-  if (connId && ws.connStates[connId] === 'connected') {
+  if (connId && isConnectionOpen(ws.connStates[connId])) {
     for (const table of ws.tables) {
       items.push({
         id: `table-${table.schema ?? ''}.${table.name}`,
@@ -173,6 +174,17 @@ const allItems = computed<PaletteItem[]>(() => {
       icon: 'copy',
       handler: () => {
         if (connId) ui.cloneSqliteOpen = true
+      }
+    },
+    {
+      label: 'Drop All Objects…',
+      icon: 'trash',
+      handler: () => {
+        if (!connId) return
+        const driver = ws.findConnection(connId)?.driver ?? ''
+        if (!supportsDropAllObjects(driver)) ws.error = `Drop all objects is not supported for ${driver}.`
+        else if (ws.isReadOnly(connId)) ws.error = 'Read-only connection: dropping is disabled.'
+        else ui.dropAllOpen = true
       }
     },
     {

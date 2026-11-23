@@ -45,6 +45,7 @@ const MAP = {
   table: ['table', 'table', 'table', 'table-cells', 'table'],
   view: ['eye', 'eye', 'eye', 'eye', 'visibility'],
   database: ['database', 'database', 'database', 'circle-stack', 'database'],
+  server: ['server', 'server', 'hard-drives', 'server-stack', 'dns'],
   code: ['code', 'code', 'code', 'code-bracket', 'code'],
   format: ['align-left', 'align-left', 'text-align-left', 'bars-3-bottom-left', 'format_align_left'],
   check: ['check', 'check', 'check', 'check', 'check'],

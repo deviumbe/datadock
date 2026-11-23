@@ -2,7 +2,14 @@
 import { reactive, ref, computed, watch, onMounted } from 'vue'
 import Modal from './Modal.vue'
 import { useSettings } from '../stores/settings'
-import { DRIVERS, PG_FAMILY, type ConnectionConfig, type DriverType } from '@shared/types'
+import {
+  DEFAULT_SERVER_IDLE_MINUTES,
+  DRIVERS,
+  PG_FAMILY,
+  supportsServerMode,
+  type ConnectionConfig,
+  type DriverType
+} from '@shared/types'
 
 const settings = useSettings()
 const sshProfiles = computed(() => settings.sshProfiles)
@@ -55,6 +62,20 @@ const isRedis = computed(() => form.driver === 'redis')
 const isOracle = computed(() => form.driver === 'oracle')
 const isMssql = computed(() => form.driver === 'mssql')
 const isEntraAuth = computed(() => isMssql.value && form.mssqlAuthType === 'entra-interactive')
+const canServerMode = computed(() => supportsServerMode(form.driver))
+const isServer = computed(() => canServerMode.value && !!form.serverMode)
+const isPgFamily = computed(() => (PG_FAMILY as string[]).includes(form.driver))
+const idlePlaceholder = computed(() =>
+  isServer.value ? `${DEFAULT_SERVER_IDLE_MINUTES} (default)` : 'never'
+)
+
+// v-model.number yields '' for a cleared input; store that as "use the default".
+const idleMinutes = computed({
+  get: () => form.autoDisconnectMinutes ?? '',
+  set: (v: number | string) => {
+    form.autoDisconnectMinutes = v === '' || v === null ? undefined : Math.max(0, Number(v))
+  }
+})
 
 // Azure SQL requires an encrypted connection — flip SSL on automatically the
 // moment Entra auth is chosen (the user can still turn it back off).
@@ -137,7 +158,9 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
 }
 
 function save(): void {
-  emit('save', props.environmentId, { ...form })
+  const config = { ...form, serverMode: isServer.value }
+  if (isServer.value && !isPgFamily.value) config.database = ''
+  emit('save', props.environmentId, config)
 }
 </script>
 
@@ -205,7 +228,15 @@ function save(): void {
           <label>Port</label>
           <input class="input" type="number" v-model.number="form.port" />
         </div>
-        <div class="field">
+        <label v-if="canServerMode" class="check span2">
+          <input type="checkbox" v-model="form.serverMode" />
+          <span>Whole server: list every database instead of connecting to one</span>
+        </label>
+        <div v-if="isServer && isPgFamily" class="field">
+          <label>Maintenance database</label>
+          <input class="input" v-model="form.database" placeholder="postgres" />
+        </div>
+        <div v-else-if="!isServer" class="field">
           <label>{{ isRedis ? 'Database (index)' : isOracle ? 'Service name' : 'Database' }}</label>
           <input
             class="input"
@@ -254,6 +285,14 @@ function save(): void {
           <input type="checkbox" v-model="form.ssl" />
           <span>Use SSL / TLS (accept self-signed)</span>
         </label>
+        <div class="field">
+          <label>Auto-disconnect when idle (minutes)</label>
+          <input class="input" type="number" min="0" v-model.number="idleMinutes" :placeholder="idlePlaceholder" />
+          <small class="hint">
+            Closes the connection after sitting unused and reopens it on the next action.
+            <template v-if="isServer">Applies to each database opened on this server. </template>0 disables it.
+          </small>
+        </div>
       </template>
 
       <!-- SQLite / DuckDB (local file engines) -->

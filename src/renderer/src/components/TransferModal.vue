@@ -4,7 +4,7 @@ import Modal from './Modal.vue'
 import AnonymizeStep from './AnonymizeStep.vue'
 import { useWorkspace } from '../stores/workspace'
 import { useTasks } from '../stores/tasks'
-import { isSqlDriver, sqlDialect } from '@shared/types'
+import { isConnectionOpen, isSqlDriver, sqlDialect } from '@shared/types'
 import type { TableDumpMode, TableDumpSpec, TableInfo, TransferMode } from '@shared/types'
 import { countMasked, type MaskConfig } from '@shared/mask'
 
@@ -114,8 +114,9 @@ function run(): void {
   tasks.start({
     kind: 'transfer',
     title: `Clone ${source.value?.name ?? ''} → ${tgt.name}`,
+    connId: tgt.id,
     run: async (opId) => {
-      if (ws.connStates[tgt.id] !== 'connected') await window.api.db.connect(tgt.id)
+      if (!isConnectionOpen(ws.connStates[tgt.id])) await window.api.db.connect(tgt.id)
       const res = await window.api.io.transferDatabase(props.connId, tgt.id, specs, m, mask, opId)
       void ws.refreshTables(tgt.id)
       return {

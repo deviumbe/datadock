@@ -278,7 +278,7 @@ export class SnowflakeAdapter implements DbAdapter {
   }
 
   async dropTables(tables: TableInfo[], _opts: DropTableOptions): Promise<void> {
-    for (const t of tables) await this.exec(`drop table if exists ${this.ident(t)}`)
+    for (const t of tables) await this.exec(`drop ${t.type === 'view' ? 'view' : 'table'} if exists ${this.ident(t)}`)
   }
 
   async truncateTables(tables: TableInfo[], _opts: TruncateOptions): Promise<void> {

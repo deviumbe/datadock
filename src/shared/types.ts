@@ -148,6 +148,12 @@ export interface ConnectionConfig {
   production?: boolean
   /** Hide this connection from the MCP server (no discovery or query access). */
   mcpExcluded?: boolean
+  /** Server connection: the sidebar lists every database on the server and each
+   * one opens as its own connection (see serverDatabaseId). */
+  serverMode?: boolean
+  /** Close the connection after this many idle minutes; it reopens on next use.
+   * Unset means the default (see DEFAULT_SERVER_IDLE_MINUTES), 0 means never. */
+  autoDisconnectMinutes?: number
 
   // Network drivers (postgres, mysql, mssql)
   host?: string
@@ -718,6 +724,36 @@ export interface DropTableOptions {
   cascade?: boolean
 }
 
+/** A user-defined database object, as listed for "Drop all objects". */
+export type DbObjectKind =
+  | 'table'
+  | 'view'
+  | 'materialized view'
+  | 'sequence'
+  | 'function'
+  | 'procedure'
+  | 'event'
+  | 'type'
+  | 'domain'
+
+export interface DbObject {
+  kind: DbObjectKind
+  schema?: string
+  name: string
+  /** Argument list for overloadable routines (Postgres), needed to drop them. */
+  args?: string
+}
+
+export interface DbObjectInventory {
+  database: string
+  objects: DbObject[]
+}
+
+/** Engines whose catalogs we know well enough to drop everything safely. */
+export function supportsDropAllObjects(driver: string): boolean {
+  return driver === 'mysql' || driver === 'postgres' || driver === 'timescaledb'
+}
+
 export interface TruncateOptions {
   /** Skip foreign-key checks (engine-specific: FK toggle, or CASCADE on Postgres). */
   ignoreForeignKeys?: boolean
@@ -739,6 +775,13 @@ export type ConnectionState =
   | 'reconnecting'
   | 'unhealthy'
   | 'error'
+  /** Closed after sitting unused; the next operation reconnects transparently. */
+  | 'idle'
+
+/** Whether a connection can serve operations now (an idle one reconnects on use). */
+export function isConnectionOpen(state: ConnectionState | undefined): boolean {
+  return state === 'connected' || state === 'idle'
+}
 
 /** Pushed on every connection-state transition (main -> renderer). */
 export interface ConnStatePayload {
@@ -778,6 +821,54 @@ export const DRIVER_CAPS: Record<DriverType, DriverCapabilities> = {
   // Redis has no users/createDatabase, but CLIENT LIST/KILL maps onto Processes.
   redis: { databases: false, users: false, processes: true },
   influxdb: { databases: false, users: false, processes: false }
+}
+
+// ---- server connections -----------------------------------------------------
+
+/** Drivers that can be added as a whole server instead of a single database. */
+export function supportsServerMode(driver: string): boolean {
+  return !!DRIVER_CAPS[driver as DriverType]?.databases
+}
+
+const SERVER_DB_SEP = '::'
+
+/**
+ * A database on a server connection is not stored in the catalog; it is
+ * addressed by a derived id and resolved from its server's config on demand,
+ * so tabs, history and notes key off it like any other connection.
+ */
+export function serverDatabaseId(serverId: string, database: string): string {
+  return `${serverId}${SERVER_DB_SEP}${database}`
+}
+
+export function parseServerDatabaseId(
+  id: string
+): { serverId: string; database: string } | undefined {
+  const at = id.indexOf(SERVER_DB_SEP)
+  if (at < 0) return undefined
+  return { serverId: id.slice(0, at), database: id.slice(at + SERVER_DB_SEP.length) }
+}
+
+/** The connection a server database runs as: the server's config pointed at one database. */
+export function serverDatabaseConfig(server: ConnectionConfig, database: string): ConnectionConfig {
+  return { ...server, id: serverDatabaseId(server.id, database), name: database, database, serverMode: false }
+}
+
+/** Server databases add up quickly, so unlike plain connections they close when idle by default. */
+export const DEFAULT_SERVER_IDLE_MINUTES = 5
+
+/** Idle limit in minutes for a connection, or 0 when it never auto-disconnects. */
+export function autoDisconnectMinutes(config: ConnectionConfig): number {
+  const fallback = config.serverMode || parseServerDatabaseId(config.id) ? DEFAULT_SERVER_IDLE_MINUTES : 0
+  return Math.max(0, config.autoDisconnectMinutes ?? fallback)
+}
+
+/** Built-in catalogs hidden from a server's database list. */
+export const SYSTEM_DATABASES: Partial<Record<DriverType, string[]>> = {
+  mysql: ['information_schema', 'mysql', 'performance_schema', 'sys'],
+  mssql: ['master', 'model', 'msdb', 'tempdb'],
+  clickhouse: ['system', 'information_schema', 'INFORMATION_SCHEMA'],
+  snowflake: ['SNOWFLAKE', 'SNOWFLAKE_SAMPLE_DATA']
 }
 
 // ---- import / export --------------------------------------------------------

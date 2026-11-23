@@ -2,9 +2,14 @@
 import { ref } from 'vue'
 import Modal from './Modal.vue'
 import type { TableInfo } from '@shared/types'
+import { useWorkspace } from '../stores/workspace'
+import { useTasks } from '../stores/tasks'
 
 const props = defineProps<{ connId: string; tables: TableInfo[] }>()
 const emit = defineEmits<{ close: []; done: [] }>()
+
+const ws = useWorkspace()
+const tasks = useTasks()
 
 const mode = ref<'sql' | 'csv'>('sql')
 const targetTable = ref(props.tables[0]?.name ?? '')
@@ -17,20 +22,26 @@ function tableByName(name: string): TableInfo | undefined {
 }
 
 async function runSql(): Promise<void> {
-  busy.value = true
-  message.value = ''
-  errors.value = []
-  try {
-    const res = await window.api.io.importSql(props.connId)
-    if (res.canceled) return
-    message.value = `Executed ${res.statements ?? 0} statement(s).`
-    errors.value = res.errors
-    emit('done')
-  } catch (e) {
-    message.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
+  const filePath = await window.api.io.pickSqlFile()
+  if (!filePath) return
+  const connId = props.connId
+  const file = filePath.split(/[\\/]/).pop()
+  const connName = ws.findConnection(connId)?.name ?? ''
+  tasks.start({
+    kind: 'import',
+    title: `Import ${file} → ${connName}`,
+    connId,
+    run: async (opId) => {
+      const res = await window.api.io.importSql(connId, filePath, opId)
+      void ws.refreshTables(connId)
+      return {
+        message: `Executed ${(res.statements ?? 0).toLocaleString()} statement(s)` +
+          (res.errors.length ? ` — ${res.errors.length} error(s)` : ''),
+        errors: res.errors
+      }
+    }
+  })
+  emit('close')
 }
 
 async function runCsv(): Promise<void> {
@@ -65,10 +76,8 @@ async function runCsv(): Promise<void> {
     </div>
 
     <div v-if="mode === 'sql'" class="pane">
-      <p class="desc">Choose a <code>.sql</code> file. Statements run in order against the connected database.</p>
-      <button class="btn btn-primary" :disabled="busy" @click="runSql">
-        {{ busy ? 'Running…' : 'Choose file & run' }}
-      </button>
+      <p class="desc">Choose a <code>.sql</code> file. Statements run in order against the connected database, in the background — follow it in the task tray.</p>
+      <button class="btn btn-primary" @click="runSql">Choose file & run</button>
     </div>
 
     <div v-else class="pane">

@@ -1,27 +1,20 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useTasks, type BgTask } from '../stores/tasks'
+import { computed } from 'vue'
+import { useTasks, progressPercent, type BgTask } from '../stores/tasks'
+import { useUi } from '../stores/ui'
 import ProgressBar from './ProgressBar.vue'
 
 const tasks = useTasks()
-const open = ref(false)
+const ui = useUi()
 
 const visible = computed(() => tasks.tasks.length > 0)
 const lead = computed(() => tasks.running[0])
-
-function pct(t: BgTask): number | null {
-  const p = t.progress
-  if (!p) return null
-  if (p.phase === 'dump' && p.totalRows && p.totalRows > 0)
-    return Math.min(100, Math.round(((p.doneRows ?? 0) / p.totalRows) * 100))
-  if (p.total > 0) return Math.min(100, Math.round((p.current / p.total) * 100))
-  return null
-}
+const leadPct = computed(() => (lead.value ? progressPercent(lead.value.progress) : null))
 
 const pillLabel = computed(() => {
   if (lead.value) {
     const n = tasks.running.length
-    const p = pct(lead.value)
+    const p = leadPct.value
     const base = n > 1 ? `${n} tasks running` : lead.value.title
     return p !== null ? `${base} · ${p}%` : base
   }
@@ -37,7 +30,7 @@ function icon(t: BgTask): string {
 <template>
   <div v-if="visible" class="tray">
     <Transition name="pop">
-      <div v-if="open" class="panel" @click.stop>
+      <div v-if="ui.tasksOpen" class="panel" @click.stop>
         <header class="phead">
           <span class="ptitle">Background tasks</span>
           <button class="link" @click="tasks.clearFinished()">Clear finished</button>
@@ -63,11 +56,14 @@ function icon(t: BgTask): string {
       </div>
     </Transition>
 
-    <button class="pill" :class="{ active: tasks.hasActive }" @click="open = !open">
+    <button class="pill" :class="{ active: tasks.hasActive }" @click="ui.tasksOpen = !ui.tasksOpen">
       <span v-if="tasks.hasActive" class="spin" />
       <span v-else class="dot">●</span>
       <span class="plabel">{{ pillLabel }}</span>
-      <span class="caret">{{ open ? '▾' : '▴' }}</span>
+      <span class="caret">{{ ui.tasksOpen ? '▾' : '▴' }}</span>
+      <span v-if="lead" class="pbar" :class="{ indet: leadPct === null }">
+        <span :style="leadPct !== null ? { width: leadPct + '%' } : undefined" />
+      </span>
     </button>
   </div>
 </template>
@@ -95,6 +91,34 @@ function icon(t: BgTask): string {
   color: var(--text-dim);
   font-size: 12px;
   max-width: 340px;
+  position: relative;
+  overflow: hidden;
+}
+.pbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--border);
+}
+.pbar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.pbar.indet > span {
+  width: 30%;
+  animation: pbar-indet 1.2s ease-in-out infinite;
+}
+@keyframes pbar-indet {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
 }
 .pill.active {
   color: var(--text);
