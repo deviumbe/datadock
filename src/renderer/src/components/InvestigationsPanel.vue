@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useTabs } from '../stores/tabs'
 import type { InvestigationReport, InvestigationType, FindingSeverity } from '@shared/types'
@@ -25,15 +26,15 @@ interface Card {
   blurb: string
 }
 const cards: Card[] = [
-  { type: 'query', icon: '🔍', title: 'Query Investigation', blurb: 'Why is this query slow? Gathers the plan, indexes, stats, locks & running queries, then explains the primary cause.' },
-  { type: 'rootCause', icon: '🎯', title: 'Root Cause Analysis', blurb: 'Describe a symptom ("why did revenue drop?"). Correlates query history & errors, last-write-per-table, growth, replication & job queues to find the most likely cause.' },
-  { type: 'health', icon: '🩺', title: 'Database Health Check', blurb: 'An overall health score from missing/duplicate indexes, seq scans, stale stats, missing keys and long-running queries.' },
-  { type: 'dataQuality', icon: '🧹', title: 'Data Quality Inspector', blurb: 'Scans for high-NULL columns, invalid emails, future-dated rows and orphaned foreign-key rows, with safe cleanup SQL.' },
-  { type: 'relationships', icon: '🔗', title: 'Relationship Discovery', blurb: 'Finds undeclared foreign keys from naming + real referential overlap, with a confidence score and the ALTER statement.' },
-  { type: 'security', icon: '🔐', title: 'Security & Privacy Audit', blurb: 'Flags plaintext passwords, embedded PII, sensitive columns and over-privileged accounts. Raw secret values never leave your machine.' },
-  { type: 'dashboard', icon: '📝', title: 'Dashboard Narrator', blurb: 'An executive summary of your analytics dashboards — computes the widgets and narrates the numbers for stakeholders.' },
-  { type: 'workspace', icon: '🧭', title: 'Workspace Assistant', blurb: 'Mines your local query history for tables to pin, repeated queries worth saving, and error patterns to fix.' },
-  { type: 'schema', icon: '📖', title: 'Schema Understanding', blurb: 'Explains what this database does as a whole — the business domain, core entities and how they relate.' }
+  { type: 'query', icon: 'search', title: 'Query Investigation', blurb: 'Why is this query slow? Gathers the plan, indexes, stats, locks & running queries, then explains the primary cause.' },
+  { type: 'rootCause', icon: 'target', title: 'Root Cause Analysis', blurb: 'Describe a symptom ("why did revenue drop?"). Correlates query history & errors, last-write-per-table, growth, replication & job queues to find the most likely cause.' },
+  { type: 'health', icon: 'check', title: 'Database Health Check', blurb: 'An overall health score from missing/duplicate indexes, seq scans, stale stats, missing keys and long-running queries.' },
+  { type: 'dataQuality', icon: 'filter', title: 'Data Quality Inspector', blurb: 'Scans for high-NULL columns, invalid emails, future-dated rows and orphaned foreign-key rows, with safe cleanup SQL.' },
+  { type: 'relationships', icon: 'diagram', title: 'Relationship Discovery', blurb: 'Finds undeclared foreign keys from naming + real referential overlap, with a confidence score and the ALTER statement.' },
+  { type: 'security', icon: 'lock', title: 'Security & Privacy Audit', blurb: 'Flags plaintext passwords, embedded PII, sensitive columns and over-privileged accounts. Raw secret values never leave your machine.' },
+  { type: 'dashboard', icon: 'chart', title: 'Dashboard Narrator', blurb: 'An executive summary of your analytics dashboards — computes the widgets and narrates the numbers for stakeholders.' },
+  { type: 'workspace', icon: 'folder', title: 'Workspace Assistant', blurb: 'Mines your local query history for tables to pin, repeated queries worth saving, and error patterns to fix.' },
+  { type: 'schema', icon: 'note', title: 'Schema Understanding', blurb: 'Explains what this database does as a whole — the business domain, core entities and how they relate.' }
 ]
 
 const SEV_RANK: Record<FindingSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
@@ -114,28 +115,28 @@ function applyInit(): void {
   <div class="inv">
     <header class="inv-head">
       <div>
-        <h1>✨ AI Investigation Suite</h1>
+        <h1>AI Investigation Suite</h1>
         <p class="sub">An AI database engineer that investigates with live evidence — execution plans, catalogs, statistics and locks. Read-only; every finding is grounded in real data.</p>
       </div>
     </header>
 
-    <div v-if="!aiReady" class="inv-note">⚙ No AI provider configured. Add a key in <strong>Settings → AI</strong> to run investigations.</div>
+    <div v-if="!aiReady" class="inv-note"><Icon name="settings" :size="13" /> No AI provider configured. Add a key in <strong>Settings → AI</strong> to run investigations.</div>
 
     <div class="cards">
       <div v-for="c in cards" :key="c.type" class="card" :class="{ active: activeType === c.type }">
-        <div class="card-ic">{{ c.icon }}</div>
-        <h3>{{ c.title }}</h3>
+        <div class="card-ic"><Icon :name="c.icon" :size="20" /></div>
+        <h2>{{ c.title }}</h2>
         <p>{{ c.blurb }}</p>
         <div v-if="c.type === 'query'" class="q-box">
-          <textarea
+          <textarea aria-label="SQL query to investigate"
             class="q-input"
             v-model="sql"
             spellcheck="false"
-            placeholder="Paste a SQL query, or open the Investigations hub from a query's ✨ Investigate button…"
+            placeholder="Paste a SQL query, or open the Investigations hub from a query's Investigate button…"
           />
         </div>
         <div v-else-if="c.type === 'rootCause'" class="q-box">
-          <textarea
+          <textarea aria-label="Symptom"
             class="q-input symptom"
             v-model="question"
             spellcheck="false"
@@ -150,7 +151,7 @@ function applyInit(): void {
 
     <section v-if="running || report || error" class="report">
       <div v-if="running" class="state">Gathering evidence and analyzing…</div>
-      <div v-else-if="error" class="state err">{{ error }}</div>
+      <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
       <template v-else-if="report">
         <div class="report-top">
           <div v-if="report.score != null" class="score" :class="scoreColor(report.score)">
@@ -176,7 +177,7 @@ function applyInit(): void {
             </div>
           </article>
         </div>
-        <p class="disclaimer">⚠ Advisory only — DataDock gathered this read-only and changed nothing. Review every command before running it.</p>
+        <p class="disclaimer"><Icon name="warn" :size="12" /> Advisory only — DataDock gathered this read-only and changed nothing. Review every command before running it.</p>
       </template>
     </section>
   </div>
@@ -190,13 +191,13 @@ function applyInit(): void {
 }
 .inv-head h1 {
   font-family: var(--font-display, var(--font));
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   margin: 0 0 6px;
 }
 .sub {
   color: var(--text-dim);
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   max-width: 80ch;
   margin: 0;
   line-height: 1.5;
@@ -205,9 +206,9 @@ function applyInit(): void {
   margin: 16px 0 0;
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(240, 180, 41, 0.12);
-  color: var(--warn);
-  font-size: 13px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: var(--fs-base);
 }
 .cards {
   display: grid;
@@ -236,7 +237,7 @@ function applyInit(): void {
   position: absolute;
   top: 12px;
   right: 12px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-faint);
@@ -245,15 +246,15 @@ function applyInit(): void {
   padding: 1px 6px;
 }
 .card-ic {
-  font-size: 22px;
+  font-size: var(--fs-xl);
 }
-.card h3 {
-  font-size: 14.5px;
+.card h2 {
+  font-size: var(--fs-md);
   font-weight: 600;
   margin: 0;
 }
 .card p {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   line-height: 1.5;
   margin: 0;
@@ -267,7 +268,7 @@ function applyInit(): void {
   min-height: 64px;
   resize: vertical;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--border-strong);
   background: var(--bg-input);
   color: var(--text);
@@ -276,18 +277,18 @@ function applyInit(): void {
 }
 .q-input.symptom {
   font-family: var(--font);
-  font-size: 13px;
+  font-size: var(--fs-base);
   min-height: 52px;
 }
 .btn.run {
   align-self: flex-start;
   margin-top: 4px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   padding: 6px 14px;
   border-radius: 8px;
   border: 1px solid var(--accent);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .btn.run:disabled {
@@ -301,10 +302,10 @@ function applyInit(): void {
 }
 .state {
   color: var(--text-dim);
-  font-size: 13.5px;
+  font-size: var(--fs-base);
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .report-top {
   display: flex;
@@ -322,14 +323,14 @@ function applyInit(): void {
   border-radius: 14px;
   border: 1px solid var(--border);
 }
-.score.green { border-color: rgba(74, 222, 128, 0.5); color: var(--ok); }
-.score.amber { border-color: rgba(240, 180, 41, 0.5); color: var(--warn); }
-.score.red { border-color: rgba(248, 113, 113, 0.5); color: var(--danger); }
-.score-num { font-size: 38px; font-weight: 800; line-height: 1; }
-.score-den { font-size: 12px; color: var(--text-faint); }
-.score-rating { margin-top: 6px; font-size: 12.5px; font-weight: 700; }
+.score.green { border-color: var(--ok-line); color: var(--ok-text); }
+.score.amber { border-color: var(--warn-line); color: var(--warn-text); }
+.score.red { border-color: var(--danger-line); color: var(--danger-text); }
+.score-num { font-size: var(--fs-3xl); font-weight: 800; line-height: 1; }
+.score-den { font-size: var(--fs-sm); color: var(--text-faint); }
+.score-rating { margin-top: 6px; font-size: var(--fs-base); font-weight: 700; }
 .summary {
-  font-size: 14px;
+  font-size: var(--fs-md);
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
@@ -343,16 +344,10 @@ function applyInit(): void {
 }
 .finding {
   border: 1px solid var(--border);
-  border-left: 3px solid var(--border-strong);
   border-radius: 10px;
   padding: 12px 14px;
   background: var(--bg-elevated);
 }
-.finding.critical { border-left-color: var(--danger); }
-.finding.high { border-left-color: #fb923c; }
-.finding.medium { border-left-color: var(--warn); }
-.finding.low { border-left-color: var(--accent); }
-.finding.info { border-left-color: var(--border-strong); }
 .f-head {
   display: flex;
   align-items: center;
@@ -360,31 +355,30 @@ function applyInit(): void {
 }
 .f-title {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   flex: 1;
 }
 .f-impact {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   font-family: var(--mono);
 }
 .sev {
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 7px;
   border-radius: 5px;
-  color: #0a0f1c;
 }
-.sev.critical { background: var(--danger); }
-.sev.high { background: #fb923c; }
-.sev.medium { background: var(--warn); }
-.sev.low { background: var(--accent); }
+.sev.critical { background: var(--danger-soft); color: var(--danger-text); }
+.sev.high { background: color-mix(in srgb, var(--hue-orange) 18%, transparent); color: var(--hue-orange); }
+.sev.medium { background: var(--warn-soft); color: var(--warn-text); }
+.sev.low { background: var(--accent-soft); color: var(--accent-text); }
 .sev.info { background: var(--border-strong); color: var(--text); }
 .f-detail {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-dim);
   white-space: pre-wrap;
@@ -396,8 +390,8 @@ function applyInit(): void {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-family: var(--mono);
-  font-size: 12px;
-  color: #9be3d6;
+  font-size: var(--fs-sm);
+  color: var(--syn-string);
   overflow-x: auto;
   white-space: pre-wrap;
 }
@@ -407,7 +401,7 @@ function applyInit(): void {
   margin-top: 10px;
 }
 .btn-ghost {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-strong);
@@ -420,7 +414,7 @@ function applyInit(): void {
 }
 .disclaimer {
   margin-top: 18px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 </style>

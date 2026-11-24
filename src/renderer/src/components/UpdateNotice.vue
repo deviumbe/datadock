@@ -10,11 +10,11 @@ const show = computed(() =>
 
 <template>
   <Transition name="toast">
-    <div v-if="show" class="update-toast" :class="u.status">
+    <div v-if="show" role="status" class="update-toast" :class="u.status">
       <!-- available -->
       <template v-if="u.status === 'available'">
         <div class="body">
-          <div class="title">✨ Update available</div>
+          <div class="title">Update available</div>
           <div class="sub">DataDock {{ u.version }} is ready to install.</div>
         </div>
         <div class="actions">
@@ -35,7 +35,7 @@ const show = computed(() =>
       <!-- ready -->
       <template v-else-if="u.status === 'ready'">
         <div class="body">
-          <div class="title">✅ Update ready</div>
+          <div class="title">Update ready</div>
           <div class="sub">Restart to install DataDock {{ u.version }}.</div>
         </div>
         <div class="actions">
@@ -90,12 +90,12 @@ const show = computed(() =>
   min-width: 0;
 }
 .title {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text);
 }
 .sub {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-top: 2px;
 }
@@ -106,7 +106,7 @@ const show = computed(() =>
   flex-shrink: 0;
 }
 .pct {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -125,7 +125,7 @@ const show = computed(() =>
 }
 .btn-ghost,
 .btn-primary {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   white-space: nowrap;
@@ -140,7 +140,7 @@ const show = computed(() =>
   border-color: var(--border-strong);
 }
 .btn-primary {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
 }

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 import Modal from './Modal.vue'
 import type { TableInfo } from '@shared/types'
 import { useWorkspace } from '../stores/workspace'
 import { useTasks } from '../stores/tasks'
+
+const uid = useId()
 
 const props = defineProps<{ connId: string; tables: TableInfo[] }>()
 const emit = defineEmits<{ close: []; done: [] }>()
@@ -83,8 +85,8 @@ async function runCsv(): Promise<void> {
     <div v-else class="pane">
       <p class="desc">Insert rows from a <code>.csv</code> (with a header row) into a table.</p>
       <div class="field">
-        <label>Target table</label>
-        <select class="select" v-model="targetTable">
+        <label :for="`${uid}-target-table`">Target table</label>
+        <select :id="`${uid}-target-table`" class="select" v-model="targetTable">
           <option v-for="t in tables" :key="t.name" :value="t.name">{{ t.name }}</option>
         </select>
       </div>
@@ -94,7 +96,7 @@ async function runCsv(): Promise<void> {
     </div>
 
     <div v-if="message" class="msg">{{ message }}</div>
-    <div v-if="errors.length" class="errors">
+    <div v-if="errors.length" class="errors" role="alert">
       <strong>{{ errors.length }} error(s):</strong>
       <div v-for="(e, i) in errors.slice(0, 20)" :key="i" class="err">{{ e }}</div>
     </div>
@@ -122,7 +124,7 @@ async function runCsv(): Promise<void> {
 .seg button.on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .pane {
   display: flex;
@@ -130,7 +132,7 @@ async function runCsv(): Promise<void> {
 }
 .desc {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-bottom: 14px;
   line-height: 1.5;
 }
@@ -144,16 +146,16 @@ async function runCsv(): Promise<void> {
   margin-top: 14px;
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  background: rgba(63, 207, 142, 0.13);
-  color: var(--ok);
-  font-size: 12px;
+  background: var(--ok-soft);
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
 }
 .errors {
   margin-top: 12px;
   max-height: 180px;
   overflow-y: auto;
-  font-size: 11px;
-  color: var(--danger);
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
 }
 .err {
   font-family: var(--mono);

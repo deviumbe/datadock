@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import MetricIcon from './MetricIcon.vue'
+import Icon from './Icon.vue'
+import { METRIC_ICONS, metricIconName } from '../lib/metricIcons'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import type { AnalyticsDataset, AnalyticsMetric, Aggregation, MetricFormat } from '@shared/types'
 import { useAnalytics } from '../stores/analytics'
@@ -18,7 +21,6 @@ const analytics = useAnalytics()
 
 const AGGS: Aggregation[] = ['count', 'sum', 'avg', 'min', 'max']
 const STYLES: MetricFormat['style'][] = ['plain', 'currency', 'percent']
-const ICONS = ['💰', '📈', '📉', '🛒', '👥', '📦', '⭐', '⚡', '🔥', '✅', '⏱️', '🌍']
 
 const name = ref(props.editing?.name ?? '')
 const datasetId = ref(props.editing?.datasetId ?? props.datasets[0]?.id ?? '')
@@ -182,15 +184,17 @@ async function save(): Promise<void> {
         <div class="fld">
           <span>Icon</span>
           <div class="icons">
-            <button type="button" class="icon-opt" :class="{ on: !icon }" title="No icon" @click="icon = ''">∅</button>
+            <button type="button" class="icon-opt" :class="{ on: !icon }" title="No icon" @click="icon = ''"><Icon name="ban" :size="15" /></button>
             <button
-              v-for="ic in ICONS"
+              v-for="ic in METRIC_ICONS"
               :key="ic"
               type="button"
               class="icon-opt"
-              :class="{ on: icon === ic }"
+              :class="{ on: metricIconName(icon) === ic }"
+              :title="ic"
+              :aria-pressed="metricIconName(icon) === ic"
               @click="icon = ic"
-            >{{ ic }}</button>
+            ><Icon :name="ic" :size="15" /></button>
           </div>
         </div>
       </div>
@@ -199,10 +203,10 @@ async function save(): Promise<void> {
         <div class="preview-head">Preview</div>
         <div class="preview-body">
           <div v-if="loading" class="pv-state">Running…</div>
-          <div v-else-if="previewError" class="pv-state err">{{ previewError }}</div>
+          <div v-else-if="previewError" class="pv-state err" role="alert">{{ previewError }}</div>
           <div v-else class="kpi">
             <div class="kpi-top">
-              <span v-if="icon" class="kpi-chip">{{ icon }}</span>
+              <span v-if="icon" class="kpi-chip"><MetricIcon :value="icon" /></span>
               <span class="kpi-label">{{ name || 'Value' }}</span>
             </div>
             <span class="kpi-value">{{ previewText }}</span>
@@ -236,7 +240,7 @@ async function save(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   flex: 1;
 }
@@ -248,7 +252,7 @@ async function save(): Promise<void> {
   gap: 10px;
 }
 .input {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 7px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -270,7 +274,7 @@ async function save(): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--fs-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -281,8 +285,8 @@ async function save(): Promise<void> {
   background: var(--accent-soft);
 }
 .warn {
-  font-size: 11.5px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
   margin: 0;
 }
 .preview {
@@ -295,7 +299,7 @@ async function save(): Promise<void> {
 }
 .preview-head {
   padding: 7px 12px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-faint);
@@ -311,7 +315,7 @@ async function save(): Promise<void> {
   min-height: 200px;
 }
 .pv-state.err {
-  color: var(--danger);
+  color: var(--danger-text);
   padding: 16px;
   text-align: center;
 }
@@ -333,13 +337,13 @@ async function save(): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 19px;
+  font-size: var(--fs-xl);
   line-height: 1;
   border-radius: 9px;
   background: var(--accent-soft);
 }
 .kpi-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -347,7 +351,7 @@ async function save(): Promise<void> {
 }
 .kpi-value {
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: var(--fs-3xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);

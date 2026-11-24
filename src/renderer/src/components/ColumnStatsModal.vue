@@ -53,7 +53,7 @@ onMounted(async () => {
 <template>
   <Modal :title="`Column stats · ${column}`" @close="emit('close')">
     <p v-if="loading" class="state">Profiling…</p>
-    <p v-else-if="error" class="state err">{{ error }}</p>
+    <p v-else-if="error" class="state err" role="alert">{{ error }}</p>
     <div v-else-if="stats" class="grid">
       <div class="stat"><span class="k">Rows</span><span class="v">{{ stats.total.toLocaleString() }}</span></div>
       <div class="stat"><span class="k">Distinct</span><span class="v">{{ stats.distinct.toLocaleString() }}</span></div>
@@ -67,14 +67,14 @@ onMounted(async () => {
 
 <style scoped>
 .state {
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 6px 0;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   white-space: pre-wrap;
 }
 .grid {
@@ -95,18 +95,18 @@ onMounted(async () => {
   grid-column: 1 / -1;
 }
 .k {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
 }
 .v {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .v.mono {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 500;
   word-break: break-word;
 }

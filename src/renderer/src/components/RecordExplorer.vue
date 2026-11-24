@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, computed, watch } from 'vue'
 import type { ColumnMeta, ErModel, ErRelation } from '@shared/types'
 import { useTabs, type Tab, type ExplorerFocus } from '../stores/tabs'
@@ -181,7 +182,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
 
     <div class="body">
       <div v-if="loading" class="state">Loading record…</div>
-      <div v-else-if="error" class="state err">{{ error }}</div>
+      <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
 
       <template v-else-if="row">
         <div class="rec-head">
@@ -219,8 +220,8 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
         <div v-if="incoming.length" class="related">
           <h3>Referenced by</h3>
           <div v-for="(rel, i) in incoming" :key="i" class="rel">
-            <button class="rel-head" @click="toggleChild(i, rel)">
-              <span class="caret" :class="{ open: children[i]?.open }">▸</span>
+            <button class="rel-head" :aria-expanded="!!children[i]?.open" @click="toggleChild(i, rel)">
+              <span class="caret" :class="{ open: children[i]?.open }"><Icon name="chevronRight" :size="11" /></span>
               <span class="rel-name">{{ rel.fromTable }}</span>
               <span class="rel-via">via {{ rel.fromColumn }}</span>
               <span v-if="children[i]?.loaded" class="rel-count">
@@ -238,7 +239,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
                 @click="openChild(rel, children[i].cols, cr)"
               >
                 <span class="child-label">{{ recordLabel(rel.fromTable, children[i].cols, cr) }}</span>
-                <span class="child-go">→</span>
+                <span class="child-go"><Icon name="arrowRight" :size="13" /></span>
               </button>
             </div>
           </div>
@@ -266,7 +267,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   min-height: 38px;
 }
 .crumb {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding: 3px 8px;
   border-radius: var(--radius-sm);
@@ -294,17 +295,17 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
 }
 .state {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 24px 0;
   text-align: center;
 }
 .state.sm {
   padding: 8px 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-align: left;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .rec-head {
   display: flex;
@@ -313,14 +314,14 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   margin-bottom: 14px;
 }
 .rec-table {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 .rec-label {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -340,7 +341,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
 .f-value {
   background: var(--bg-panel);
   padding: 8px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .f-label {
   color: var(--text-dim);
@@ -353,10 +354,10 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   color: var(--text);
 }
 .fk-tag {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -371,7 +372,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
 }
 .fk-link {
   font-family: var(--mono);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .fk-link:hover {
@@ -381,7 +382,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   margin-top: 22px;
 }
 .related h3 {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-faint);
@@ -399,7 +400,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   gap: 8px;
   width: 100%;
   padding: 9px 12px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
   background: var(--bg-panel);
 }
@@ -419,11 +420,11 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
 }
 .rel-via {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 .rel-count {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -444,7 +445,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   gap: 10px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   text-align: left;
 }
@@ -458,7 +459,7 @@ async function toggleChild(i: number, rel: ErRelation): Promise<void> {
   white-space: nowrap;
 }
 .child-go {
-  color: var(--accent);
+  color: var(--accent-text);
   flex: none;
 }
 </style>

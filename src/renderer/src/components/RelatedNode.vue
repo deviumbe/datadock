@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, computed, watch } from 'vue'
 import type { ColumnMeta, ErModel, ErRelation } from '@shared/types'
 // Self-import: this component renders itself for nested (deeper) records.
@@ -168,15 +169,15 @@ watch(
 
 <template>
   <div class="node" :class="{ root: depth === 0 }">
-    <button class="node-head" @click="toggle">
-      <span class="caret" :class="{ open }">▸</span>
+    <button class="node-head" :aria-expanded="open" @click="toggle">
+      <span class="caret" :class="{ open }"><Icon name="chevronRight" :size="11" /></span>
       <span class="node-table">{{ table }}</span>
       <span class="node-label">{{ label ?? recordLabel(table, columns, row ?? []) }}</span>
     </button>
 
     <div v-if="open" class="node-body">
       <div v-if="loading" class="state">Loading…</div>
-      <div v-else-if="error" class="state err">{{ error }}</div>
+      <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
 
       <template v-else-if="row">
         <!-- Parents: FK columns pointing at other records -->
@@ -188,8 +189,8 @@ watch(
               class="parent"
             >
               <template v-if="canDescend && !isCycle(`${outgoing.get(col.name)!.toTable}#${String(cellByName(columns, row, col.name))}`)">
-                <button class="rec-toggle" @click="toggleExpand(`p:${col.name}`)">
-                  <span class="caret sm" :class="{ open: expanded[`p:${col.name}`] }">▸</span>
+                <button class="rec-toggle" :aria-expanded="!!expanded[`p:${col.name}`]" @click="toggleExpand(`p:${col.name}`)">
+                  <span class="caret sm" :class="{ open: expanded[`p:${col.name}`] }"><Icon name="chevronRight" :size="11" /></span>
                   <span class="via">{{ col.name }} →</span>
                   <span class="to">{{ outgoing.get(col.name)!.toTable }} #{{ display(cellByName(columns, row, col.name)) }}</span>
                 </button>
@@ -218,8 +219,8 @@ watch(
         <div v-if="groups.length" class="sect">
           <h4>Referenced by</h4>
           <div v-for="(g, gi) in groups" :key="gi" class="group">
-            <button class="group-head" @click="toggleExpand(`g:${gi}`)">
-              <span class="caret sm" :class="{ open: expanded[`g:${gi}`] }">▸</span>
+            <button class="group-head" :aria-expanded="!!expanded[`g:${gi}`]" @click="toggleExpand(`g:${gi}`)">
+              <span class="caret sm" :class="{ open: expanded[`g:${gi}`] }"><Icon name="chevronRight" :size="11" /></span>
               <span class="grp-name">{{ g.rel.fromTable }}</span>
               <span class="grp-via">via {{ g.rel.fromColumn }}</span>
               <span v-if="g.loading" class="grp-count muted">…</span>
@@ -270,7 +271,7 @@ watch(
   gap: 8px;
   width: 100%;
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
   text-align: left;
   border-radius: var(--radius-sm);
@@ -279,7 +280,7 @@ watch(
   background: var(--bg-hover);
 }
 .node.root > .node-head {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   padding: 8px 10px;
 }
@@ -290,16 +291,16 @@ watch(
   flex: none;
 }
 .caret.sm {
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .caret.open {
   transform: rotate(90deg);
 }
 .node-table {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   flex: none;
 }
@@ -314,21 +315,21 @@ watch(
 }
 .state {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 10px 4px;
 }
 .state.sm {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .sect {
   margin: 4px 0 8px;
 }
 .sect h4 {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-faint);
@@ -345,7 +346,7 @@ watch(
   gap: 7px;
   width: 100%;
   padding: 4px 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   text-align: left;
   border-radius: var(--radius-sm);
@@ -356,19 +357,19 @@ watch(
 }
 .via {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   flex: none;
 }
 .to {
   font-family: var(--mono);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .parent-flat,
 .child-flat {
   display: inline-flex;
   gap: 7px;
   padding: 4px 8px 4px 23px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-family: var(--mono);
   color: var(--text-dim);
 }
@@ -377,11 +378,11 @@ watch(
 }
 .grp-via {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 .grp-count {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   background: var(--bg-elevated);
   border: 1px solid var(--border);

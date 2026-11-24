@@ -134,7 +134,7 @@ function openTable(table: string): void {
     <header class="search-head">
       <div class="searchbox">
         <span class="ic"><Icon name="search" :size="15" /></span>
-        <input
+        <input aria-label="Search value"
           v-model="term"
           class="sinput"
           placeholder="Find any value across every table…"
@@ -148,7 +148,7 @@ function openTable(table: string): void {
           title="Choose which tables to skip when searching"
           @click="toggleManage"
         >
-          ⛔ Exclude<span v-if="excluded.size" class="excl-badge">{{ excluded.size }}</span>
+          <Icon name="ban" :size="13" /> Exclude<span v-if="excluded.size" class="excl-badge">{{ excluded.size }}</span>
         </button>
         <button v-if="running" class="btn btn-ghost" @click="stop">Stop</button>
         <button v-else class="btn btn-primary" :disabled="!term.trim() || !isSql" @click="search">Search</button>
@@ -156,7 +156,7 @@ function openTable(table: string): void {
 
       <div v-if="manageOpen" class="manage">
         <div class="manage-top">
-          <input v-model="tableFilter" class="manage-filter" placeholder="Filter tables…" />
+          <input aria-label="Filter tables" v-model="tableFilter" class="manage-filter" placeholder="Filter tables…" />
           <button v-if="excluded.size" class="btn btn-ghost sm" @click="clearExcluded">Clear ({{ excluded.size }})</button>
         </div>
         <p class="manage-hint">Unchecked tables are skipped during search — handy for large, irrelevant tables.</p>
@@ -179,7 +179,7 @@ function openTable(table: string): void {
 
     <div class="body">
       <div v-if="!isSql" class="state">Universal search isn't available for {{ driver }}.</div>
-      <div v-else-if="error" class="state err">{{ error }}</div>
+      <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
       <div v-else-if="!scanned" class="state">
         <div class="big"><Icon name="search" :size="34" /></div>
         <p>Type a value and hit Search to find it anywhere in this database — every text column of every table is scanned.</p>
@@ -188,11 +188,11 @@ function openTable(table: string): void {
 
       <div v-for="(h, i) in hits" :key="i" class="hit">
         <div class="hit-head" @click="h.open = !h.open">
-          <span class="caret" :class="{ open: h.open }">▸</span>
+          <button class="caret" :class="{ open: h.open }" :title="`Toggle ${h.table}`" :aria-expanded="h.open" @click.stop="h.open = !h.open"><Icon name="chevronRight" :size="11" /></button>
           <strong>{{ h.table }}</strong>
           <span class="hcount">{{ h.result.rows.length }}{{ h.result.rows.length === 20 ? '+' : '' }}</span>
           <div class="spacer" />
-          <button class="btn btn-ghost sm" @click.stop="openTable(h.table)">Open table →</button>
+          <button class="btn btn-ghost sm" @click.stop="openTable(h.table)">Open table</button>
         </div>
         <div v-if="h.open" class="hit-grid">
           <ResultsGrid :result="h.result" />
@@ -221,12 +221,12 @@ function openTable(table: string): void {
   gap: 8px;
 }
 .ic {
-  font-size: 16px;
+  font-size: var(--fs-md);
   color: var(--text-faint);
 }
 .sinput {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--fs-md);
   padding: 9px 12px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -244,7 +244,7 @@ function openTable(table: string): void {
 }
 .status {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .excl-btn {
@@ -254,13 +254,13 @@ function openTable(table: string): void {
   white-space: nowrap;
 }
 .excl-btn.active {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .excl-badge {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border-radius: 999px;
   padding: 0 6px;
 }
@@ -278,7 +278,7 @@ function openTable(table: string): void {
 }
 .manage-filter {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 6px 10px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -291,7 +291,7 @@ function openTable(table: string): void {
 }
 .manage-hint {
   margin: 8px 2px 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .manage-list {
@@ -307,7 +307,7 @@ function openTable(table: string): void {
   gap: 8px;
   padding: 5px 6px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 .trow:hover {
@@ -340,15 +340,15 @@ function openTable(table: string): void {
   margin: auto;
   text-align: center;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
   max-width: 440px;
   padding: 50px 20px;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .big {
-  font-size: 40px;
+  font-size: var(--fs-3xl);
   color: var(--text-faint);
   margin-bottom: 10px;
 }
@@ -370,17 +370,21 @@ function openTable(table: string): void {
   background: var(--bg-hover);
 }
 .caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--text-faint);
-  display: inline-block;
   transition: transform 0.12s ease;
 }
 .caret.open {
   transform: rotate(90deg);
 }
 .hcount {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border-radius: 999px;
   padding: 1px 8px;
   font-weight: 600;
@@ -390,7 +394,7 @@ function openTable(table: string): void {
 }
 .btn.sm {
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 .hit-grid {
   max-height: 320px;

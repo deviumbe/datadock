@@ -108,7 +108,7 @@ async function run(): Promise<void> {
         Type <code>{{ database }}</code> to confirm
       </label>
       <input
-        v-model="confirmText"
+        v-model="confirmText" aria-label="Type the name to confirm"
         class="input"
         spellcheck="false"
         autocomplete="off"
@@ -118,7 +118,7 @@ async function run(): Promise<void> {
       <p class="warn">This cannot be undone.</p>
     </template>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <div v-if="error" class="error" role="alert">{{ error }}</div>
 
     <template #footer>
       <button class="btn" :disabled="busy" @click="emit('close')">Cancel</button>
@@ -131,7 +131,7 @@ async function run(): Promise<void> {
 
 <style scoped>
 .intro {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   line-height: 1.55;
   margin-bottom: 14px;
@@ -141,11 +141,11 @@ async function run(): Promise<void> {
   padding: 8px 11px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--danger);
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
 }
 .muted {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin-bottom: 14px;
 }
@@ -168,7 +168,7 @@ async function run(): Promise<void> {
   background: none;
   border: none;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   text-align: left;
   cursor: pointer;
 }
@@ -189,14 +189,14 @@ async function run(): Promise<void> {
 }
 .name {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding: 1px 0;
   word-break: break-all;
 }
 .confirm-lbl {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
@@ -213,24 +213,24 @@ async function run(): Promise<void> {
 }
 .warn {
   margin-top: 10px;
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
 }
 .error {
   margin-top: 12px;
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
   font-family: var(--mono);
   word-break: break-word;
 }
 .drop-go {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-weight: 600;
 }
 .drop-go:hover:not(:disabled) {
-  background: #d6535c;
+  background: var(--danger-hover);
 }
 .drop-go:disabled {
   opacity: 0.5;

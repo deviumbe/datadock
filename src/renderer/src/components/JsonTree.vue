@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 // A small collapsible JSON tree. Self-referential: renders nested objects/arrays
 // recursively. Auto-expands the first couple of levels for quick scanning.
 import { ref, computed } from 'vue'
@@ -34,8 +35,8 @@ function primitive(v: unknown): string {
   <div class="node">
     <!-- object / array -->
     <template v-if="isContainer">
-      <div class="row toggle" @click="open = !open">
-        <span class="caret">{{ open ? '▾' : '▸' }}</span>
+      <div v-press class="row toggle" :aria-expanded="open" @click="open = !open">
+        <span class="caret"><Icon :name="open ? 'chevronDown' : 'chevronRight'" :size="11" /></span>
         <span v-if="name !== undefined" class="key">{{ name }}</span>
         <span class="muted">{{ summary }}</span>
       </div>
@@ -55,7 +56,7 @@ function primitive(v: unknown): string {
 <style scoped>
 .node {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.7;
 }
 .children {
@@ -82,7 +83,7 @@ function primitive(v: unknown): string {
   flex: none;
 }
 .key {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .key::after {
   content: ':';
@@ -92,13 +93,13 @@ function primitive(v: unknown): string {
   color: var(--text-faint);
 }
 .val.string {
-  color: #a5d6a7;
+  color: var(--syn-string);
 }
 .val.number {
-  color: #f0b429;
+  color: var(--syn-number);
 }
 .val.boolean {
-  color: #f0b429;
+  color: var(--syn-number);
 }
 .val.null {
   color: var(--text-faint);

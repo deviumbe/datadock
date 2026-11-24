@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MetricIcon from './MetricIcon.vue'
 import { ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import type { AnalyticsDataset, AnalyticsMetric } from '@shared/types'
@@ -41,7 +42,7 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
 <template>
   <div class="mcard">
     <div class="m-top">
-      <span v-if="metric.icon" class="m-chip">{{ metric.icon }}</span>
+      <span v-if="metric.icon" class="m-chip"><MetricIcon :value="metric.icon" /></span>
       <span class="m-label">{{ metric.name }}</span>
       <div class="m-actions">
         <button class="ic" title="Edit" @click="emit('edit', metric)"><Icon name="pencil" :size="14" /></button>
@@ -69,6 +70,7 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
 }
+.mcard:focus-within .m-actions,
 .mcard:hover .m-actions {
   opacity: 1;
 }
@@ -85,13 +87,13 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1;
   border-radius: 9px;
   background: var(--accent-soft);
 }
 .m-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -102,15 +104,15 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
 }
 .m-value {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1.05;
 }
 .m-value.err {
-  font-size: 14px;
-  color: var(--danger);
+  font-size: var(--fs-md);
+  color: var(--danger-text);
 }
 .m-actions {
   margin-left: auto;
@@ -124,6 +126,8 @@ watch(() => [props.metric.updatedAt, props.dataset?.id], load, { immediate: true
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
+  min-width: 26px;
+  min-height: 24px;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
 }

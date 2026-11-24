@@ -73,14 +73,15 @@ function apply(): void {
       <input
         type="checkbox"
         class="toggle"
+        aria-label="Filter enabled"
         :checked="!f.disabled"
         :title="f.disabled ? 'Filter disabled — click to apply it' : 'Click to disable this filter without removing it'"
         @change="toggle(i)"
       />
-      <select class="select sm" v-model="f.column" @change="apply">
+      <select class="select sm" v-model="f.column" aria-label="Filter column" @change="apply">
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
       </select>
-      <select class="select sm op" v-model="f.op" @change="apply">
+      <select class="select sm op" aria-label="Filter operator" v-model="f.op" @change="apply">
         <optgroup v-for="g in OP_GROUPS" :key="g.label" :label="g.label">
           <option v-for="op in g.ops" :key="op" :value="op">{{ OP_LABELS[op] }}</option>
         </optgroup>
@@ -89,13 +90,14 @@ function apply(): void {
         <input
           class="input sm"
           v-model="f.value"
+          aria-label="Filter value"
           :placeholder="placeholderFor(f.op)"
           @keydown.enter="apply"
           @blur="apply"
         />
         <template v-if="isRange(f.op)">
           <span class="and">and</span>
-          <input
+          <input aria-label="Filter upper value"
             class="input sm"
             v-model="f.value2"
             placeholder="value"
@@ -104,7 +106,7 @@ function apply(): void {
           />
         </template>
       </template>
-      <button class="btn-ghost rm" @click="remove(i)"><Icon name="x" :size="13" /></button>
+      <button class="btn-ghost rm" title="Remove filter" @click="remove(i)"><Icon name="x" :size="13" /></button>
     </div>
     <span v-if="local.length === 0" class="hint">No filters</span>
   </div>
@@ -130,7 +132,7 @@ function apply(): void {
 }
 .add {
   padding: 4px 9px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   flex-shrink: 0;
 }
 .filter {
@@ -156,7 +158,7 @@ function apply(): void {
 }
 .sm {
   padding: 3px 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .select.sm {
   max-width: 130px;
@@ -169,7 +171,7 @@ function apply(): void {
 }
 .and {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 0 1px;
 }
 .rm {
@@ -182,11 +184,11 @@ function apply(): void {
   border-radius: 4px;
 }
 .rm:hover {
-  color: var(--danger);
+  color: var(--danger-text);
   background: var(--bg-hover);
 }
 .hint {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 </style>

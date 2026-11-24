@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useTabs } from '../stores/tabs'
 import { useUi } from '../stores/ui'
 import Icon from './Icon.vue'
+import { useDialog } from '../lib/dialog'
 import { isConnectionOpen, supportsDropAllObjects } from '@shared/types'
 
 const emit = defineEmits<{ close: []; action: [action: string] }>()
@@ -139,7 +140,7 @@ const allItems = computed<PaletteItem[]>(() => {
       label: 'Disconnect',
       icon: 'power',
       handler: () => {
-        if (connId) void ws.disconnect(connId)
+        if (connId) void tabsStore.disconnect(connId)
       }
     },
     {
@@ -164,7 +165,7 @@ const allItems = computed<PaletteItem[]>(() => {
     },
     {
       label: 'Clone Database to…',
-      icon: '⇉',
+      icon: 'copy',
       handler: () => {
         if (connId) ui.transferOpen = true
       }
@@ -376,16 +377,15 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
-onMounted(() => {
-  inputEl.value?.focus()
-})
+const dialog = ref<HTMLElement>()
+useDialog(dialog, { onEscape: () => emit('close'), initial: ['.search-input'] })
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="palette">
       <div class="backdrop" @mousedown.self="emit('close')">
-        <div class="palette" @keydown="onKeydown">
+        <div ref="dialog" class="palette" role="dialog" aria-modal="true" aria-label="Command palette" tabindex="-1" @keydown="onKeydown">
           <div class="search-bar">
             <span class="search-icon"><Icon name="search" :size="15" /></span>
             <input
@@ -393,18 +393,26 @@ onMounted(() => {
               v-model="query"
               class="search-input"
               placeholder="Search connections, tables, actions…"
-              @keydown.esc="emit('close')"
+              role="combobox"
+              aria-label="Search connections, tables and actions"
+              aria-expanded="true"
+              aria-controls="palette-list"
+              aria-autocomplete="list"
+              :aria-activedescendant="filtered.length ? `palette-item-${selectedIndex}` : undefined"
             />
           </div>
-          <div ref="listEl" class="list">
+          <div id="palette-list" ref="listEl" class="list" role="listbox" aria-label="Results">
             <template v-if="filtered.length === 0">
-              <div class="empty">No results found.</div>
+              <div class="empty" role="status">No results for “{{ query.trim() }}”.</div>
             </template>
-            <template v-for="group in grouped" :key="group.category">
-              <div class="group-label">{{ group.category }}</div>
+            <div v-for="group in grouped" :key="group.category" role="group" :aria-label="group.category">
+              <div class="group-label" aria-hidden="true">{{ group.category }}</div>
               <div
                 v-for="{ item, globalIndex } in group.items"
+                :id="`palette-item-${globalIndex}`"
                 :key="item.id"
+                role="option"
+                :aria-selected="globalIndex === selectedIndex"
                 class="item"
                 :class="{ selected: globalIndex === selectedIndex }"
                 @mouseenter="selectedIndex = globalIndex"
@@ -413,9 +421,9 @@ onMounted(() => {
                 <span class="item-icon"><Icon :name="item.icon" :size="14" /></span>
                 <span class="item-label">{{ item.label }}</span>
                 <span v-if="item.hint" class="item-hint">{{ item.hint }}</span>
-                <span class="item-badge">{{ item.category }}</span>
+                <span class="item-badge" aria-hidden="true">{{ item.category }}</span>
               </div>
-            </template>
+            </div>
           </div>
           <div class="footer-hint">
             <span class="kbd">↑↓</span> navigate
@@ -432,7 +440,7 @@ onMounted(() => {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: flex-start;
@@ -447,7 +455,7 @@ onMounted(() => {
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -473,7 +481,7 @@ onMounted(() => {
   border: none;
   outline: none;
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-family: inherit;
 }
 .search-input::placeholder {
@@ -488,7 +496,7 @@ onMounted(() => {
 }
 .group-label {
   padding: 6px 16px 4px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -514,18 +522,18 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .item.selected .item-icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .item-label {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .item-hint {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -533,7 +541,7 @@ onMounted(() => {
   max-width: 40%;
 }
 .item-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   background: var(--bg-elevated);
   padding: 1px 7px;
@@ -544,7 +552,7 @@ onMounted(() => {
   padding: 24px 16px;
   text-align: center;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 
 /* ---- footer hint ---- */
@@ -554,12 +562,12 @@ onMounted(() => {
   gap: 8px;
   padding: 8px 16px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .kbd {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   background: var(--bg-elevated);
   padding: 1px 5px;
   border-radius: 3px;
@@ -586,5 +594,9 @@ onMounted(() => {
 }
 .palette-leave-to .palette {
   transform: scale(0.95);
+}
+.item.selected .item-hint,
+.item.selected .item-badge {
+  color: var(--text-dim);
 }
 </style>

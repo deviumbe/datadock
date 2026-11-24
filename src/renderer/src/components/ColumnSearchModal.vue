@@ -47,14 +47,14 @@ const totalColumns = computed(() =>
 
 <template>
   <Modal title="Search schema" wide @close="emit('close')">
-    <input
+    <input aria-label="Find a table or column by name"
       ref="inputEl"
       class="input search"
       v-model="term"
       placeholder="Find a table or column by name…"
     />
     <div v-if="loading" class="state">Loading schema…</div>
-    <div v-else-if="error" class="state err">{{ error }}</div>
+    <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
     <template v-else>
       <p class="hint">
         Searching {{ Object.keys(schema).length }} tables · {{ totalColumns }} columns.
@@ -83,14 +83,14 @@ const totalColumns = computed(() =>
 }
 .state {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .hint {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-bottom: 10px;
 }
 .results {
@@ -109,7 +109,7 @@ const totalColumns = computed(() =>
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   text-align: left;
 }
 .row:hover {
@@ -123,19 +123,19 @@ const totalColumns = computed(() =>
   color: var(--text-faint);
 }
 .col {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .tag {
   margin-left: auto;
   font-family: var(--font);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
 }
 .empty {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-style: italic;
 }
 </style>

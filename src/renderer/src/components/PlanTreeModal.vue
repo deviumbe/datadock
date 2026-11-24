@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { computed } from 'vue'
 import type { PlanBaseline, PlanNode } from '@shared/types'
 import Modal from './Modal.vue'
@@ -55,9 +56,10 @@ const savedWhen = computed(() =>
 
     <!-- Regression alert: this plan's cost vs the saved baseline -->
     <div v-if="verdict" class="alert" :class="verdict">
-      <span class="a-ic">{{
-        verdict === 'regressed' ? '⚠' : verdict === 'improved' ? '↓' : verdict === 'captured' ? '📍' : '✓'
-      }}</span>
+      <span class="a-ic"><Icon
+        :name="verdict === 'regressed' ? 'warn' : verdict === 'improved' ? 'trendDown' : verdict === 'captured' ? 'bookmark' : 'check'"
+        :size="15"
+      /></span>
       <span class="a-msg">
         <template v-if="verdict === 'captured'">
           Baseline captured at cost <strong>{{ fmtCost(currentCost!) }}</strong>. Future plans for
@@ -96,7 +98,7 @@ const savedWhen = computed(() =>
 <style scoped>
 .lead {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   margin-bottom: 14px;
   line-height: 1.5;
 }
@@ -107,13 +109,13 @@ const savedWhen = computed(() =>
   padding: 9px 12px;
   margin-bottom: 12px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.45;
   border: 1px solid var(--border);
 }
 .alert .a-ic {
   flex: none;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 .alert .a-msg {
   flex: 1;
@@ -123,11 +125,11 @@ const savedWhen = computed(() =>
   color: var(--text);
 }
 .alert.regressed {
-  background: rgba(248, 113, 113, 0.1);
-  border-color: rgba(248, 113, 113, 0.4);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
 }
 .alert.regressed .a-ic {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .alert.improved {
   background: var(--accent-soft);
@@ -135,14 +137,14 @@ const savedWhen = computed(() =>
 }
 .alert.improved .a-ic,
 .alert.steady .a-ic {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .alert.captured {
   background: var(--bg-elevated);
 }
 .a-btn {
   flex: none;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);

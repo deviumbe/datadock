@@ -1,6 +1,9 @@
 // Compose a self-contained HTML document for PDF/report export. Chart images are
 // embedded as data-URLs by the caller, so the resulting HTML needs no network.
 
+import { DEFAULT_ICONS } from './iconSets'
+import { metricIconName } from './metricIcons'
+
 export interface CardSnapshot {
   title: string
   type: string
@@ -21,10 +24,17 @@ function esc(s: unknown): string {
     .replace(/>/g, '&gt;')
 }
 
+function kpiIcon(stored: string): string {
+  const name = metricIconName(stored)
+  if (!name) return esc(stored)
+  const { viewBox, glyphs } = DEFAULT_ICONS
+  return `<svg width="32" height="32" viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${glyphs[name]}</svg>`
+}
+
 function cardHtml(c: CardSnapshot): string {
   let body: string
   if (c.type === 'kpi') {
-    body = `<div class="kpi">${c.icon ? `<span class="kpi-ic">${esc(c.icon)}</span>` : ''}<div><div class="kpi-label">${esc(c.title)}</div><div class="kpi-val">${esc(c.valueText ?? '—')}</div></div></div>`
+    body = `<div class="kpi">${c.icon ? `<span class="kpi-ic">${kpiIcon(c.icon)}</span>` : ''}<div><div class="kpi-label">${esc(c.title)}</div><div class="kpi-val">${esc(c.valueText ?? '—')}</div></div></div>`
   } else if (c.type === 'table') {
     const head = (c.columns ?? []).map((h) => `<th>${esc(h)}</th>`).join('')
     const rows = (c.rows ?? [])
@@ -32,7 +42,7 @@ function cardHtml(c: CardSnapshot): string {
       .join('')
     body = `<table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`
   } else if (c.image) {
-    body = `<img class="chart-img" src="${c.image}" />`
+    body = `<img class="chart-img" src="${c.image}" alt="${esc(c.title)}" />`
   } else {
     body = `<div class="muted">No preview.</div>`
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { computed } from 'vue'
 import { useTasks, progressPercent, type BgTask } from '../stores/tasks'
 import { useUi } from '../stores/ui'
@@ -23,7 +24,7 @@ const pillLabel = computed(() => {
 })
 
 function icon(t: BgTask): string {
-  return t.status === 'running' ? '' : t.status === 'done' ? '✓' : t.status === 'canceled' ? '⊘' : '✕'
+  return t.status === 'done' ? 'check' : t.status === 'canceled' ? 'ban' : 'warn'
 }
 </script>
 
@@ -39,12 +40,12 @@ function icon(t: BgTask): string {
           <div v-for="t in tasks.tasks" :key="t.id" class="item" :class="t.status">
             <div class="irow">
               <span class="badge" :class="t.status">
-                <span v-if="t.status === 'running'" class="mini-spin" />
-                <span v-else>{{ icon(t) }}</span>
+                <span v-if="t.status === 'running'" class="mini-spin" data-busy />
+                <Icon v-else :name="icon(t)" :size="13" />
               </span>
               <span class="ititle">{{ t.title }}</span>
               <button v-if="t.status === 'running'" class="link danger" @click="tasks.cancel(t.id)">Cancel</button>
-              <button v-else class="x" title="Dismiss" @click="tasks.dismiss(t.id)">✕</button>
+              <button v-else class="x" title="Dismiss" @click="tasks.dismiss(t.id)"><Icon name="x" :size="12" /></button>
             </div>
             <ProgressBar v-if="t.status === 'running'" :progress="t.progress" class="ipb" />
             <div v-else-if="t.message" class="imsg" :class="{ err: t.status === 'error' }">{{ t.message }}</div>
@@ -56,12 +57,12 @@ function icon(t: BgTask): string {
       </div>
     </Transition>
 
-    <button class="pill" :class="{ active: tasks.hasActive }" @click="ui.tasksOpen = !ui.tasksOpen">
-      <span v-if="tasks.hasActive" class="spin" />
-      <span v-else class="dot">●</span>
+    <button class="pill" :aria-expanded="ui.tasksOpen" :class="{ active: tasks.hasActive }" @click="ui.tasksOpen = !ui.tasksOpen">
+      <span v-if="tasks.hasActive" class="spin" data-busy />
+      <span v-else class="dot"><Icon name="check" :size="13" /></span>
       <span class="plabel">{{ pillLabel }}</span>
-      <span class="caret">{{ ui.tasksOpen ? '▾' : '▴' }}</span>
-      <span v-if="lead" class="pbar" :class="{ indet: leadPct === null }">
+      <span class="caret"><Icon :name="ui.tasksOpen ? 'chevronDown' : 'chevronUp'" :size="12" /></span>
+      <span v-if="lead" class="pbar" :data-busy="leadPct === null || undefined" :class="{ indet: leadPct === null }">
         <span :style="leadPct !== null ? { width: leadPct + '%' } : undefined" />
       </span>
     </button>
@@ -89,7 +90,7 @@ function icon(t: BgTask): string {
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-modal);
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   max-width: 340px;
   position: relative;
   overflow: hidden;
@@ -130,12 +131,12 @@ function icon(t: BgTask): string {
   white-space: nowrap;
 }
 .dot {
-  color: var(--ok);
-  font-size: 9px;
+  color: var(--ok-text);
+  font-size: var(--fs-xs);
 }
 .caret {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .spin,
 .mini-spin {
@@ -148,12 +149,12 @@ function icon(t: BgTask): string {
 .spin {
   width: 12px;
   height: 12px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .mini-spin {
   width: 10px;
   height: 10px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 @keyframes spin {
   to {
@@ -177,18 +178,18 @@ function icon(t: BgTask): string {
   border-bottom: 1px solid var(--border);
 }
 .ptitle {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 .link {
   background: none;
   border: none;
-  color: var(--accent);
-  font-size: 11px;
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 .link.danger {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .item {
   padding: 10px 14px;
@@ -207,20 +208,20 @@ function icon(t: BgTask): string {
   display: flex;
   justify-content: center;
   flex: none;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .badge.done {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .badge.error {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .badge.canceled {
   color: var(--text-faint);
 }
 .ititle {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -230,24 +231,29 @@ function icon(t: BgTask): string {
   border: none;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
 }
 .ipb {
   margin-top: 8px;
 }
 .imsg {
   margin-top: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   word-break: break-word;
 }
 .imsg.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .ierrs {
   margin-top: 4px;
-  font-size: 11px;
-  color: var(--danger);
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
   font-family: var(--mono);
   word-break: break-word;
 }

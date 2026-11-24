@@ -20,7 +20,7 @@ function save(): void {
         <Icon name="note" :size="13" /> A private note about this table — what it's for, gotchas,
         anything worth remembering. Stored locally on this machine only.
       </p>
-      <textarea
+      <textarea aria-label="Table note"
         v-model="text"
         class="input area"
         rows="6"
@@ -47,14 +47,14 @@ function save(): void {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--text-dim);
 }
 .hint :deep(.dd-icon) {
   margin-top: 1px;
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .area {
   width: 100%;

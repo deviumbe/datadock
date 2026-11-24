@@ -1,8 +1,27 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { BarChart, LineChart, PieChart } from 'echarts/charts'
+import {
+  GridComponent,
+  LegendComponent,
+  LegendScrollComponent,
+  TooltipComponent
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 
-const props = defineProps<{ option: echarts.EChartsCoreOption | null }>()
+echarts.use([
+  BarChart,
+  LineChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  LegendScrollComponent,
+  TooltipComponent,
+  CanvasRenderer
+])
+
+const props = defineProps<{ option: echarts.EChartsCoreOption | null; label?: string }>()
 const emit = defineEmits<{ pointClick: [{ name: string; seriesName?: string }] }>()
 
 const el = ref<HTMLDivElement | null>(null)
@@ -48,7 +67,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="el" class="echart" />
+  <div ref="el" class="echart" role="img" :aria-label="label ?? 'Chart'" />
 </template>
 
 <style scoped>

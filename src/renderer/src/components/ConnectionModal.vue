@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, computed, watch, onMounted } from 'vue'
+import { reactive, ref, computed, watch, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
 import { useSettings } from '../stores/settings'
 import {
@@ -10,6 +10,8 @@ import {
   type ConnectionConfig,
   type DriverType
 } from '@shared/types'
+
+const uid = useId()
 
 const settings = useSettings()
 const sshProfiles = computed(() => settings.sshProfiles)
@@ -175,13 +177,13 @@ function save(): void {
       </div>
 
       <div class="field span2">
-        <label>Display name</label>
-        <input class="input" v-model="form.name" placeholder="e.g. Production primary" />
+        <label :for="`${uid}-display-name`">Display name</label>
+        <input :id="`${uid}-display-name`" class="input" v-model="form.name" placeholder="e.g. Production primary" />
       </div>
 
       <div class="field">
-        <label>Driver</label>
-        <select class="select" v-model="form.driver">
+        <label :for="`${uid}-driver`">Driver</label>
+        <select :id="`${uid}-driver`" class="select" v-model="form.driver">
           <option value="" disabled>Select a database type…</option>
           <option v-for="d in DRIVERS" :key="d.type" :value="d.type">{{ d.label }}</option>
         </select>
@@ -193,6 +195,9 @@ function save(): void {
           <button
             v-for="c in COLORS"
             :key="c"
+            type="button"
+            :title="`Colour ${c}`"
+            :aria-pressed="form.color === c"
             class="swatch"
             :class="{ on: form.color === c }"
             :style="{ background: c }"
@@ -203,42 +208,42 @@ function save(): void {
 
       <label class="check span2 ro">
         <input type="checkbox" v-model="form.readOnly" />
-        <span>🔒 Read-only (safe mode) — block edits, inserts/deletes, DDL, imports & mutating SQL</span>
+        <span>Read-only (safe mode): block edits, inserts, deletes, DDL, imports and mutating SQL</span>
       </label>
       <label class="check span2 ro">
         <input type="checkbox" v-model="form.production" />
-        <span>⚠️ Production — show a prominent red banner when this connection is active</span>
+        <span>Production: show a prominent red banner when this connection is active</span>
       </label>
       <label class="check span2 ro">
         <input type="checkbox" v-model="form.mcpExcluded" />
-        <span>🔌 Disable discovery from MCP — hide this connection from AI agents</span>
+        <span>Disable discovery from MCP: hide this connection from AI agents</span>
       </label>
 
       <!-- Network drivers -->
       <template v-if="isNetwork">
         <div class="field span2-host">
-          <label>Host</label>
-          <input
+          <label :for="`${uid}-host`">Host</label>
+          <input :id="`${uid}-host`"
             class="input"
             v-model="form.host"
             :placeholder="isEntraAuth ? 'yourserver.database.windows.net' : 'localhost'"
           />
         </div>
         <div class="field">
-          <label>Port</label>
-          <input class="input" type="number" v-model.number="form.port" />
+          <label :for="`${uid}-port`">Port</label>
+          <input :id="`${uid}-port`" class="input" type="number" v-model.number="form.port" />
         </div>
         <label v-if="canServerMode" class="check span2">
           <input type="checkbox" v-model="form.serverMode" />
           <span>Whole server: list every database instead of connecting to one</span>
         </label>
         <div v-if="isServer && isPgFamily" class="field">
-          <label>Maintenance database</label>
-          <input class="input" v-model="form.database" placeholder="postgres" />
+          <label :for="`${uid}-maintenance-database`">Maintenance database</label>
+          <input :id="`${uid}-maintenance-database`" class="input" v-model="form.database" placeholder="postgres" />
         </div>
         <div v-else-if="!isServer" class="field">
-          <label>{{ isRedis ? 'Database (index)' : isOracle ? 'Service name' : 'Database' }}</label>
-          <input
+          <label :for="`${uid}-db-name`">{{ isRedis ? 'Database (index)' : isOracle ? 'Service name' : 'Database' }}</label>
+          <input :id="`${uid}-db-name`"
             class="input"
             v-model="form.database"
             :type="isRedis ? 'number' : 'text'"
@@ -246,20 +251,20 @@ function save(): void {
           />
         </div>
         <div v-if="isMssql" class="field span2">
-          <label>Authentication</label>
-          <select class="select" v-model="form.mssqlAuthType">
+          <label :for="`${uid}-authentication`">Authentication</label>
+          <select :id="`${uid}-authentication`" class="select" v-model="form.mssqlAuthType">
             <option value="sql">SQL login (username / password)</option>
             <option value="entra-interactive">Microsoft Entra ID — sign in with browser</option>
           </select>
         </div>
         <template v-if="!isEntraAuth">
           <div class="field">
-            <label>{{ isRedis ? 'Username (ACL, optional)' : 'User' }}</label>
-            <input class="input" v-model="form.user" autocomplete="off" />
+            <label :for="`${uid}-db-user`">{{ isRedis ? 'Username (ACL, optional)' : 'User' }}</label>
+            <input :id="`${uid}-db-user`" class="input" v-model="form.user" autocomplete="off" />
           </div>
           <div class="field">
-            <label>Password</label>
-            <input
+            <label :for="`${uid}-password`">Password</label>
+            <input :id="`${uid}-password`"
               class="input"
               type="password"
               v-model="form.password"
@@ -269,8 +274,8 @@ function save(): void {
           </div>
         </template>
         <div v-else class="field span2">
-          <label>Entra tenant ID (optional)</label>
-          <input
+          <label :for="`${uid}-entra-tenant-id-optional`">Entra tenant ID (optional)</label>
+          <input :id="`${uid}-entra-tenant-id-optional`"
             class="input"
             v-model="form.entraTenantId"
             placeholder="e.g. contoso.onmicrosoft.com or a GUID — leave blank to pick at sign-in"
@@ -286,8 +291,8 @@ function save(): void {
           <span>Use SSL / TLS (accept self-signed)</span>
         </label>
         <div class="field">
-          <label>Auto-disconnect when idle (minutes)</label>
-          <input class="input" type="number" min="0" v-model.number="idleMinutes" :placeholder="idlePlaceholder" />
+          <label :for="`${uid}-auto-disconnect-when-idl`">Auto-disconnect when idle (minutes)</label>
+          <input :id="`${uid}-auto-disconnect-when-idl`" class="input" type="number" min="0" v-model.number="idleMinutes" :placeholder="idlePlaceholder" />
           <small class="hint">
             Closes the connection after sitting unused and reopens it on the next action.
             <template v-if="isServer">Applies to each database opened on this server. </template>0 disables it.
@@ -298,9 +303,9 @@ function save(): void {
       <!-- SQLite / DuckDB (local file engines) -->
       <template v-else-if="form.driver === 'sqlite' || form.driver === 'duckdb'">
         <div class="field span2">
-          <label>Database file path</label>
+          <label :for="`${uid}-database-file-path`">Database file path</label>
           <div class="key-row">
-            <input
+            <input :id="`${uid}-database-file-path`"
               class="input"
               v-model="form.filePath"
               :placeholder="form.driver === 'duckdb' ? '/path/to/database.duckdb' : '/path/to/database.sqlite'"
@@ -316,17 +321,17 @@ function save(): void {
       <!-- Snowflake -->
       <template v-else-if="form.driver === 'snowflake'">
         <div class="field span2">
-          <label>Account</label>
-          <input class="input" v-model="form.account" placeholder="e.g. xy12345.eu-west-1 or orgname-account_name" />
+          <label :for="`${uid}-account`">Account</label>
+          <input :id="`${uid}-account`" class="input" v-model="form.account" placeholder="e.g. xy12345.eu-west-1 or orgname-account_name" />
           <small class="hint">Your Snowflake account identifier (the part before <code>.snowflakecomputing.com</code>).</small>
         </div>
         <div class="field">
-          <label>User</label>
-          <input class="input" v-model="form.user" autocomplete="off" />
+          <label :for="`${uid}-user`">User</label>
+          <input :id="`${uid}-user`" class="input" v-model="form.user" autocomplete="off" />
         </div>
         <div class="field">
-          <label>Password</label>
-          <input
+          <label :for="`${uid}-password-2`">Password</label>
+          <input :id="`${uid}-password-2`"
             class="input"
             type="password"
             v-model="form.password"
@@ -335,37 +340,37 @@ function save(): void {
           />
         </div>
         <div class="field">
-          <label>Warehouse</label>
-          <input class="input" v-model="form.warehouse" placeholder="e.g. COMPUTE_WH" />
+          <label :for="`${uid}-warehouse`">Warehouse</label>
+          <input :id="`${uid}-warehouse`" class="input" v-model="form.warehouse" placeholder="e.g. COMPUTE_WH" />
         </div>
         <div class="field">
-          <label>Role</label>
-          <input class="input" v-model="form.role" placeholder="optional, e.g. SYSADMIN" />
+          <label :for="`${uid}-role`">Role</label>
+          <input :id="`${uid}-role`" class="input" v-model="form.role" placeholder="optional, e.g. SYSADMIN" />
         </div>
         <div class="field">
-          <label>Database</label>
-          <input class="input" v-model="form.database" placeholder="optional" />
+          <label :for="`${uid}-database`">Database</label>
+          <input :id="`${uid}-database`" class="input" v-model="form.database" placeholder="optional" />
         </div>
         <div class="field">
-          <label>Schema</label>
-          <input class="input" v-model="form.schema" placeholder="optional, e.g. PUBLIC" />
+          <label :for="`${uid}-schema`">Schema</label>
+          <input :id="`${uid}-schema`" class="input" v-model="form.schema" placeholder="optional, e.g. PUBLIC" />
         </div>
       </template>
 
       <!-- BigQuery -->
       <template v-else-if="form.driver === 'bigquery'">
         <div class="field">
-          <label>Project ID</label>
-          <input class="input" v-model="form.projectId" placeholder="my-gcp-project" />
+          <label :for="`${uid}-project-id`">Project ID</label>
+          <input :id="`${uid}-project-id`" class="input" v-model="form.projectId" placeholder="my-gcp-project" />
         </div>
         <div class="field">
-          <label>Dataset</label>
-          <input class="input" v-model="form.database" placeholder="my_dataset" />
+          <label :for="`${uid}-dataset`">Dataset</label>
+          <input :id="`${uid}-dataset`" class="input" v-model="form.database" placeholder="my_dataset" />
         </div>
         <div class="field span2">
-          <label>Service-account key file</label>
+          <label :for="`${uid}-service-account-key-file`">Service-account key file</label>
           <div class="key-row">
-            <input class="input" v-model="form.filePath" placeholder="/path/to/service-account.json" />
+            <input :id="`${uid}-service-account-key-file`" class="input" v-model="form.filePath" placeholder="/path/to/service-account.json" />
             <button type="button" class="btn" @click="pickDbFile">Browse…</button>
           </div>
           <small class="hint">A JSON key with BigQuery access. Leave empty to use Application Default Credentials.</small>
@@ -375,8 +380,8 @@ function save(): void {
       <!-- MongoDB -->
       <template v-else-if="form.driver === 'mongodb'">
         <div class="field span2">
-          <label>Connection URI</label>
-          <input
+          <label :for="`${uid}-connection-uri`">Connection URI</label>
+          <input :id="`${uid}-connection-uri`"
             class="input"
             v-model="form.url"
             placeholder="mongodb://localhost:27017 or mongodb+srv://user:pass@cluster.mongodb.net"
@@ -384,20 +389,20 @@ function save(): void {
           <small class="hint">A standard MongoDB URI. Atlas <code>mongodb+srv://</code> strings work too.</small>
         </div>
         <div class="field span2">
-          <label>Database</label>
-          <input class="input" v-model="form.database" placeholder="defaults to the URI's database" />
+          <label :for="`${uid}-database-2`">Database</label>
+          <input :id="`${uid}-database-2`" class="input" v-model="form.database" placeholder="defaults to the URI's database" />
         </div>
       </template>
 
       <!-- InfluxDB -->
       <template v-else-if="form.driver === 'influxdb'">
         <div class="field span2">
-          <label>URL</label>
-          <input class="input" v-model="form.url" placeholder="http://localhost:8086" />
+          <label :for="`${uid}-url`">URL</label>
+          <input :id="`${uid}-url`" class="input" v-model="form.url" placeholder="http://localhost:8086" />
         </div>
         <div class="field span2">
-          <label>Token</label>
-          <input
+          <label :for="`${uid}-token`">Token</label>
+          <input :id="`${uid}-token`"
             class="input"
             type="password"
             v-model="form.token"
@@ -406,12 +411,12 @@ function save(): void {
           />
         </div>
         <div class="field">
-          <label>Org</label>
-          <input class="input" v-model="form.org" />
+          <label :for="`${uid}-org`">Org</label>
+          <input :id="`${uid}-org`" class="input" v-model="form.org" />
         </div>
         <div class="field">
-          <label>Bucket</label>
-          <input class="input" v-model="form.bucket" placeholder="default bucket" />
+          <label :for="`${uid}-bucket`">Bucket</label>
+          <input :id="`${uid}-bucket`" class="input" v-model="form.bucket" placeholder="default bucket" />
         </div>
       </template>
     </div>
@@ -425,8 +430,8 @@ function save(): void {
 
       <div v-if="form.sshEnabled" class="ssh-grid">
         <div v-if="sshProfiles.length" class="field">
-          <label>SSH profile</label>
-          <select class="select" v-model="form.sshProfileId">
+          <label :for="`${uid}-ssh-profile`">SSH profile</label>
+          <select :id="`${uid}-ssh-profile`" class="select" v-model="form.sshProfileId">
             <option :value="undefined" disabled>Select a profile…</option>
             <option v-for="p in sshProfiles" :key="p.id" :value="p.id">
               {{ p.name }} ({{ p.user }}@{{ p.host }})
@@ -479,7 +484,7 @@ function save(): void {
   border-bottom: 1px solid var(--border-soft);
 }
 .presets-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -491,7 +496,7 @@ function save(): void {
   gap: 7px;
 }
 .preset-chip {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
@@ -500,7 +505,7 @@ function save(): void {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .preset-chip:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -509,7 +514,7 @@ function save(): void {
 }
 .hint {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .swatches {
   display: flex;
@@ -557,7 +562,7 @@ function save(): void {
   flex: 1;
 }
 .ssh-note {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   line-height: 1.5;
 }
@@ -571,7 +576,7 @@ function save(): void {
   margin-top: 14px;
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   word-break: break-word;
 }
 .test-row.testing {
@@ -579,11 +584,11 @@ function save(): void {
   color: var(--text-dim);
 }
 .test-row.ok {
-  background: rgba(63, 207, 142, 0.13);
-  color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok-text);
 }
 .test-row.fail {
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 </style>

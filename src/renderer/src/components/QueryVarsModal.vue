@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
+
+const uid = useId()
 
 const props = defineProps<{ names: string[] }>()
 const emit = defineEmits<{ submit: [values: Record<string, string>]; close: [] }>()
@@ -20,8 +22,8 @@ function submit(): void {
     <p class="lead">Fill in the values to substitute before running. Values are inserted as plain text — add quotes in your query for string literals.</p>
     <div class="vars">
       <div v-for="(name, i) in names" :key="name" class="field">
-        <label>{{ name }}</label>
-        <input
+        <label :for="`${uid}-${name}`">{{ name }}</label>
+        <input :id="`${uid}-${name}`"
           :ref="i === 0 ? (el) => (first = el as HTMLInputElement) : undefined"
           class="input"
           v-model="values[name]"
@@ -40,7 +42,7 @@ function submit(): void {
 <style scoped>
 .lead {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   margin-bottom: 16px;
   line-height: 1.5;
 }

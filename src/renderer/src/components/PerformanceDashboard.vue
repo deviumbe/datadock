@@ -206,7 +206,7 @@ function poolPct(): number {
     </header>
 
     <div v-if="!totalRuns && !loading" class="empty">
-      <div class="logo">📊</div>
+      <div class="logo"><Icon name="chart" :size="34" /></div>
       <h3>No query activity yet</h3>
       <p>Run some queries on this connection and the dashboard will fill with timings, slow-query analysis and index suggestions.</p>
     </div>
@@ -271,7 +271,7 @@ function poolPct(): number {
               <code class="qsql" :title="q.sample">{{ q.sample }}</code>
             </div>
           </div>
-          <p v-else class="muted">No queries slower than {{ fmtMs(thresholdMs) }}. 🎉</p>
+          <p v-else class="muted">No queries slower than {{ fmtMs(thresholdMs) }}.</p>
         </section>
 
         <!-- index recommendations -->
@@ -284,10 +284,10 @@ function poolPct(): number {
                 <strong>{{ r.table }}</strong> · <span class="cols">{{ r.columns.join(', ') }}</span>
                 <span class="rec-why">{{ r.reason }} (~{{ fmtMs(r.avgMs) }})</span>
               </div>
-              <button class="btn btn-ghost sm" title="Open as a query" @click="runSql(r.ddl)">Create →</button>
+              <button class="btn btn-ghost sm" title="Open as a query" @click="runSql(r.ddl)">Create</button>
             </div>
           </div>
-          <p v-else class="muted">No suggestions — slow queries look adequately indexed. 👍</p>
+          <p v-else class="muted">No suggestions — slow queries look adequately indexed.</p>
         </section>
       </div>
 
@@ -343,7 +343,7 @@ function poolPct(): number {
         <p v-else-if="!idxScanned && !idxScanning" class="muted">
           Scan the schema for redundant indexes, foreign keys missing an index, and tables without a primary key.
         </p>
-        <p v-else-if="idxScanned && !findings.length" class="muted">No index issues found. 👍</p>
+        <p v-else-if="idxScanned && !findings.length" class="muted">No index issues found.</p>
         <div v-else-if="findings.length" class="findings">
           <div v-for="(f, i) in findings" :key="i" class="finding" :class="f.kind">
             <span class="fdot" :class="f.severity" />
@@ -352,7 +352,7 @@ function poolPct(): number {
               <span class="fdetail">{{ f.detail }}</span>
             </div>
             <button v-if="f.ddl" class="btn btn-ghost sm" title="Open the fix as a query" @click="runSql(f.ddl)">
-              {{ f.kind === 'redundant' ? 'Drop →' : 'Create →' }}
+              {{ f.kind === 'redundant' ? 'Drop' : 'Create' }}
             </button>
           </div>
         </div>
@@ -381,24 +381,24 @@ function poolPct(): number {
   z-index: 2;
 }
 .perf-head h2 {
-  font-size: 16px;
+  font-size: var(--fs-md);
 }
 .sub {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .spacer {
   flex: 1;
 }
 .thresh {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .thresh select {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 3px 6px;
 }
 .empty {
@@ -409,7 +409,7 @@ function poolPct(): number {
   padding: 60px 20px;
 }
 .empty .logo {
-  font-size: 36px;
+  font-size: var(--fs-3xl);
 }
 .empty h3 {
   color: var(--text);
@@ -439,18 +439,18 @@ function poolPct(): number {
   border-color: var(--danger);
 }
 .card .k {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-faint);
 }
 .card .v {
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--text);
 }
 .card .v small {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -461,7 +461,7 @@ function poolPct(): number {
   padding: 14px 16px;
 }
 .panel h3 {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-faint);
@@ -475,21 +475,21 @@ function poolPct(): number {
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0 7px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 .grow-delta {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
   color: var(--text-dim);
 }
 .grow-delta.up {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .grow-delta.down {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .two-col {
   display: grid;
@@ -497,7 +497,7 @@ function poolPct(): number {
   gap: 18px;
 }
 .muted {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-faint);
 }
 .qlist {
@@ -516,32 +516,32 @@ function poolPct(): number {
   margin-bottom: 3px;
 }
 .kind {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .kind.update,
 .kind.delete,
 .kind.insert {
-  background: rgba(240, 180, 41, 0.18);
-  color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn-text);
 }
 .qavg {
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .qmeta {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .qsql {
   display: block;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -562,21 +562,21 @@ function poolPct(): number {
 }
 .rec-info {
   flex: 1;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   min-width: 0;
 }
 .rec-info .cols {
   font-family: var(--mono);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .rec-why {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .btn.sm {
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   flex: none;
 }
 .panel h3 .btn {
@@ -611,12 +611,12 @@ function poolPct(): number {
 }
 .finfo {
   flex: 1;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   min-width: 0;
 }
 .fdetail {
   display: block;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .bars {
@@ -631,7 +631,7 @@ function poolPct(): number {
   gap: 10px;
 }
 .hbar-label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -649,7 +649,7 @@ function poolPct(): number {
   border-radius: 4px;
 }
 .hbar-val {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -672,7 +672,7 @@ function poolPct(): number {
   background: var(--accent);
 }
 .pool-pct {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 .pool-stats {
@@ -686,17 +686,17 @@ function poolPct(): number {
   gap: 2px;
 }
 .pool-stats .k {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   color: var(--text-faint);
 }
 .pool-stats .v {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: var(--text);
 }
 .pool-stats .bad .v {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 @media (max-width: 900px) {
   .two-col {

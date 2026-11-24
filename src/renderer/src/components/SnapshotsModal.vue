@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useUi } from '../stores/ui'
 import { ref, computed, watch } from 'vue'
 import { isSqlDriver, type Snapshot } from '@shared/types'
 import Modal from './Modal.vue'
 import Icon from './Icon.vue'
+
+const ui = useUi()
 
 const props = defineProps<{ connId: string; connName: string; driver: string; readOnly: boolean }>()
 const emit = defineEmits<{ close: []; restored: [] }>()
@@ -77,7 +80,13 @@ async function restore(s: Snapshot): Promise<void> {
 }
 
 async function remove(s: Snapshot): Promise<void> {
-  if (!confirm(`Delete snapshot “${s.label}”? The restore point will be gone for good.`)) return
+  const ok = await ui.confirmDialog({
+    title: 'Delete snapshot',
+    message: `Delete “${s.label}”? The restore point will be gone for good.`,
+    confirmLabel: 'Delete snapshot',
+    danger: true
+  })
+  if (!ok) return
   try {
     await window.api.snapshots.remove(props.connId, s.id)
     await reload()
@@ -114,7 +123,7 @@ function fmtWhen(iso: string): string {
       <template v-else>
         <!-- Take a new snapshot -->
         <div class="take">
-          <input
+          <input aria-label="Snapshot label"
             v-model="label"
             class="input"
             placeholder="Label (e.g. “before migration”)"
@@ -125,7 +134,7 @@ function fmtWhen(iso: string): string {
           </button>
         </div>
 
-        <p v-if="error" class="err">{{ error }}</p>
+        <p v-if="error" class="err" role="alert">{{ error }}</p>
 
         <!-- Existing snapshots -->
         <div v-if="loading && !list.length" class="state">Loading…</div>
@@ -195,7 +204,7 @@ function fmtWhen(iso: string): string {
   gap: 14px;
 }
 .intro {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-dim);
 }
@@ -204,7 +213,7 @@ function fmtWhen(iso: string): string {
 }
 .state,
 .empty {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 16px;
   text-align: center;
@@ -219,8 +228,8 @@ function fmtWhen(iso: string): string {
   flex: 1;
 }
 .err {
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .list {
@@ -244,7 +253,7 @@ function fmtWhen(iso: string): string {
   align-items: center;
   gap: 11px;
   padding: 11px 14px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .snap-info {
   display: flex;
@@ -255,14 +264,14 @@ function fmtWhen(iso: string): string {
 }
 .snap-label {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .snap-meta {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-family: var(--mono);
 }
@@ -285,19 +294,19 @@ function fmtWhen(iso: string): string {
   color: var(--text-faint);
 }
 .ic:hover {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 .snap-confirm {
   padding: 12px 14px;
   border-top: 1px solid var(--border-soft);
-  background: rgba(248, 113, 113, 0.07);
+  background: var(--danger-soft);
 }
 .warn-text {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--text-dim);
   margin-bottom: 10px;
@@ -305,10 +314,10 @@ function fmtWhen(iso: string): string {
 .warn-text :deep(.dd-icon) {
   margin-top: 1px;
   flex: none;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .warn-text strong {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .warn-text code {
   font-family: var(--mono);
@@ -327,7 +336,7 @@ function fmtWhen(iso: string): string {
 .btn-danger-solid {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-weight: 600;
 }
 .btn-danger-solid:disabled {
@@ -339,10 +348,10 @@ function fmtWhen(iso: string): string {
   gap: 7px;
   padding: 9px 14px;
   border-top: 1px solid var(--border-soft);
-  font-size: 12px;
-  color: var(--ok);
+  font-size: var(--fs-sm);
+  color: var(--ok-text);
 }
 .snap-result.bad {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 </style>

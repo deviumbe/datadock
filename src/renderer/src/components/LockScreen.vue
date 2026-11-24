@@ -48,14 +48,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="lock">
+  <main class="lock" aria-labelledby="lock-title">
     <div class="drag" />
     <div class="card">
       <div class="glyph"><Icon name="lock" :size="26" /></div>
-      <h1>DataDock is locked</h1>
+      <h1 id="lock-title">DataDock is locked</h1>
       <p class="file" :title="status?.path">{{ fileName }}</p>
 
-      <p v-if="vault.lockReason" class="reason">{{ vault.lockReason }}</p>
+      <p v-if="vault.lockReason" class="reason" role="status">{{ vault.lockReason }}</p>
       <p v-if="status && !status.fileExists" class="reason">
         The vault file was not found. Is the synced folder mounted?
       </p>
@@ -71,6 +71,7 @@ onMounted(() => {
           class="input"
           type="password"
           autocomplete="current-password"
+          aria-label="Vault passphrase"
           :placeholder="touchId ? 'or type your passphrase' : 'Vault passphrase'"
           :disabled="busy"
         />
@@ -84,9 +85,9 @@ onMounted(() => {
         Unlock with Touch ID on this Mac
       </label>
 
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
     </div>
-  </div>
+  </main>
 </template>
 
 <style scoped>
@@ -134,15 +135,15 @@ onMounted(() => {
   display: grid;
   place-items: center;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 h1 {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 .file {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-top: -8px;
   max-width: 100%;
   overflow: hidden;
@@ -150,8 +151,8 @@ h1 {
   white-space: nowrap;
 }
 .reason {
-  color: var(--warn);
-  font-size: 12.5px;
+  color: var(--warn-text);
+  font-size: var(--fs-base);
   text-align: center;
   line-height: 1.45;
 }
@@ -172,12 +173,12 @@ h1 {
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   align-self: flex-start;
 }
 .err {
-  color: var(--danger);
-  font-size: 12.5px;
+  color: var(--danger-text);
+  font-size: var(--fs-base);
   text-align: center;
   line-height: 1.45;
 }

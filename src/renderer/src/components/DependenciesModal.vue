@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import Modal from './Modal.vue'
 import type { ErRelation } from '@shared/types'
@@ -30,7 +31,7 @@ const referencedBy = computed(() => relations.value.filter((r) => r.toTable === 
 <template>
   <Modal :title="`Dependencies · ${table}`" wide @close="emit('close')">
     <div v-if="loading" class="state">Loading foreign-key graph…</div>
-    <div v-else-if="error" class="state err">{{ error }}</div>
+    <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
     <template v-else>
       <section>
         <h3>References <span class="count">{{ references.length }}</span></h3>
@@ -38,7 +39,7 @@ const referencedBy = computed(() => relations.value.filter((r) => r.toTable === 
         <ul v-if="references.length">
           <li v-for="(r, i) in references" :key="'out-' + i">
             <code class="col">{{ r.fromColumn }}</code>
-            <span class="arrow">→</span>
+            <span class="arrow"><Icon name="arrowRight" :size="14" /></span>
             <button class="link" @click="emit('open', r.toTable)">{{ r.toTable }}</button>
             <code class="col dim">{{ r.toColumn }}</code>
           </li>
@@ -53,7 +54,7 @@ const referencedBy = computed(() => relations.value.filter((r) => r.toTable === 
           <li v-for="(r, i) in referencedBy" :key="'in-' + i">
             <button class="link" @click="emit('open', r.fromTable)">{{ r.fromTable }}</button>
             <code class="col">{{ r.fromColumn }}</code>
-            <span class="arrow">→</span>
+            <span class="arrow"><Icon name="arrowRight" :size="14" /></span>
             <code class="col dim">{{ r.toColumn }}</code>
           </li>
         </ul>
@@ -69,11 +70,11 @@ const referencedBy = computed(() => relations.value.filter((r) => r.toTable === 
 <style scoped>
 .state {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   padding: 8px 0;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 section {
   margin-bottom: 20px;
@@ -82,7 +83,7 @@ section:last-of-type {
   margin-bottom: 0;
 }
 h3 {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -90,14 +91,14 @@ h3 {
 }
 .count {
   background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 11px;
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
   border-radius: 999px;
   padding: 1px 8px;
 }
 .hint {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin: 4px 0 10px;
 }
 ul {
@@ -114,11 +115,11 @@ li {
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .col {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .col.dim {
@@ -128,16 +129,16 @@ li {
   color: var(--text-faint);
 }
 .link {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .link:hover {
   text-decoration: underline;
 }
 .empty {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-style: italic;
 }
 </style>

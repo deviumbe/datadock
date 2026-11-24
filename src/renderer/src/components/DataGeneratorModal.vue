@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
 import Icon from './Icon.vue'
 import type { DriverType, TableInfo } from '@shared/types'
 import { GEN_LABELS, genValue, guessGen, type Gen } from '../lib/dataGen'
+
+const uid = useId()
 
 const props = defineProps<{ connId: string; driver: DriverType; table: TableInfo }>()
 const emit = defineEmits<{ close: []; done: [] }>()
@@ -123,7 +125,7 @@ async function generate(): Promise<void> {
     <section class="ai-gen">
       <div class="ai-row">
         <span class="ai-ic"><Icon name="sparkles" :size="16" /></span>
-        <input
+        <input aria-label="Describe the data"
           v-model="aiHint"
           class="input"
           :disabled="aiBusy || !aiHasKey"
@@ -139,8 +141,8 @@ async function generate(): Promise<void> {
     </section>
 
     <div class="row-count">
-      <label>Rows to generate</label>
-      <input class="input" type="number" v-model.number="count" min="1" max="100000" />
+      <label :for="`${uid}-rows-to-generate`">Rows to generate</label>
+      <input :id="`${uid}-rows-to-generate`" class="input" type="number" v-model.number="count" min="1" max="100000" />
     </div>
 
     <table class="cols">
@@ -154,16 +156,16 @@ async function generate(): Promise<void> {
           </td>
           <td class="ct">{{ c.type }}</td>
           <td class="cg">
-            <select class="select sm" v-model="c.gen">
+            <select class="select sm" v-model="c.gen" :aria-label="`Generator for ${c.name}`">
               <option v-for="g in genKeys" :key="g" :value="g">{{ GEN_LABELS[g] }}</option>
             </select>
-            <input v-if="c.gen === 'fixed'" class="input sm fixed" v-model="c.fixed" placeholder="value" />
+            <input aria-label="value" v-if="c.gen === 'fixed'" class="input sm fixed" v-model="c.fixed" placeholder="value" />
           </td>
         </tr>
       </tbody>
     </table>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
     <div v-if="message" class="msg">{{ message }}</div>
 
     <template #footer>
@@ -192,7 +194,7 @@ async function generate(): Promise<void> {
 }
 .ai-ic {
   display: inline-flex;
-  color: var(--accent);
+  color: var(--accent-text);
   flex: none;
 }
 .ai-row .input {
@@ -203,7 +205,7 @@ async function generate(): Promise<void> {
 }
 .ai-hint {
   margin: 8px 2px 0;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .row-count {
@@ -213,7 +215,7 @@ async function generate(): Promise<void> {
   margin-bottom: 14px;
 }
 .row-count label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -225,7 +227,7 @@ async function generate(): Promise<void> {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .cols th {
   text-align: left;
@@ -243,10 +245,10 @@ async function generate(): Promise<void> {
   font-family: var(--mono);
 }
 .pk {
-  font-size: 8px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 1px 4px;
   border-radius: 3px;
   margin-left: 6px;
@@ -262,28 +264,28 @@ async function generate(): Promise<void> {
 }
 .select.sm {
   padding: 4px 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .input.sm.fixed {
   padding: 4px 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   width: 120px;
 }
 .err {
   margin-top: 12px;
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
-  font-size: 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .msg {
   margin-top: 12px;
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  background: rgba(63, 207, 142, 0.13);
-  color: var(--ok);
-  font-size: 12px;
+  background: var(--ok-soft);
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
 }
 </style>

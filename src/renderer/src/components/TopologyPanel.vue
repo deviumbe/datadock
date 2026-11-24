@@ -341,7 +341,7 @@ const sinceTimer = setInterval(() => {
 <template>
   <div class="topo-panel">
     <header class="topo-bar">
-      <button class="back" title="Back" @click="ui.closeTopology()">←</button>
+      <button class="back" title="Back" @click="ui.closeTopology()"><Icon name="arrowLeft" :size="15" /></button>
       <div class="title-wrap">
         <h1>{{ topology?.name ?? 'Topology' }}</h1>
         <span class="sub">{{ topology?.nodes.length ?? 0 }} nodes · updated {{ sinceLabel || '—' }}</span>
@@ -354,14 +354,14 @@ const sinceTimer = setInterval(() => {
         <label class="auto" title="Desktop notification when a node goes down or lag turns critical">
           <input type="checkbox" v-model="alerts" /> Alerts
         </label>
-        <select class="select small" v-model.number="refreshMs">
+        <select class="select small" aria-label="Refresh interval" v-model.number="refreshMs">
           <option :value="2000">2s</option>
           <option :value="4000">4s</option>
           <option :value="10000">10s</option>
           <option :value="30000">30s</option>
         </select>
-        <button class="btn" :class="{ spin: refreshing }" title="Refresh now" @click="refresh">↻</button>
-        <button v-if="aiReady" class="btn ai" title="Ask AI to diagnose this topology" @click="runAdvisor">✦ Advisor</button>
+        <button class="btn" :class="{ spin: refreshing }" :data-busy="refreshing || undefined" title="Refresh now" @click="refresh"><Icon name="refresh" :size="13" /></button>
+        <button v-if="aiReady" class="btn ai" title="Ask AI to diagnose this topology" @click="runAdvisor"><Icon name="sparkles" :size="13" /> Advisor</button>
         <button v-if="topology" class="btn" @click="emit('edit', topology)">Edit</button>
       </div>
     </header>
@@ -387,7 +387,7 @@ const sinceTimer = setInterval(() => {
       <div class="tier">
         <div v-if="!primaries.length" class="tier-hint">No node is marked Primary — assign one in Edit.</div>
         <template v-for="node in primaries" :key="node.connectionId">
-          <div class="node" :data-node="node.connectionId" :class="nodeView(node).color" @click="openNode(node.connectionId)">
+          <div v-press class="node" :data-node="node.connectionId" :class="nodeView(node).color" @click="openNode(node.connectionId)">
             <div class="node-head">
               <span class="drv">{{ connDriver(node.connectionId).toUpperCase().slice(0, 4) }}</span>
               <span class="nm" :title="connName(node.connectionId)">{{ connName(node.connectionId) }}</span>
@@ -396,7 +396,7 @@ const sinceTimer = setInterval(() => {
             <div class="role-row">
               <span class="role primary">PRIMARY</span>
               <span class="status">{{ nodeView(node).badge }}</span>
-              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`">⚙ {{ managedOf(node) }}</span>
+              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`"><Icon name="settings" :size="11" /> {{ managedOf(node) }}</span>
             </div>
             <p v-for="(d, i) in nodeView(node).detail" :key="i" class="detail">{{ d }}</p>
             <p v-if="nodeView(node).position" class="pos">@ {{ nodeView(node).position }}</p>
@@ -407,7 +407,7 @@ const sinceTimer = setInterval(() => {
       <!-- replicas / arbiters -->
       <div class="tier replicas">
         <template v-for="node in others" :key="node.connectionId">
-          <div class="node" :data-node="node.connectionId" :class="nodeView(node).color" @click="openNode(node.connectionId)">
+          <div v-press class="node" :data-node="node.connectionId" :class="nodeView(node).color" @click="openNode(node.connectionId)">
             <div class="node-head">
               <span class="drv">{{ connDriver(node.connectionId).toUpperCase().slice(0, 4) }}</span>
               <span class="nm" :title="connName(node.connectionId)">{{ connName(node.connectionId) }}</span>
@@ -416,7 +416,7 @@ const sinceTimer = setInterval(() => {
             <div class="role-row">
               <span class="role" :class="node.role">{{ node.role.toUpperCase() }}</span>
               <span class="status">{{ nodeView(node).badge }}</span>
-              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`">⚙ {{ managedOf(node) }}</span>
+              <span v-if="managedOf(node)" class="mng" :title="`Managed by ${managedOf(node)}`"><Icon name="settings" :size="11" /> {{ managedOf(node) }}</span>
               <span v-if="nodeView(node).lag != null" class="lag" :class="nodeView(node).color">{{ fmtLag(nodeView(node).lag) }}</span>
             </div>
             <svg v-if="hasSpark(node.connectionId)" class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
@@ -425,7 +425,7 @@ const sinceTimer = setInterval(() => {
             <p
               v-if="nodeView(node).detected && nodeView(node).detected !== node.role && nodeView(node).detected !== 'unknown'"
               class="detail mismatch"
-            >⚠ engine reports: {{ nodeView(node).detected }}</p>
+            ><Icon name="warn" :size="12" /> engine reports: {{ nodeView(node).detected }}</p>
             <p v-for="(d, i) in nodeView(node).detail" :key="i" class="detail">{{ d }}</p>
             <p v-if="nodeView(node).position" class="pos">@ {{ nodeView(node).position }}</p>
           </div>
@@ -436,16 +436,16 @@ const sinceTimer = setInterval(() => {
     <!-- AI advisor drawer (read-only diagnosis) -->
     <aside v-if="advisorOpen" class="advisor">
       <header class="adv-head">
-        <span class="adv-title">✦ Replication advisor</span>
-        <button class="btn" :class="{ spin: advising }" title="Re-run" @click="runAdvisor">↻</button>
+        <span class="adv-title"><Icon name="sparkles" :size="14" /> Replication advisor</span>
+        <button class="btn" :class="{ spin: advising }" :data-busy="advising || undefined" title="Re-run" @click="runAdvisor"><Icon name="refresh" :size="13" /></button>
         <button class="adv-close" title="Close" @click="advisorOpen = false"><Icon name="x" :size="12" /></button>
       </header>
       <div class="adv-body">
         <div v-if="advising && !advice" class="adv-state">Analyzing the topology…</div>
-        <div v-else-if="adviseErr" class="adv-state err">{{ adviseErr }}</div>
+        <div v-else-if="adviseErr" class="adv-state err" role="alert">{{ adviseErr }}</div>
         <div v-else class="adv-text">{{ advice }}</div>
       </div>
-      <p class="adv-foot">⚠ Advice only — DataDock executes nothing. Review every command before you run it.</p>
+      <p class="adv-foot"><Icon name="warn" :size="12" /> Advice only — DataDock executes nothing. Review every command before you run it.</p>
     </aside>
   </div>
 </template>
@@ -468,7 +468,7 @@ const sinceTimer = setInterval(() => {
   background: var(--bg-elevated);
 }
 .back {
-  font-size: 18px;
+  font-size: var(--fs-lg);
   width: 30px;
   height: 30px;
   border-radius: 7px;
@@ -482,12 +482,12 @@ const sinceTimer = setInterval(() => {
   flex: 1;
 }
 .title-wrap h1 {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 700;
   margin: 0;
 }
 .sub {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .bar-actions {
@@ -496,7 +496,7 @@ const sinceTimer = setInterval(() => {
   gap: 8px;
 }
 .auto {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   display: flex;
   align-items: center;
@@ -504,7 +504,7 @@ const sinceTimer = setInterval(() => {
 }
 .select.small {
   padding: 3px 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .btn.spin {
   animation: spin 0.7s linear infinite;
@@ -542,17 +542,25 @@ const sinceTimer = setInterval(() => {
 @keyframes dash {
   to { stroke-dashoffset: -12; }
 }
-.link.green { stroke: var(--ok, #3fcf8e); }
-.link.amber { stroke: var(--warn, #f0b429); }
-.link.red { stroke: var(--danger, #e5616a); }
-.link.grey { stroke: var(--border-strong, #555); stroke-dasharray: 4 6; }
-.chip.green { fill: var(--ok, #3fcf8e); }
-.chip.amber { fill: var(--warn, #f0b429); }
-.chip.red { fill: var(--danger, #e5616a); }
+.link.green { stroke: var(--ok); }
+.link.amber { stroke: var(--warn); }
+.link.red { stroke: var(--danger); }
+.link.grey { stroke: var(--border-strong); stroke-dasharray: 4 6; }
+.chip.green { fill: var(--ok); }
+.chip.amber { fill: var(--warn); }
+.chip.red { fill: var(--danger); }
 .chip.grey { fill: var(--bg-elevated); stroke: var(--border); }
+.chip.green + .chip-text {
+  fill: var(--on-ok);
+}
+.chip.amber + .chip-text {
+  fill: var(--on-warn);
+}
+.chip.red + .chip-text {
+  fill: var(--on-danger);
+}
 .chip-text {
-  fill: #08110d;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-anchor: middle;
   font-family: var(--mono);
@@ -571,7 +579,7 @@ const sinceTimer = setInterval(() => {
 }
 .tier-hint {
   color: var(--text-faint);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .node {
   width: 240px;
@@ -586,9 +594,9 @@ const sinceTimer = setInterval(() => {
   transform: translateY(-2px);
   border-color: var(--border-strong);
 }
-.node.green { border-color: rgba(63, 207, 142, 0.6); box-shadow: 0 0 0 1px rgba(63, 207, 142, 0.25); }
-.node.amber { border-color: rgba(240, 180, 41, 0.7); box-shadow: 0 0 0 1px rgba(240, 180, 41, 0.3); }
-.node.red { border-color: rgba(229, 97, 106, 0.7); box-shadow: 0 0 0 1px rgba(229, 97, 106, 0.3); }
+.node.green { border-color: var(--ok-line); box-shadow: 0 0 0 1px var(--ok-line); }
+.node.amber { border-color: var(--warn-line); box-shadow: 0 0 0 1px var(--warn-line); }
+.node.red { border-color: var(--danger-line); box-shadow: 0 0 0 1px var(--danger-line); }
 .node-head {
   display: flex;
   align-items: center;
@@ -596,9 +604,9 @@ const sinceTimer = setInterval(() => {
 }
 .drv {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   border-radius: 4px;
   padding: 2px 5px;
@@ -606,7 +614,7 @@ const sinceTimer = setInterval(() => {
 .nm {
   flex: 1;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -617,9 +625,9 @@ const sinceTimer = setInterval(() => {
   border-radius: 50%;
   background: var(--border-strong);
 }
-.dot.green { background: var(--ok, #3fcf8e); }
-.dot.amber { background: var(--warn, #f0b429); }
-.dot.red { background: var(--danger, #e5616a); box-shadow: 0 0 6px var(--danger, #e5616a); }
+.dot.green { background: var(--ok); }
+.dot.amber { background: var(--warn); }
+.dot.red { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 .role-row {
   display: flex;
   align-items: center;
@@ -627,7 +635,7 @@ const sinceTimer = setInterval(() => {
   margin: 9px 0 4px;
 }
 .role {
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.05em;
   padding: 2px 6px;
@@ -636,24 +644,24 @@ const sinceTimer = setInterval(() => {
   background: var(--bg-active);
 }
 .role.primary {
-  color: #1a1205;
-  background: var(--gold, #e0a14a);
+  color: var(--on-warn);
+  background: var(--warn);
 }
 .status {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .lag {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
 }
-.lag.green { color: var(--ok, #3fcf8e); }
-.lag.amber { color: var(--warn, #f0b429); }
-.lag.red { color: var(--danger, #e5616a); }
+.lag.green { color: var(--ok-text); }
+.lag.amber { color: var(--warn-text); }
+.lag.red { color: var(--danger-text); }
 .mng {
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--text-dim);
@@ -674,13 +682,13 @@ const sinceTimer = setInterval(() => {
   stroke-width: 1.6;
   vector-effect: non-scaling-stroke;
 }
-.spark polyline.green { stroke: var(--ok, #3fcf8e); }
-.spark polyline.amber { stroke: var(--warn, #f0b429); }
-.spark polyline.red { stroke: var(--danger, #e5616a); }
+.spark polyline.green { stroke: var(--ok); }
+.spark polyline.amber { stroke: var(--warn); }
+.spark polyline.red { stroke: var(--danger); }
 .spark polyline.grey { stroke: var(--border-strong); }
 /* ---- AI advisor drawer ---- */
 .btn.ai {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-ring);
 }
 .advisor {
@@ -695,7 +703,7 @@ const sinceTimer = setInterval(() => {
   flex-direction: column;
   background: var(--bg-elevated);
   border-left: 1px solid var(--border);
-  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-modal);
 }
 .adv-head {
   display: flex;
@@ -707,8 +715,8 @@ const sinceTimer = setInterval(() => {
 .adv-title {
   flex: 1;
   font-weight: 700;
-  font-size: 13.5px;
-  color: var(--accent);
+  font-size: var(--fs-base);
+  color: var(--accent-text);
 }
 .adv-close {
   width: 26px;
@@ -727,36 +735,36 @@ const sinceTimer = setInterval(() => {
 }
 .adv-text {
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   color: var(--text);
 }
 .adv-state {
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
 }
 .adv-state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .adv-foot {
   margin: 0;
   padding: 9px 14px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .detail {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin: 2px 0 0;
   line-height: 1.4;
 }
 .detail.mismatch {
-  color: var(--warn, #f0b429);
+  color: var(--warn-text);
 }
 .pos {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   margin: 5px 0 0;
   white-space: nowrap;

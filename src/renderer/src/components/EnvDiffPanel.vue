@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, computed } from 'vue'
 import type { IndexDef } from '@shared/types'
 import { useTabs } from '../stores/tabs'
@@ -109,8 +110,8 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
     <div class="toolbar">
       <strong>Environment Diff</strong>
       <span class="muted">{{ connName }}</span>
-      <span class="arrow">↔</span>
-      <select class="select" v-model="targetId" :disabled="busy">
+      <span class="arrow"><Icon name="swap" :size="14" /></span>
+      <select class="select" v-model="targetId" aria-label="Compare with" :disabled="busy">
         <option value="" disabled>Compare with…</option>
         <option v-for="c in candidates" :key="c.id" :value="c.id">{{ c.label }}</option>
       </select>
@@ -129,7 +130,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
       <span v-if="checkData" class="hint">— tick specific tables below; production data normally differs everywhere.</span>
     </div>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
     <div v-if="!report && !busy && !error" class="empty">
       Pick a connection (e.g. Staging) to compare against “{{ connName }}”.
     </div>
@@ -145,12 +146,12 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
     <div v-if="report" class="list">
       <div v-for="t in visible" :key="t.name" class="trow">
         <div class="thead" :class="t.tableStatus" @click="toggleExpand(t.name)">
-          <span class="caret">{{ expanded.has(t.name) ? '▾' : '▸' }}</span>
+          <button class="caret" :title="`Toggle ${t.name}`" :aria-expanded="expanded.has(t.name)" @click.stop="toggleExpand(t.name)"><Icon :name="expanded.has(t.name) ? 'chevronDown' : 'chevronRight'" :size="11" /></button>
           <span class="tname">{{ t.name }}</span>
           <span v-if="t.tableStatus !== 'common'" class="tbadge" :class="t.tableStatus">{{ statusBadge(t.tableStatus) }}</span>
           <template v-else>
-            <span v-if="checkColumns && t.hasColumnDiff" class="chip col">📋 {{ t.columnDiffs.length }}</span>
-            <span v-if="checkIndexes && t.hasIndexDiff" class="chip idx">🔑 {{ t.indexDiffs.length }}</span>
+            <span v-if="checkColumns && t.hasColumnDiff" class="chip col" title="Column differences"><Icon name="table" :size="12" /> {{ t.columnDiffs.length }}</span>
+            <span v-if="checkIndexes && t.hasIndexDiff" class="chip idx" title="Index differences"><Icon name="key" :size="12" /> {{ t.indexDiffs.length }}</span>
             <label
               v-if="checkData"
               class="dchk"
@@ -160,7 +161,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
               <input type="checkbox" :checked="dataTables.has(t.name)" @change="toggleData(t.name)" /> data
             </label>
             <span v-if="checkData && dataTables.has(t.name)" class="chip data" :class="{ differ: t.rowsDiffer }">
-              📊 {{ t.rowsA ?? '—' }} → {{ t.rowsB ?? '—' }}
+              <Icon name="chart" :size="12" /> {{ t.rowsA ?? '—' }} → {{ t.rowsB ?? '—' }}
             </span>
           </template>
         </div>
@@ -191,11 +192,11 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
           </template>
           <div v-if="checkData && dataTables.has(t.name)" class="dgrp">
             Data — {{ t.rowsA ?? '—' }} rows here vs {{ t.rowsB ?? '—' }} in target
-            <button class="link" @click="tabsStore.openDataDiff(connId)">open full data diff →</button>
+            <button class="link" @click="tabsStore.openDataDiff(connId)">open full data diff</button>
           </div>
         </div>
       </div>
-      <div v-if="visible.length === 0" class="empty">No differences for the selected checks. 🎉</div>
+      <div v-if="visible.length === 0" class="empty">No differences for the selected checks.</div>
     </div>
   </div>
 </template>
@@ -217,7 +218,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
 }
 .muted {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .arrow {
   color: var(--text-faint);
@@ -232,7 +233,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   flex-wrap: wrap;
 }
 .ctitle {
@@ -251,14 +252,14 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
 }
 .err {
   padding: 10px 14px;
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
 }
 .empty {
   padding: 30px 20px;
   text-align: center;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .summary {
   display: flex;
@@ -267,7 +268,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   flex-wrap: wrap;
 }
 .s {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 2px 9px;
   border-radius: 999px;
   background: var(--bg-elevated);
@@ -276,16 +277,16 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
 }
 .s.onlyA,
 .s.onlyB {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .s.changed {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .s.idx {
-  color: #b07ad6;
+  color: var(--hue-violet);
 }
 .s.data {
-  color: #e0915a;
+  color: var(--hue-orange);
 }
 .list {
   flex: 1;
@@ -310,22 +311,27 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   background: var(--bg-hover);
 }
 .caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--text-faint);
 }
 .tname {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 .tbadge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(240, 180, 41, 0.15);
-  color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn-text);
 }
 .chip {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--bg-elevated);
@@ -333,18 +339,18 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   color: var(--text-dim);
 }
 .chip.col {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .chip.idx {
-  color: #b07ad6;
+  color: var(--hue-violet);
 }
 .chip.data.differ {
-  color: var(--danger);
+  color: var(--danger-text);
   border-color: var(--danger);
 }
 .dchk {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   display: inline-flex;
   align-items: center;
@@ -359,7 +365,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   background: var(--bg-app);
 }
 .dgrp {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-faint);
@@ -372,7 +378,7 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 2px 0;
 }
 .dmark {
@@ -381,23 +387,23 @@ const statusBadge = (s: EnvTableDiff['tableStatus']): string =>
   font-weight: 700;
 }
 .drow.added .dmark {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .drow.removed .dmark {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .drow.changed .dmark {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .dname {
   font-family: var(--mono);
 }
 .ddetail {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 .link {
-  color: var(--accent);
-  font-size: 11px;
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
 }
 </style>

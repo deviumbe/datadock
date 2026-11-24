@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, computed } from 'vue'
 import type { TableInfo } from '@shared/types'
 import { diffData, type DataDiffResult } from '../lib/dataDiff'
@@ -72,12 +73,12 @@ const diffs = computed(() => result.value?.rows ?? [])
     <div class="toolbar">
       <strong>Data Diff</strong>
       <span class="muted">{{ connName }}</span>
-      <span class="arrow">↔</span>
-      <select class="select" v-model="targetId" :disabled="busy">
+      <span class="arrow"><Icon name="swap" :size="14" /></span>
+      <select class="select" v-model="targetId" aria-label="Compare with" :disabled="busy">
         <option value="" disabled>Compare with…</option>
         <option v-for="c in candidates" :key="c.id" :value="c.id">{{ c.label }}</option>
       </select>
-      <select class="select" v-model="tableName" :disabled="busy">
+      <select class="select" v-model="tableName" aria-label="Table" :disabled="busy">
         <option value="" disabled>Table…</option>
         <option v-for="t in tables" :key="t.name" :value="t.name">{{ t.name }}</option>
       </select>
@@ -86,7 +87,7 @@ const diffs = computed(() => result.value?.rows ?? [])
       </button>
     </div>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
     <div v-if="!result && !busy && !error" class="empty">
       Pick a target connection and a table to compare row-by-row (matched by primary key).
     </div>
@@ -97,7 +98,7 @@ const diffs = computed(() => result.value?.rows ?? [])
         <span class="s changed">{{ result.changedCount }} changed</span>
         <span class="s removed">{{ result.removedCount }} only in {{ connName }}</span>
         <span class="s added">{{ result.addedCount }} only in target</span>
-        <span v-if="capped" class="s cap">⚠ compared first {{ CAP }} rows per side</span>
+        <span v-if="capped" class="s cap"><Icon name="warn" :size="12" /> compared first {{ CAP }} rows per side</span>
       </div>
       <div class="list">
         <div v-for="d in diffs" :key="d.key" class="rrow" :class="d.status">
@@ -113,7 +114,7 @@ const diffs = computed(() => result.value?.rows ?? [])
             <template v-else>only in target</template>
           </span>
         </div>
-        <div v-if="diffs.length === 0" class="empty">Rows are identical. 🎉</div>
+        <div v-if="diffs.length === 0" class="empty">Rows are identical.</div>
       </div>
     </template>
   </div>
@@ -136,7 +137,7 @@ const diffs = computed(() => result.value?.rows ?? [])
 }
 .muted {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .arrow {
   color: var(--text-faint);
@@ -146,10 +147,10 @@ const diffs = computed(() => result.value?.rows ?? [])
 }
 .err {
   padding: 10px 12px;
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .empty {
   padding: 30px;
@@ -161,17 +162,17 @@ const diffs = computed(() => result.value?.rows ?? [])
   flex-wrap: wrap;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   flex-shrink: 0;
 }
 .summary .changed {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .summary .removed {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .summary .added {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .summary .same,
 .summary .cap {
@@ -182,7 +183,7 @@ const diffs = computed(() => result.value?.rows ?? [])
   overflow-y: auto;
   padding: 4px 8px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .rrow {
   display: flex;
@@ -191,13 +192,13 @@ const diffs = computed(() => result.value?.rows ?? [])
   border-bottom: 1px solid var(--border);
 }
 .rrow.added {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .rrow.removed {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .rrow.changed {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .rmark {
   width: 12px;

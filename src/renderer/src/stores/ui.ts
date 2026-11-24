@@ -74,6 +74,28 @@ export const useUi = defineStore('ui', () => {
   function closePalette(): void { paletteOpen.value = false }
   function togglePalette(): void { paletteOpen.value = !paletteOpen.value }
 
+  function closeAllOverlays(): void {
+    for (const open of [
+      importOpen,
+      exportDbOpen,
+      transferOpen,
+      tableSizesOpen,
+      columnSearchOpen,
+      snapshotsOpen,
+      recoverOpen,
+      cloneSqliteOpen,
+      settingsOpen,
+      dataGripImportOpen,
+      tasksOpen,
+      dropAllOpen,
+      chatDockOpen,
+      paletteOpen
+    ])
+      open.value = false
+    topologyId.value = null
+    if (confirmState.value) resolveConfirm(false)
+  }
+
   const isMac = window.api?.platform === 'darwin'
 
   // Theme lives in the theme store; these stay as the façade the rest of the
@@ -130,6 +152,7 @@ export const useUi = defineStore('ui', () => {
     openPalette,
     closePalette,
     togglePalette,
+    closeAllOverlays,
     isMac,
     theme,
     toggleTheme,

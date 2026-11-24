@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useWorkspace } from '../stores/workspace'
 import { useTabs, type Tab } from '../stores/tabs'
 import { useUi } from '../stores/ui'
@@ -20,26 +20,11 @@ import DropAllObjectsModal from './DropAllObjectsModal.vue'
 import TruncateTablesModal from './TruncateTablesModal.vue'
 import CellValueModal from './CellValueModal.vue'
 import ColumnStatsModal from './ColumnStatsModal.vue'
-import ContextMenu from './ContextMenu.vue'
-import ErDiagram from './ErDiagram.vue'
+import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import { dialogOpen } from '../lib/dialog'
 import ChatPanel from './ChatPanel.vue'
-import RecordExplorer from './RecordExplorer.vue'
-import RelatedRecords from './RelatedRecords.vue'
-import PerformanceDashboard from './PerformanceDashboard.vue'
-import InvestigationsPanel from './InvestigationsPanel.vue'
-import DocsPanel from './DocsPanel.vue'
-import SmartSearchPanel from './SmartSearchPanel.vue'
-import AnalyticsPanel from './AnalyticsPanel.vue'
-import ChartRender from './ChartRender.vue'
 import { canChart, autoDetect } from '../lib/chartOption'
-import EnvDiffPanel from './EnvDiffPanel.vue'
-import SchemaDiffPanel from './SchemaDiffPanel.vue'
-import DataDiffPanel from './DataDiffPanel.vue'
-import RedisQueuePanel from './RedisQueuePanel.vue'
 import RedisKeyModal from './RedisKeyModal.vue'
-import VisualQueryBuilder from './VisualQueryBuilder.vue'
-import DataGeneratorModal from './DataGeneratorModal.vue'
-import CodegenModal from './CodegenModal.vue'
 import { LANGUAGES as CODEGEN_LANGUAGES } from '../lib/codegen'
 import AiAssistantModal from './AiAssistantModal.vue'
 import QueryVarsModal from './QueryVarsModal.vue'
@@ -56,20 +41,31 @@ import TableNoteModal from './TableNoteModal.vue'
 import BookmarksMenu from './BookmarksMenu.vue'
 import type { ChartType, DropTableOptions, PlanBaseline, PlanNode, QueryResult, TruncateOptions } from '@shared/types'
 
-type MenuItem = {
-  label?: string
-  danger?: boolean
-  sep?: boolean
-  shortcut?: string
-  action?: () => void
-  children?: MenuItem[]
-}
 import { serverDatabaseId, sqlDialect, supportsDropAllObjects, type FilterOp, type FilterSpec, type Snippet, type TableInfo } from '@shared/types'
 import { formatSql } from '../lib/sql'
 import { lintSql } from '../lib/sqlLint'
 import { rowToJson, rowToCsv, rowToInsert, rowsToInserts, rowsToUpdates } from '../lib/rowCopy'
 import { canExportToTable, planResultTable } from '../lib/resultTable'
-import logoUrl from '../assets/logo.png'
+import logoUrl from '../assets/logo.webp'
+
+// Loaded on first use: these pull in the charting and code-generation libraries,
+// which most sessions never open.
+const ErDiagram = defineAsyncComponent(() => import('./ErDiagram.vue'))
+const RecordExplorer = defineAsyncComponent(() => import('./RecordExplorer.vue'))
+const RelatedRecords = defineAsyncComponent(() => import('./RelatedRecords.vue'))
+const PerformanceDashboard = defineAsyncComponent(() => import('./PerformanceDashboard.vue'))
+const InvestigationsPanel = defineAsyncComponent(() => import('./InvestigationsPanel.vue'))
+const DocsPanel = defineAsyncComponent(() => import('./DocsPanel.vue'))
+const SmartSearchPanel = defineAsyncComponent(() => import('./SmartSearchPanel.vue'))
+const AnalyticsPanel = defineAsyncComponent(() => import('./AnalyticsPanel.vue'))
+const ChartRender = defineAsyncComponent(() => import('./ChartRender.vue'))
+const EnvDiffPanel = defineAsyncComponent(() => import('./EnvDiffPanel.vue'))
+const SchemaDiffPanel = defineAsyncComponent(() => import('./SchemaDiffPanel.vue'))
+const DataDiffPanel = defineAsyncComponent(() => import('./DataDiffPanel.vue'))
+const RedisQueuePanel = defineAsyncComponent(() => import('./RedisQueuePanel.vue'))
+const VisualQueryBuilder = defineAsyncComponent(() => import('./VisualQueryBuilder.vue'))
+const DataGeneratorModal = defineAsyncComponent(() => import('./DataGeneratorModal.vue'))
+const CodegenModal = defineAsyncComponent(() => import('./CodegenModal.vue'))
 
 const ws = useWorkspace()
 const tabsStore = useTabs()
@@ -246,15 +242,22 @@ function applyBulkEdit(column: string, value: unknown): void {
 }
 
 // Generate INSERT / UPDATE statements from the ticked rows into a new query tab.
+// A keyboard-triggered click has no pointer position; hang the menu off its button.
+function menuOrigin(e: MouseEvent): { x: number; y: number } {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  return { x: r.left, y: r.bottom + 4 }
+}
 function openGenerateSqlMenu(e: MouseEvent): void {
+  showGenerateSqlMenu(menuOrigin(e))
+}
+function showGenerateSqlMenu(origin: { x: number; y: number }): void {
   const a = active.value
   if (!a?.result || a.kind !== 'table' || !a.table) return
   const cols = a.result.columns
   const rows = [...a.selection].sort((x, y) => x - y).map((i) => a.result!.rows[i] as unknown[])
   const table = a.table.name
   ctx.value = {
-    x: e.clientX,
-    y: e.clientY,
+    ...origin,
     items: [
       {
         label: `Generate ${rows.length} INSERT${rows.length === 1 ? '' : 's'}`,
@@ -436,7 +439,7 @@ function onRowContext(tab: Tab, rowIndex: number, e: MouseEvent, colIndex?: numb
     const key = keyIdx >= 0 ? row[keyIdx] : undefined
     if (key != null) {
       items.push(
-        { label: '🔍 View value', action: () => (redisKeyTarget.value = String(key)) },
+        { label: 'View value', action: () => (redisKeyTarget.value = String(key)) },
         { sep: true }
       )
     }
@@ -522,11 +525,17 @@ const multiSelect = computed(() => selectedTables.value.length > 1)
 // so they don't hijack select-all or row deletion in the grid and editor.
 const tableListEl = ref<HTMLElement | null>(null)
 const tableListActive = ref(false)
-function trackTableListFocus(e: PointerEvent): void {
+function trackTableListFocus(e: Event): void {
   tableListActive.value = !!tableListEl.value?.contains(e.target as Node)
 }
-onMounted(() => window.addEventListener('pointerdown', trackTableListFocus, true))
-onBeforeUnmount(() => window.removeEventListener('pointerdown', trackTableListFocus, true))
+onMounted(() => {
+  window.addEventListener('pointerdown', trackTableListFocus, true)
+  window.addEventListener('focusin', trackTableListFocus)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', trackTableListFocus, true)
+  window.removeEventListener('focusin', trackTableListFocus)
+})
 
 function onTableClick(t: TableInfo, idx: number, e: MouseEvent): void {
   const key = tableKey(t)
@@ -602,17 +611,107 @@ function onTableContext(t: TableInfo, idx: number, e: MouseEvent): void {
 
 // Generate code for the entire database — a language menu that opens the modal
 // scoped to every table/view of the active connection.
+// Narrow windows fold secondary toolbar actions into these menus.
+function openTopbarMenu(e: MouseEvent): void {
+  const c = activeConn.value
+  if (!c) return
+  const origin = menuOrigin(e)
+  const items: MenuItem[] = [
+    { label: 'Chat with your data', action: () => ui.toggleChatDock() },
+    { label: 'Visual query builder', action: () => tabsStore.openVisualQuery(c.id) },
+    { label: 'Investigate', action: () => tabsStore.openInvestigations(c.id) },
+    { label: 'Analytics', action: () => tabsStore.openAnalytics(c.id) }
+  ]
+  if (!nonSql.value)
+    items.push({
+      label: 'Generate code',
+      disabled: !ws.tables.length,
+      children: ws.tables.length ? codegenItems() : undefined
+    })
+  if (!nonSql.value && !readOnly.value && !ws.txn[c.id])
+    items.push({ label: 'Begin transaction', action: () => void ws.beginTxn(c.id) })
+  items.push({ sep: true }, { label: 'Disconnect', action: () => void disconnect() })
+  ctx.value = { ...origin, items }
+}
+function openQueryMenu(e: MouseEvent): void {
+  const a = active.value
+  if (!a) return
+  const blank = !a.query.trim()
+  const items: MenuItem[] = []
+  if (explainable.value)
+    items.push({ label: 'Explain', disabled: blank || a.running, action: () => void tabsStore.explain(a) })
+  if (visualExplainable.value)
+    items.push({ label: 'Plan', disabled: blank || a.running || planLoading.value, action: () => void openPlan(a) })
+  if (!nonSql.value)
+    items.push(
+      { label: 'Format', shortcut: '⌘⇧F', disabled: blank, action: () => formatActive() },
+      { label: 'Generate SQL with AI', action: () => openAi('generate') },
+      {
+        label: 'Investigate this query',
+        disabled: blank,
+        action: () => tabsStore.openInvestigations(a.connectionId, { type: 'query', sql: a.query })
+      }
+    )
+  items.push(
+    { label: 'Chat with your data', action: () => ui.openChatDock() },
+    { sep: true },
+    { label: 'Save query', disabled: blank, action: () => openSaveSnippet() },
+    { label: 'Export', disabled: !a.result, action: () => (exportOpen.value = true) }
+  )
+  if (canResultToTable.value)
+    items.push({ sep: true }, { label: 'Save result as table', action: () => (toTableOpen.value = true) })
+  ctx.value = { ...menuOrigin(e), items }
+}
+function openTableMenu(e: MouseEvent): void {
+  const a = active.value
+  if (!a) return
+  const origin = menuOrigin(e)
+  const items: MenuItem[] = [
+    { label: 'Previous page', disabled: a.offset === 0 || a.running, action: () => void tabsStore.prevPage(a) },
+    {
+      label: 'Next page',
+      disabled: a.running || !a.result || a.result.rows.length < a.pageSize,
+      action: () => void tabsStore.nextPage(a)
+    },
+    { sep: true },
+    { label: 'Refresh', shortcut: '⌘R', action: () => void tabsStore.reloadTable(a) },
+    {
+      label: 'Rows per page',
+      children: [100, 200, 500, 1000].map((n) => ({
+        label: n === a.pageSize ? `${n} (current)` : String(n),
+        action: () => void tabsStore.setPageSize(a, n)
+      }))
+    },
+    { sep: true }
+  ]
+  if (tabsStore.editsAllowed(a))
+    items.push(
+      {
+        label: 'Discard changes',
+        danger: true,
+        disabled: !tabsStore.dirtyCount(a),
+        action: () => tabsStore.discardEdits(a)
+      },
+      { label: 'Add row', action: () => tabsStore.addInsertRow(a) },
+      { label: 'Bulk edit', disabled: !a.selection.length, action: () => (bulkOpen.value = true) },
+      { label: 'Generate SQL', disabled: !a.selection.length, action: () => showGenerateSqlMenu(origin) },
+      { sep: true }
+    )
+  items.push(
+    { label: 'Save result as table', disabled: !canResultToTable.value, action: () => (toTableOpen.value = true) },
+    { label: 'Export', disabled: !a.result, action: () => (exportOpen.value = true) }
+  )
+  ctx.value = { ...origin, items }
+}
+function codegenItems(): MenuItem[] {
+  const tables = ws.tables.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
+  return CODEGEN_LANGUAGES.map((language) => ({
+    label: language,
+    action: () => (codegenTarget.value = { language, tables })
+  }))
+}
 function openDbCodegen(e: MouseEvent): void {
-  const all = ws.tables.map((t) => ({ schema: t.schema, name: t.name, type: t.type }))
-  if (!all.length) return
-  ctx.value = {
-    x: e.clientX,
-    y: e.clientY,
-    items: CODEGEN_LANGUAGES.map((lang) => ({
-      label: lang,
-      action: () => (codegenTarget.value = { language: lang, tables: all })
-    }))
-  }
+  if (ws.tables.length) ctx.value = { ...menuOrigin(e), items: codegenItems() }
 }
 
 // ---- per-table notes (local) -----------------------------------------------
@@ -801,13 +900,18 @@ const unlockCountdown = computed(() => {
   const s = ws.unlockSecondsLeft(activeConn.value.id)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 })
-function unlockWrites(): void {
+async function unlockWrites(): Promise<void> {
   const c = activeConn.value
   if (!c) return
-  const msg = c.production
-    ? `⚠ ${c.name} is a PRODUCTION connection. Allow writes for 15 minutes?`
-    : `Allow writes to “${c.name}” for 15 minutes?`
-  if (confirm(msg)) ws.unlockWrites(c.id, 15)
+  const ok = await ui.confirmDialog({
+    title: 'Allow writes',
+    message: c.production
+      ? `${c.name} is a production connection. Allow writes for 15 minutes?`
+      : `Allow writes to “${c.name}” for 15 minutes?`,
+    confirmLabel: 'Allow writes',
+    danger: c.production
+  })
+  if (ok) ws.unlockWrites(c.id, 15)
 }
 function relockWrites(): void {
   if (activeConn.value) ws.relockWrites(activeConn.value.id)
@@ -897,6 +1001,7 @@ function onTableListKeydown(e: KeyboardEvent): boolean {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  if (dialogOpen()) return
   const a = active.value
 
   if (tableListActive.value && !inEditableField() && onTableListKeydown(e)) return
@@ -920,8 +1025,8 @@ function onKeydown(e: KeyboardEvent): void {
     return
   }
 
-  // Backspace / Delete: mark a selected data row for deletion, OR drop tables
-  // selected in the list (unless typing in a field).
+  // Backspace / Delete: mark the selected data rows for deletion (unless typing in
+  // a field). Dropping tables is only ever offered from the focused table list.
   if (e.key !== 'Backspace' && e.key !== 'Delete') return
   if (inEditableField()) return
   if (a && a.kind === 'table' && a.viewMode === 'data' && tabsStore.editsAllowed(a)) {
@@ -937,16 +1042,26 @@ function onKeydown(e: KeyboardEvent): void {
       return
     }
   }
-  if (selectedTables.value.length && !nonSql.value && !readOnly.value) {
-    e.preventDefault()
-    openDropModal()
-  }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 function openTable(t: TableInfo): void {
   if (ws.activeConnectionId) tabsStore.openTable(ws.activeConnectionId, t)
+}
+watch(
+  () => active.value?.id,
+  async () => {
+    await nextTick()
+    document
+      .querySelector('.tab-strip [role="tab"][aria-selected="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+)
+async function closeTabFromKeyboard(tab: Tab): Promise<void> {
+  if (!(await tabsStore.requestCloseTab(tab.id))) return
+  await nextTick()
+  document.querySelector<HTMLElement>('.tab-strip [role="tab"][aria-selected="true"]')?.focus()
 }
 function newQuery(): void {
   if (ws.activeConnectionId) tabsStore.openQuery(ws.activeConnectionId)
@@ -975,7 +1090,7 @@ function startResize(which: 'tables' | 'detail', e: MouseEvent): void {
   window.addEventListener('mouseup', up)
 }
 async function disconnect(): Promise<void> {
-  if (ws.activeConnectionId) await ws.disconnect(ws.activeConnectionId)
+  if (ws.activeConnectionId) await tabsStore.disconnect(ws.activeConnectionId)
 }
 
 // pagination helpers
@@ -1009,7 +1124,13 @@ async function createDatabase(tab: Tab): Promise<void> {
   }
 }
 async function dropDatabase(tab: Tab, name: string): Promise<void> {
-  if (!confirm(`Drop database "${name}"? This cannot be undone.`)) return
+  const ok = await ui.confirmDialog({
+    title: 'Drop database',
+    message: `Drop database "${name}"? This cannot be undone.`,
+    confirmLabel: 'Drop database',
+    danger: true
+  })
+  if (!ok) return
   try {
     await window.api.db.dropDatabase(tab.connectionId, name)
     await tabsStore.run(tab)
@@ -1051,7 +1172,14 @@ function durClass(ms?: number): string {
 
 async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   const pid = row[0]
-  if (pid == null || !confirm(`Kill process ${pid}?`)) return
+  if (pid == null) return
+  const ok = await ui.confirmDialog({
+    title: 'Kill process',
+    message: `Kill process ${pid}? Its running statement is aborted.`,
+    confirmLabel: 'Kill process',
+    danger: true
+  })
+  if (!ok) return
   try {
     await window.api.db.killProcess(tab.connectionId, pid as string | number)
     await tabsStore.run(tab)
@@ -1064,51 +1192,57 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 <template>
   <main class="main">
     <header class="topbar" :class="{ inset: ui.isMac && ui.sidebarCollapsed }">
-      <button class="icon-btn" title="Toggle sidebar (⌘B)" @click="ui.toggleSidebar()"><Icon name="menu" /></button>
+      <button class="icon-btn" title="Show or hide the sidebar (⌘B)" @click="ui.toggleSidebar()"><Icon name="menu" /></button>
       <template v-if="activeConn">
-        <span class="dot" :style="{ background: activeConn.color || '#888f9c' }" />
-        <strong class="conn-name">{{ activeConn.name }}</strong>
+        <span class="dot" :style="{ background: activeConn.color || 'var(--text-faint)' }" />
+        <h1 class="conn-name">{{ activeConn.name }}</h1>
         <span class="meta">{{ activeConn.driver }}<template v-if="activeConn.database"> · {{ activeConn.database }}</template></span>
         <span class="state" :class="ws.connStates[activeConn.id] || 'disconnected'" />
         <button
           v-if="readOnly"
           class="ro-badge locked"
-          title="Read-only (safe mode) — click to temporarily allow writes"
+          title="Read-only" data-tip="Click to allow writes for 15 minutes. You are asked to confirm."
           @click="unlockWrites"
         ><Icon name="lock" :size="12" /> Read-only</button>
         <button
           v-else-if="writeUnlocked"
           class="ro-badge unlocked"
-          title="Writes temporarily unlocked — click to re-lock now"
+          title="Writes are unlocked" data-tip="Click to make this connection read-only again now."
           @click="relockWrites"
         ><Icon name="unlock" :size="12" /> Writable {{ unlockCountdown }}</button>
       </template>
       <strong v-else class="brand-title">DataDock</strong>
       <div class="spacer drag" />
-      <button class="icon-btn palette-btn" title="Command palette (⌘K)" @click="ui.openPalette()">⌘K</button>
-      <button class="icon-btn" :title="ui.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="ui.toggleTheme()">
+      <button class="icon-btn palette-btn" title="Command palette (⌘K)" data-tip="Search connections, tables and actions." aria-label="Command palette" @click="ui.openPalette()">⌘K</button>
+      <button class="icon-btn theme-btn" :title="ui.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="ui.toggleTheme()">
         <Icon :name="ui.theme === 'dark' ? 'sun' : 'moon'" />
       </button>
       <template v-if="activeConn">
         <template v-if="!nonSql && !readOnly">
           <template v-if="ws.txn[activeConn.id]">
-            <span class="txn-badge" title="Open transaction — uncommitted"><span class="tx-dot" /> TX</span>
-            <button class="btn btn-ghost txn-commit" @click="ws.commitTxn(activeConn.id)">Commit</button>
-            <button class="btn btn-ghost txn-rollback" @click="ws.rollbackTxn(activeConn.id)">Rollback</button>
+            <span class="txn-badge" data-tooltip="Transaction open" data-tip="Your changes are not saved until you commit."><span class="tx-dot" /> TX</span>
+            <button class="btn btn-ghost txn-commit" title="Commit transaction" data-tip="Makes every change since Begin Tx permanent." @click="ws.commitTxn(activeConn.id)">Commit</button>
+            <button class="btn btn-ghost txn-rollback" title="Roll back transaction" data-tip="Discards every change since Begin Tx." @click="ws.rollbackTxn(activeConn.id)">Rollback</button>
           </template>
-          <button v-else class="btn btn-ghost" title="Begin transaction" @click="ws.beginTxn(activeConn.id)"><Icon name="swap" /> Begin Tx</button>
-        </template>            <button
-          class="btn btn-ghost ai-btn"
+          <button v-else class="btn btn-ghost fold" title="Begin transaction" data-tip="Changes on this connection stay uncommitted until you press Commit." @click="ws.beginTxn(activeConn.id)"><Icon name="swap" /> Begin Tx</button>
+          <span class="bar-sep fold" />
+        </template>
+        <button
+          class="btn btn-ghost ai-btn fold"
           :class="{ on: ui.chatDockOpen }"
           title="Chat with your data"
+          data-tip="Opens the AI side panel. It can only read."
+          :aria-pressed="ui.chatDockOpen"
           @click="ui.toggleChatDock()"
-        ><Icon name="sparkles" /> Chat</button>
-        <button class="btn btn-ghost" title="Visual Query Builder" @click="tabsStore.openVisualQuery(activeConn.id)"><Icon name="diagram" /> Builder</button>
-        <button class="btn btn-ghost" title="AI Investigation Suite — slow queries, database health & schema understanding" @click="tabsStore.openInvestigations(activeConn.id)"><Icon name="sparkles" /> Investigate</button>
-        <button class="btn btn-ghost" title="Analytics — charts & dashboards (⌘⇧A)" @click="tabsStore.openAnalytics(activeConn.id)"><Icon name="chart" /> Analytics</button>
-        <button v-if="!nonSql" class="btn btn-ghost" title="Generate code for the whole database — models, migrations, DTOs, schemas…" :disabled="!ws.tables.length" @click="openDbCodegen($event)"><Icon name="code" /> Code</button>
-        <button class="btn btn-ghost" @click="newQuery"><Icon name="plus" /> Query</button>
-        <button class="btn" @click="disconnect">Disconnect</button>
+        ><Icon name="sparkles" /> <span class="lbl">Chat</span></button>
+        <button class="btn btn-ghost fold" title="Visual query builder" data-tip="Opens a tab to build a query without SQL. Nothing runs until you press Run." @click="tabsStore.openVisualQuery(activeConn.id)"><Icon name="diagram" /> <span class="lbl">Builder</span></button>
+        <button class="btn btn-ghost fold" title="Investigate" data-tip="Opens a tab with AI checks for slow queries and database health. Read-only." @click="tabsStore.openInvestigations(activeConn.id)"><Icon name="target" /> <span class="lbl">Investigate</span></button>
+        <button class="btn btn-ghost fold" title="Analytics" data-tip="Opens a tab with charts and dashboards." @click="tabsStore.openAnalytics(activeConn.id)"><Icon name="chart" /> <span class="lbl">Analytics</span></button>
+        <button v-if="!nonSql" class="btn btn-ghost fold" title="Generate code" data-tip="Choose a language to generate models, migrations or schemas. The database is not changed." aria-haspopup="menu" :disabled="!ws.tables.length" @click="openDbCodegen($event)"><Icon name="code" /> <span class="lbl">Code</span></button>
+        <span class="bar-sep fold" />
+        <button class="btn btn-ghost" title="New query (⌘T)" data-tip="Opens an empty query tab." @click="newQuery"><Icon name="plus" /> <span class="lbl-keep">Query</span></button>
+        <button class="btn fold" title="Disconnect" data-tip="Closes the connection to this database. Your tabs stay open." @click="disconnect"><Icon name="power" /> Disconnect</button>
+        <button class="btn btn-ghost more" title="More actions" aria-haspopup="menu" @click="openTopbarMenu"><Icon name="more" /></button>
       </template>
     </header>
 
@@ -1126,27 +1260,30 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
     <template v-else>
       <Transition name="drop">
         <div v-if="isProduction" class="prod-banner">
-          ⚠ PRODUCTION — {{ activeConn.name }}. Changes here affect live data.
+          <Icon name="warn" :size="13" /> PRODUCTION — {{ activeConn.name }}. Changes here affect live data.
         </div>
       </Transition>
       <Transition name="drop">
-        <div v-if="ws.error" class="conn-error">{{ ws.error }}</div>
+        <div v-if="ws.error" class="conn-error" role="alert">{{ ws.error }}</div>
       </Transition>
 
       <div class="work">
         <!-- Table list -->
         <div class="tables" v-show="!ui.tablesCollapsed" :style="{ width: ui.tablesWidth + 'px' }">
           <div class="tables-head">
-            <input class="input filter" v-model="tableFilter" placeholder="Filter tables…" />
-            <button class="icon-btn sm" title="Refresh tables" :disabled="!activeConn || refreshingTables" @click="refreshTableList"><Icon name="refresh" :size="14" :class="{ spin: refreshingTables }" /></button>
-            <button v-if="!nonSql && !readOnly" class="icon-btn sm" title="New table" @click="createTableOpen = true"><Icon name="plus" :size="14" /></button>
-            <button v-if="!nonSql" class="icon-btn sm" title="Generate code (whole database)" :disabled="!activeConn || !ws.tables.length" @click="openDbCodegen($event)"><Icon name="code" :size="14" /></button>
-            <button class="icon-btn sm" title="Collapse list" @click="ui.toggleTables()"><Icon name="chevronLeft" :size="14" /></button>
+            <input class="input filter" v-model="tableFilter" aria-label="Filter tables" placeholder="Filter" />
+            <button class="icon-btn sm" title="Reload table list (⌘⇧R)" :disabled="!activeConn || refreshingTables" @click="refreshTableList"><Icon name="refresh" :size="14" :class="{ spin: refreshingTables }" :data-busy="refreshingTables || undefined" /></button>
+            <button v-if="!nonSql && !readOnly" class="icon-btn sm" title="New table" data-tip="Opens a form. Nothing is created until you confirm." @click="createTableOpen = true"><Icon name="plus" :size="14" /></button>
+            <button v-if="!nonSql" class="icon-btn sm" title="Generate code" data-tip="Models, migrations or schemas for every table. The database is not changed." :disabled="!activeConn || !ws.tables.length" @click="openDbCodegen($event)"><Icon name="code" :size="14" /></button>
+            <button class="icon-btn sm" title="Hide table list" @click="ui.toggleTables()"><Icon name="chevronLeft" :size="14" /></button>
           </div>
-          <div ref="tableListEl" class="table-list">
+          <div ref="tableListEl" class="table-list" role="listbox" aria-label="Tables" aria-multiselectable="true" data-rows>
             <div
               v-for="(t, idx) in filteredTables"
               :key="(t.schema || '') + t.name"
+              v-row
+              role="option"
+              :aria-selected="isSelected(t)"
               class="table-item"
               :class="{ selected: isSelected(t) }"
               @click="onTableClick(t, idx, $event)"
@@ -1167,30 +1304,46 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <div
           v-show="!ui.tablesCollapsed"
           class="resizer"
-          title="Drag to resize"
+          title="Drag or use the arrow keys to resize"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          aria-label="Tables list width"
+          aria-valuemin="160"
+          aria-valuemax="440"
+          :aria-valuenow="ui.tablesWidth"
+          @keydown.left.prevent="ui.setTablesWidth(ui.tablesWidth - 16)"
+          @keydown.right.prevent="ui.setTablesWidth(ui.tablesWidth + 16)"
           @mousedown="startResize('tables', $event)"
         />
         <button v-if="ui.tablesCollapsed" class="tables-expand" title="Show tables" @click="ui.toggleTables()"><Icon name="chevronRight" :size="14" /></button>
 
         <!-- Tabs + content -->
         <div class="tab-area">
-          <TransitionGroup name="tabs" tag="div" class="tab-strip">
+          <div class="tab-strip">
+          <TransitionGroup name="tabs" tag="div" class="tab-list" role="tablist" aria-label="Open tabs" data-rows="horizontal">
             <div
               v-for="tab in connTabs"
               :key="tab.id"
+              v-row
+              role="tab"
+              :aria-selected="active?.id === tab.id"
+              aria-keyshortcuts="Delete"
               class="tab"
               :class="{ on: active?.id === tab.id }"
               @click="tabsStore.setActive(activeConn.id, tab.id)"
+              @keydown.delete.stop.prevent="closeTabFromKeyboard(tab)"
               @mousedown.middle.prevent
-              @mouseup.middle="tabsStore.closeTab(tab.id)"
+              @mouseup.middle="tabsStore.requestCloseTab(tab.id)"
             >
               <span class="tab-kind" :class="tab.kind" />
               <span class="tab-title">{{ tab.title }}</span>
-              <span v-if="tab.kind === 'table' && tabsStore.dirtyCount(tab)" class="tab-dirty">●</span>
-              <button class="tab-close" @click.stop="tabsStore.closeTab(tab.id)"><Icon name="x" :size="12" /></button>
+              <span v-if="tab.kind === 'table' && tabsStore.dirtyCount(tab)" class="tab-dirty" data-tooltip="Unsaved changes"><span class="sr-only">unsaved</span></span>
+              <span class="tab-close" aria-hidden="true" data-tooltip="Close tab (⌘W)" @click.stop="tabsStore.requestCloseTab(tab.id)"><Icon name="x" :size="12" /></span>
             </div>
-            <button key="__add" class="tab-add" @click="newQuery" title="New query"><Icon name="plus" :size="15" /></button>
           </TransitionGroup>
+            <button class="tab-add" title="New query (⌘T)" @click="newQuery"><Icon name="plus" :size="15" /></button>
+          </div>
 
           <div v-if="!active" class="no-tab">
             <p>No tab open. Click a table or start a query.</p>
@@ -1204,7 +1357,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <button
                   class="btn btn-primary"
                   :disabled="active.running"
-                  title="Run all statements (⌘⇧↵). ⌘↵ runs the selection or the statement at the cursor."
+                  title="Run all statements (⌘⇧↵)" data-tip="⌘↵ runs only the selection or the statement at the cursor."
                   @click="runActive(active)"
                 >
                   <Icon name="play" :size="13" /> {{ active.running ? 'Running…' : 'Run' }}
@@ -1217,14 +1370,15 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 ><Icon name="stop" :size="13" /> Cancel</button>
                 <span class="hint">{{ isMongo ? 'MongoDB' : isInflux ? 'Flux' : 'SQL' }} · ⌘↵ selection · ⌘⇧↵ all</span>
               </div>
-              <div class="tb-group">
-                <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Show query plan (EXPLAIN)" @click="tabsStore.explain(active)"><Icon name="explain" /> Explain</button>
-                <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Visualize the query plan as a tree" @click="openPlan(active)"><Icon name="plan" /> {{ planLoading ? 'Plan…' : 'Plan' }}</button>
-                <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" @click="formatActive"><Icon name="format" /> Format</button>
-                <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" @click="openAi('generate')"><Icon name="sparkles" /> AI</button>
-                <button v-if="!nonSql" class="btn btn-ghost ai-btn" :disabled="!active.query.trim()" title="Investigate why this query is slow (AI, read-only)" @click="tabsStore.openInvestigations(active.connectionId, { type: 'query', sql: active.query })"><Icon name="sparkles" /> Investigate</button>
-                <button class="btn btn-ghost ai-btn" title="Chat with your data" @click="ui.openChatDock()"><Icon name="sparkles" /> Chat</button>
+              <div class="tb-group fold">
+                <button v-if="explainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running" title="Explain" data-tip="Shows the query plan as text." @click="tabsStore.explain(active)"><Icon name="explain" /> <span class="lbl">Explain</span></button>
+                <button v-if="visualExplainable" class="btn btn-ghost" :disabled="!active.query.trim() || active.running || planLoading" title="Plan" data-tip="Shows the query plan as a tree." @click="openPlan(active)"><Icon name="plan" /> <span class="lbl">{{ planLoading ? 'Plan…' : 'Plan' }}</span></button>
+                <button v-if="!nonSql" class="btn btn-ghost" :disabled="!active.query.trim()" title="Format SQL (⌘⇧F)" data-tip="Reformats the text in the editor. Nothing runs." @click="formatActive"><Icon name="format" /> <span class="lbl">Format</span></button>
+                <button v-if="!nonSql" class="btn btn-ghost ai-btn" title="Generate SQL with AI" data-tip="Writes SQL into the editor. You decide whether to run it." @click="openAi('generate')"><Icon name="bolt" /> <span class="lbl">AI</span></button>
+                <button v-if="!nonSql" class="btn btn-ghost ai-btn" :disabled="!active.query.trim()" title="Investigate this query" data-tip="AI explains why it is slow. Read-only." @click="tabsStore.openInvestigations(active.connectionId, { type: 'query', sql: active.query })"><Icon name="target" /> <span class="lbl">Investigate</span></button>
+                <button class="btn btn-ghost ai-btn" title="Chat with your data" data-tip="Opens the AI side panel. It can only read." @click="ui.openChatDock()"><Icon name="sparkles" /> <span class="lbl">Chat</span></button>
               </div>
+              <button class="btn btn-ghost more" title="More query actions" aria-haspopup="menu" @click="openQueryMenu"><Icon name="more" /></button>
               <div class="spacer" />
               <div class="tb-group">
                 <BookmarksMenu
@@ -1238,16 +1392,18 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   :class="{ 'is-saved': activeSaved }"
                   :disabled="!active.query.trim()"
                   @click="openSaveSnippet"
-                  :title="activeSaved ? `Saved as “${activeSaved.name}”` : 'Save as snippet'"
-                ><Icon name="star" /> {{ activeSaved ? 'Saved' : 'Save' }}</button>
-                <button v-if="canResultToTable" class="btn btn-ghost tb-icon" title="Save this result as a new table" @click="toTableOpen = true"><Icon name="tableExport" /></button>
-                <button class="btn btn-ghost" :disabled="!active.result" @click="exportOpen = true"><Icon name="download" /> Export</button>
+                  :title="activeSaved ? `Saved as “${activeSaved.name}”` : 'Save query'"
+                  data-tip="Keeps this query under Saved Queries."
+                ><Icon name="star" /> <span class="lbl">{{ activeSaved ? 'Saved' : 'Save' }}</span></button>
+                <button v-if="canResultToTable" class="btn btn-ghost tb-icon fold" title="Save as new table" data-tip="Asks for a name, then creates a table from this result." @click="toTableOpen = true"><Icon name="tableExport" /></button>
+                <button class="btn btn-ghost" title="Export" data-tip="Choose a format and file for these results." :disabled="!active.result" @click="exportOpen = true"><Icon name="download" /> <span class="lbl">Export</span></button>
               </div>
             </div>
-            <div class="loading-bar" :class="{ active: active.running }" />
+            <div class="loading-bar" :data-busy="active.running || undefined" :class="{ active: active.running }" />
             <div class="editor-host">
               <SqlEditor
                 v-model="active.query"
+                :label="isMongo || isInflux ? 'Query editor' : 'SQL editor'"
                 :schema="ws.schemas[active.connectionId]"
                 :snippets="nonSql ? [] : tabsStore.savedSnippets"
                 :placeholder="isMongo ? 'db.collection.find({ })' : isInflux ? 'from(bucket: …) |> range(start: -1h)' : 'SELECT * FROM …'"
@@ -1255,10 +1411,10 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               />
             </div>
             <div v-if="activeLints.length" class="lints" :class="{ open: lintsOpen }">
-              <button class="lint-bar" @click="lintsOpen = !lintsOpen">
-                <span class="lint-ic" :class="lintWarnCount ? 'warn' : 'info'">{{ lintWarnCount ? '⚠' : 'ℹ' }}</span>
+              <button class="lint-bar" :aria-expanded="lintsOpen" @click="lintsOpen = !lintsOpen">
+                <span class="lint-ic" :class="lintWarnCount ? 'warn' : 'info'"><Icon :name="lintWarnCount ? 'warn' : 'info'" :size="13" /></span>
                 <span class="lint-sum">{{ activeLints.length }} SQL suggestion{{ activeLints.length === 1 ? '' : 's' }}</span>
-                <span class="lint-caret">{{ lintsOpen ? '▴' : '▾' }}</span>
+                <span class="lint-caret"><Icon :name="lintsOpen ? 'chevronUp' : 'chevronDown'" :size="12" /></span>
               </button>
               <div v-if="lintsOpen" class="lint-list">
                 <div v-for="l in activeLints" :key="l.rule" class="lint" :class="l.severity">
@@ -1268,10 +1424,10 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               </div>
             </div>
             <div class="results">
-              <div v-if="active.error" class="run-error">
+              <div v-if="active.error" class="run-error" role="alert">
                 <div class="run-error-head">
                   <span class="run-error-msg">{{ active.error }}</span>
-                  <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')">✨ Fix with AI</button>
+                  <button v-if="!nonSql" class="btn btn-ghost ai-btn fix-btn" title="Ask AI to fix this query" @click="openAi('fix')"><Icon name="sparkles" :size="13" /> Fix with AI</button>
                 </div>
               </div>
               <!-- One sub-tab per result set when a script returns several -->
@@ -1288,8 +1444,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <!-- Instant Visualization: chart any result with one click -->
                 <div v-if="canChart(active.result)" class="result-view">
                   <div class="rv-toggle">
-                    <button :class="{ on: qResultView === 'table' }" @click="qResultView = 'table'">▦ Table</button>
-                    <button :class="{ on: qResultView === 'chart' }" @click="showChartView">📊 Chart</button>
+                    <button :class="{ on: qResultView === 'table' }" :aria-pressed="qResultView === 'table'" @click="qResultView = 'table'"><Icon name="table" :size="13" /> Table</button>
+                    <button :class="{ on: qResultView === 'chart' }" :aria-pressed="qResultView === 'chart'" @click="showChartView"><Icon name="chart" :size="13" /> Chart</button>
                   </div>
                   <div v-if="qResultView === 'chart'" class="rv-types">
                     <button v-for="t in (['bar','line','area','pie'] as ChartType[])" :key="t" :class="{ on: qChartType === t }" @click="qChartType = t">{{ t }}</button>
@@ -1309,8 +1465,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <div v-else-if="active.kind === 'table'" class="table-pane">
             <div class="toolbar">
               <div class="view-toggle">
-                <button :class="{ on: active.viewMode === 'data' }" @click="tabsStore.setViewMode(active, 'data')">Data</button>
-                <button :class="{ on: active.viewMode === 'structure' }" @click="tabsStore.setViewMode(active, 'structure')">Structure</button>
+                <button title="Data" data-tip="Rows in this table." :class="{ on: active.viewMode === 'data' }" :aria-pressed="active.viewMode === 'data'" @click="tabsStore.setViewMode(active, 'data')">Data</button>
+                <button title="Structure" data-tip="Columns, keys and indexes." :class="{ on: active.viewMode === 'structure' }" :aria-pressed="active.viewMode === 'structure'" @click="tabsStore.setViewMode(active, 'structure')">Structure</button>
               </div>
               <span class="tb-sep" />
               <template v-if="active.viewMode === 'data'">
@@ -1330,38 +1486,40 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                       @click="tabsStore.nextPage(active)"
                     ><Icon name="chevronRight" :size="15" /></button>
                   </div>
-                  <select class="select sm" :value="active.pageSize" title="Rows per page" @change="tabsStore.setPageSize(active, Number(($event.target as HTMLSelectElement).value))">
+                  <select class="select sm fold-late" :value="active.pageSize" aria-label="Rows per page" title="Rows per page" @change="tabsStore.setPageSize(active, Number(($event.target as HTMLSelectElement).value))">
                     <option :value="100">100</option>
                     <option :value="200">200</option>
                     <option :value="500">500</option>
                     <option :value="1000">1000</option>
                   </select>
-                  <button class="btn btn-ghost tb-icon" @click="tabsStore.reloadTable(active)" title="Refresh"><Icon name="refresh" /></button>
+                  <button class="btn btn-ghost tb-icon fold-late" @click="tabsStore.reloadTable(active)" title="Reload rows (⌘R)"><Icon name="refresh" /></button>
                 </div>
                 <div v-if="tabsStore.editsAllowed(active)" class="tb-group">
-                  <button class="btn btn-ghost" title="Add row" @click="tabsStore.addInsertRow(active)"><Icon name="plus" /> <span class="lbl">Add row</span></button>
+                  <button class="btn btn-ghost fold-late" title="Add row" data-tip="Adds an empty row as an unsaved change." @click="tabsStore.addInsertRow(active)"><Icon name="plus" /> <span class="lbl">Add row</span></button>
                   <button
-                    class="btn btn-ghost"
+                    class="btn btn-ghost fold"
                     :disabled="active.selection.length === 0"
-                    title="Set a column to one value across the selected rows"
+                    title="Bulk edit" data-tip="Sets one column across the selected rows. Not saved until you press Save."
                     @click="bulkOpen = true"
                   ><Icon name="pencil" /> <span class="lbl">Bulk edit<span v-if="active.selection.length"> ({{ active.selection.length }})</span></span></button>
                   <button
-                    class="btn btn-ghost"
+                    class="btn btn-ghost fold"
                     :disabled="active.selection.length === 0"
-                    title="Generate INSERT/UPDATE SQL from the selected rows"
+                    aria-haspopup="menu"
+                    title="Generate SQL" data-tip="Opens INSERT or UPDATE statements for the selected rows in a new tab. Nothing runs."
                     @click="openGenerateSqlMenu"
                   ><Icon name="code" /> <span class="lbl">Generate SQL</span></button>
                 </div>
+                <button class="btn btn-ghost more" title="More table actions" aria-haspopup="menu" @click="openTableMenu"><Icon name="more" /></button>
                 <div class="spacer" />
-                <div class="tb-group">
-                  <template v-if="tabsStore.editsAllowed(active)">
-                    <span class="dirty-info" :class="{ idle: !tabsStore.dirtyCount(active) }">{{ tabsStore.dirtyCount(active) }} unsaved</span>
-                    <button class="btn btn-ghost" :disabled="!tabsStore.dirtyCount(active)" @click="tabsStore.discardEdits(active)">Discard</button>
-                    <button class="btn btn-primary" :disabled="!tabsStore.dirtyCount(active) || active.running" @click="tabsStore.commit(active)">Save ⌘S</button>
-                  </template>
-                  <button class="btn btn-ghost tb-icon" :disabled="!canResultToTable" title="Save this result as a new table" @click="toTableOpen = true"><Icon name="tableExport" /></button>
-                  <button class="btn btn-ghost" :disabled="!active.result" title="Export" @click="exportOpen = true"><Icon name="download" /> <span class="lbl">Export</span></button>
+                <div class="tb-group fold">
+                  <button class="btn btn-ghost tb-icon" :disabled="!canResultToTable" title="Save as new table" data-tip="Asks for a name, then creates a table from these rows." @click="toTableOpen = true"><Icon name="tableExport" /></button>
+                  <button class="btn btn-ghost" :disabled="!active.result" title="Export" data-tip="Choose a format and file for these rows." @click="exportOpen = true"><Icon name="download" /> <span class="lbl">Export</span></button>
+                </div>
+                <div v-if="tabsStore.editsAllowed(active)" class="tb-group pinned">
+                  <span class="dirty-info" :class="{ idle: !tabsStore.dirtyCount(active) }">{{ tabsStore.dirtyCount(active) }} unsaved</span>
+                  <button class="btn btn-ghost discard" title="Discard changes" data-tip="Drops every unsaved change in this tab." :disabled="!tabsStore.dirtyCount(active)" @click="tabsStore.discardEdits(active)">Discard</button>
+                  <button class="btn btn-primary" title="Save changes (⌘S)" data-tip="Writes your unsaved changes to the database." :disabled="!tabsStore.dirtyCount(active) || active.running" @click="tabsStore.commit(active)">Save <span class="save-key">⌘S</span></button>
                 </div>
               </template>
               <template v-else>
@@ -1370,7 +1528,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                 <span v-if="active.running" class="status-mini">Working…</span>
               </template>
             </div>
-            <div class="loading-bar" :class="{ active: active.running }" />
+            <div class="loading-bar" :data-busy="active.running || undefined" :class="{ active: active.running }" />
 
             <!-- Structure view -->
             <StructurePanel
@@ -1399,7 +1557,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 
             <div class="table-body">
               <div class="grid-host">
-                <div v-if="active.error" class="run-error">{{ active.error }}</div>
+                <div v-if="active.error" class="run-error" role="alert">{{ active.error }}</div>
                 <ResultsGrid
                   v-else
                   :result="active.result"
@@ -1429,7 +1587,16 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <div
                 v-if="active.selectedRow !== null && active.result"
                 class="resizer detail-resizer"
-                title="Drag to resize"
+                title="Drag or use the arrow keys to resize"
+                role="separator"
+                tabindex="0"
+                aria-orientation="vertical"
+                aria-label="Row details width"
+                aria-valuemin="240"
+                aria-valuemax="640"
+                :aria-valuenow="ui.detailWidth"
+                @keydown.left.prevent="ui.setDetailWidth(ui.detailWidth + 16)"
+                @keydown.right.prevent="ui.setDetailWidth(ui.detailWidth - 16)"
                 @mousedown="startResize('detail', $event)"
               />
               <RowDetailPanel
@@ -1456,12 +1623,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
           <!-- Databases tab -->
           <div v-else-if="active.kind === 'databases'" class="server-pane">
             <div class="toolbar">
-              <input class="input db-input" v-model="newDbName" placeholder="New database name" @keydown.enter="createDatabase(active)" />
+              <input class="input db-input" v-model="newDbName" aria-label="New database name" placeholder="New database name" @keydown.enter="createDatabase(active)" />
               <button class="btn btn-primary" :disabled="!newDbName.trim()" @click="createDatabase(active)">Create</button>
               <div class="spacer" />
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
             </div>
-            <div v-if="active.error" class="run-error">{{ active.error }}</div>
+            <div v-if="active.error" class="run-error" role="alert">{{ active.error }}</div>
             <div class="db-list">
               <div v-for="db in active.databases" :key="db" class="db-row">
                 <span class="db-icon"><Icon name="database" :size="13" /></span>
@@ -1472,7 +1639,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
                   @click="ws.connectAndOpen(serverDatabaseId(active.connectionId, db))"
                 >{{ db }}</button>
                 <span v-else class="db-name">{{ db }}</span>
-                <button class="btn-ghost drop" @click="dropDatabase(active, db)">Drop</button>
+                <button class="btn-ghost drop" :title="`Drop ${db}`" @click="dropDatabase(active, db)">Drop</button>
               </div>
             </div>
           </div>
@@ -1486,7 +1653,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
             </div>
             <div class="results">
-              <div v-if="active.error" class="run-error">{{ active.error }}</div>
+              <div v-if="active.error" class="run-error" role="alert">{{ active.error }}</div>
               <ResultsGrid v-else :result="active.result" />
             </div>
           </div>
@@ -1500,7 +1667,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
             </div>
             <div class="results">
-              <div v-if="active.error" class="run-error">{{ active.error }}</div>
+              <div v-if="active.error" class="run-error" role="alert">{{ active.error }}</div>
               <ResultsGrid v-else :result="active.result" action-label="Kill" @action="(row) => killProcess(active!, row)" />
             </div>
           </div>
@@ -1515,10 +1682,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
               <button class="btn btn-ghost btn-danger" @click="tabsStore.clearHistory(active)">Clear</button>
             </div>
-            <div class="history-list">
+            <div class="history-list" data-rows>
               <div
                 v-for="h in active.entries"
                 :key="h.id"
+                v-row
+                role="button"
                 class="history-item"
                 :class="{ failed: !!h.error }"
                 @click="useHistoryEntry(h.sql)"
@@ -1547,17 +1716,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
               <span class="status-mini">{{ active.snippets?.length || 0 }} saved</span>
               <button class="btn btn-ghost tb-icon" title="Refresh" @click="tabsStore.run(active)"><Icon name="refresh" /></button>
             </div>
-            <div class="history-list">
+            <div class="history-list" role="list" data-rows>
               <div
                 v-for="s in active.snippets"
                 :key="s.id"
+                v-row
+                role="listitem"
                 class="history-item snippet"
                 @click="useSnippet(s)"
                 title="Click to open in a new query tab"
               >
                 <div class="snippet-head">
                   <span class="snippet-name">{{ s.name }}</span>
-                  <button class="btn-ghost drop" @click.stop="tabsStore.deleteSnippet(active!, s.id)"><Icon name="x" :size="12" /></button>
+                  <span data-row-actions><button class="btn-ghost drop" :title="`Delete ${s.name}`" @click.stop="tabsStore.deleteSnippet(active!, s.id)"><Icon name="x" :size="12" /></button></span>
                 </div>
                 <pre class="history-sql">{{ s.sql }}</pre>
               </div>
@@ -1666,8 +1837,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
         <span v-else-if="writeUnlocked" class="sb-tag wr">Writable {{ unlockCountdown }}</span>
         <span v-if="!nonSql && ws.txn[activeConn.id]" class="sb-tag tx">Transaction open</span>
         <div class="sb-spacer" />
-        <span v-if="active && active.running" class="sb-stat">Working…</span>
-        <span v-else-if="active && active.result && !active.error" class="sb-stat">
+        <span v-if="active && active.running" class="sb-stat" role="status">Working…</span>
+        <span v-else-if="active && active.result && !active.error" class="sb-stat" role="status">
           {{ active.result.rowCount }} rows · {{ Math.round(active.result.durationMs) }} ms
         </span>
       </footer>
@@ -1928,7 +2099,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   flex-direction: column;
   background: var(--bg-panel);
   border-left: 1px solid var(--border-strong);
-  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-pop);
   z-index: 40;
 }
 .chat-dock-head {
@@ -1944,7 +2115,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text);
 }
@@ -1971,6 +2142,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
+  container: topbar / inline-size;
 }
 .topbar.inset {
   padding-left: 78px; /* clear macOS traffic lights when sidebar is collapsed */
@@ -1978,6 +2150,47 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .topbar .icon-btn,
 .topbar .btn {
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+.topbar .dot,
+.topbar .state {
+  flex-shrink: 0;
+}
+.more {
+  display: none;
+}
+.bar-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+}
+@container topbar (max-width: 1120px) {
+  .topbar .meta {
+    display: none;
+  }
+  .topbar .btn .lbl {
+    display: none;
+  }
+  .topbar .btn {
+    padding-inline: 10px;
+  }
+}
+@container topbar (max-width: 990px) {
+  .topbar .fold,
+  .topbar .meta {
+    display: none;
+  }
+  .topbar .more {
+    display: inline-flex;
+  }
+}
+@container topbar (max-width: 470px) {
+  .topbar .palette-btn,
+  .topbar .theme-btn,
+  .topbar .lbl-keep {
+    display: none;
+  }
 }
 .icon-btn {
   width: 28px;
@@ -1987,19 +2200,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
 .icon-btn.sm {
-  width: 22px;
-  height: 22px;
-  font-size: 13px;
+  width: 24px;
+  height: 24px;
+  font-size: var(--fs-base);
 }
 .palette-btn {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   width: auto;
   padding: 0 8px;
@@ -2018,16 +2231,24 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   font-weight: 700;
   letter-spacing: 0.01em;
 }
+/* Which database you are about to write to must never be squeezed out. */
 .conn-name {
+  font-size: var(--fs-base);
   font-weight: 600;
+  flex: 0 1 auto;
+  min-width: 72px;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   padding: 2px 9px;
@@ -2037,34 +2258,34 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--warn);
-  background: rgba(240, 180, 41, 0.15);
-  border: 1px solid rgba(240, 180, 41, 0.4);
+  color: var(--warn-text);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
   padding: 2px 8px;
   border-radius: 999px;
   -webkit-app-region: no-drag;
 }
 .ro-badge.locked:hover {
-  background: rgba(240, 180, 41, 0.28);
+  background: var(--warn-line);
 }
 .ro-badge.unlocked {
-  color: var(--ok);
-  background: rgba(74, 222, 128, 0.14);
-  border-color: rgba(74, 222, 128, 0.45);
+  color: var(--ok-text);
+  background: var(--ok-soft);
+  border-color: var(--ok-line);
   font-variant-numeric: tabular-nums;
 }
 .ro-badge.unlocked:hover {
-  background: rgba(74, 222, 128, 0.26);
+  background: var(--ok-line);
 }
 .txn-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--warn);
+  color: var(--warn-text);
   -webkit-app-region: no-drag;
 }
 .tx-dot {
@@ -2075,10 +2296,10 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   animation: ddpulse 2s ease-in-out infinite;
 }
 .txn-commit {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .txn-rollback {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .spacer.drag {
   -webkit-app-region: drag;
@@ -2092,7 +2313,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   overflow: hidden;
   background:
     radial-gradient(ellipse 55% 45% at 50% 42%, var(--accent-tint), transparent 70%),
-    radial-gradient(ellipse 85% 70% at 50% 50%, rgba(44, 70, 119, 0.16), transparent 72%);
+    radial-gradient(ellipse 85% 70% at 50% 50%, var(--accent-tint), transparent 72%);
 }
 .welcome-card {
   text-align: center;
@@ -2120,27 +2341,27 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   position: absolute;
   inset: 4px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow), rgba(44, 70, 119, 0.12) 55%, transparent 70%);
+  background: radial-gradient(circle, var(--accent-glow), var(--accent-soft) 55%, transparent 70%);
   filter: blur(10px);
 }
 .welcome-logo {
   width: 92px;
   height: 92px;
   position: relative;
-  filter: drop-shadow(0 16px 40px var(--accent-glow)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 16px 40px var(--accent-glow)) drop-shadow(0 8px 22px var(--shadow-color));
 }
 .welcome-card h1 {
-  font-size: 28px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   letter-spacing: -0.4px;
   color: var(--text);
   margin-bottom: 10px;
 }
 .welcome-card p {
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .welcome-card .sub {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin-top: 6px;
   max-width: 340px;
@@ -2186,18 +2407,21 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .prod-banner {
   flex-shrink: 0;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   letter-spacing: 0.03em;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 5px 12px;
 }
 .conn-error {
-  background: rgba(248, 113, 113, 0.13);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
   padding: 7px 14px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 /* Banners (production warning, connection errors) slide down into place. */
@@ -2225,7 +2449,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 0 14px;
   border-top: 1px solid var(--border);
   background: var(--bg-panel);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   -webkit-app-region: no-drag;
 }
@@ -2250,7 +2474,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   white-space: nowrap;
 }
 .sb-tag {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 1px 8px;
   border-radius: 999px;
@@ -2259,18 +2483,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .sb-tag.ro,
 .sb-tag.tx {
-  color: var(--warn);
-  background: rgba(240, 180, 41, 0.12);
-  border-color: rgba(240, 180, 41, 0.32);
+  color: var(--warn-text);
+  background: var(--warn-soft);
+  border-color: var(--warn-line);
 }
 .sb-tag.wr {
-  color: var(--ok);
-  background: rgba(74, 222, 128, 0.12);
-  border-color: rgba(74, 222, 128, 0.32);
+  color: var(--ok-text);
+  background: var(--ok-soft);
+  border-color: var(--ok-line);
   font-variant-numeric: tabular-nums;
 }
 .tables {
   width: 210px;
+  max-width: 36%;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
@@ -2347,20 +2572,20 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   background: var(--accent-soft);
 }
 .table-item.selected .tname {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .sel-hint {
   flex-shrink: 0;
   padding: 6px 10px;
   border-top: 1px solid var(--border);
   background: var(--bg-elevated);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 .ticon {
   display: inline-flex;
   align-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .tname {
   flex: 1;
@@ -2375,16 +2600,17 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   flex: none;
 }
 .table-item:hover .tnote {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .no-tables {
   color: var(--text-faint);
   padding: 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 
 /* Tabs */
 .tab-area {
+  container: tabarea / inline-size;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -2397,11 +2623,17 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   gap: 2px;
   padding: 6px 6px 0;
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
   background: var(--bg-app);
 }
+.tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
 /* Keep the strip's own scrollbar slim so it doesn't crowd the tabs. */
-.tab-strip::-webkit-scrollbar {
+.tab-list::-webkit-scrollbar {
   height: 4px;
 }
 /* New tabs rise in; when one closes, its neighbours slide over to fill the gap. */
@@ -2437,9 +2669,10 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .tab.on {
   background: var(--bg-panel);
   color: var(--text);
-  border-color: var(--border);
-  border-top: 2px solid var(--accent);
-  padding-top: 6px;
+  border-color: var(--accent-ring);
+}
+.tab.on .tab-title {
+  font-weight: 600;
 }
 .tab-kind {
   width: 7px;
@@ -2485,23 +2718,29 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   text-overflow: ellipsis;
 }
 .tab-dirty {
-  color: var(--warn);
-  font-size: 9px;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
 }
 .tab-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: -4px -7px -4px -3px;
+  border-radius: 4px;
   opacity: 0;
   transition: opacity 0.12s, background 0.12s, color 0.12s;
 }
 /* Reveal the close affordance only on the hovered/active tab — less persistent
    clutter across a full strip of tabs. */
 .tab:hover .tab-close,
+.tab:focus-visible .tab-close,
 .tab.on .tab-close {
   opacity: 1;
 }
@@ -2510,6 +2749,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   color: var(--text);
 }
 .tab-add {
+  flex: none;
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
@@ -2557,9 +2797,6 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Establish a sizing context so the toolbar can compact its buttons to
-     icon-only based on the panel width (not the whole window). */
-  container-type: inline-size;
 }
 .table-pane > .toolbar,
 .table-pane > .loading-bar,
@@ -2579,11 +2816,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   padding: 7px 16px;
   background: var(--accent-soft);
   border-bottom: 1px solid var(--border-soft);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .table-note > :deep(.dd-icon) {
-  color: var(--accent);
+  color: var(--accent-text);
   flex: none;
 }
 .table-note-text {
@@ -2594,7 +2831,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .table-note-edit {
   flex: none;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   padding: 2px 8px;
   border-radius: 999px;
@@ -2678,26 +2915,92 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .toolbar .pg-btn {
   flex-shrink: 0;
 }
-/* When the data panel gets narrow, collapse labelled buttons to icon-only so
-   they stay on one row instead of overflowing off-screen. Tooltips keep them
-   discoverable; a scrollbar is the last resort at extreme widths. */
-@container (max-width: 600px) {
-  .toolbar .btn .lbl {
+/* As the panel narrows: labels collapse to icons, then secondary actions fold
+   into the More menu. Save stays pinned to the right edge throughout; a scrollbar
+   is the last resort. */
+@container tabarea (max-width: 1290px) {
+  .toolbar .hint,
+  .table-pane .toolbar .lbl {
     display: none;
   }
-  .toolbar .btn {
-    padding-left: 9px;
-    padding-right: 9px;
+  .table-pane .toolbar .btn:has(> .lbl) {
+    padding-inline: 9px;
   }
 }
-/* Keep controls full-size and let the row wrap on narrow windows rather than
-   squishing or clipping them — calmer than a crowded single line. */
+@container tabarea (max-width: 1060px) {
+  .toolbar :deep(.lbl) {
+    display: none;
+  }
+  .toolbar :deep(.btn:has(> .lbl)) {
+    padding-inline: 9px;
+  }
+}
+@container tabarea (max-width: 700px) {
+  .editor-pane .toolbar .fold {
+    display: none;
+  }
+  .editor-pane .toolbar .more {
+    display: inline-flex;
+  }
+}
+@container tabarea (max-width: 1000px) {
+  .table-pane .toolbar .fold,
+  .toolbar .dirty-info,
+  .toolbar .discard:disabled,
+  .toolbar .tb-sep {
+    display: none;
+  }
+  .table-pane .toolbar .more {
+    display: inline-flex;
+  }
+}
+@container tabarea (max-width: 740px) {
+  .toolbar .fold-late,
+  .toolbar .save-key {
+    display: none;
+  }
+}
+@container tabarea (max-width: 480px) {
+  .toolbar .pg-info,
+  .toolbar .discard {
+    display: none;
+  }
+  .toolbar {
+    padding-inline: 8px;
+  }
+  .toolbar .view-toggle button {
+    padding-inline: 8px;
+  }
+}
+@container tabarea (max-width: 340px) {
+  .toolbar .pager,
+  .toolbar .tb-group:not(.pinned):has(> .bm) {
+    display: none;
+  }
+  .toolbar {
+    gap: 4px;
+  }
+  .toolbar .view-toggle button {
+    padding-inline: 5px;
+  }
+  .toolbar .btn,
+  .toolbar :deep(.btn) {
+    padding-inline: 7px;
+  }
+}
+.toolbar .pinned {
+  position: sticky;
+  right: 0;
+  padding-left: 8px;
+  background: var(--bg-panel);
+}
+/* Keep controls full-size rather than squishing them. */
 .toolbar > * {
   flex-shrink: 0;
 }
 .toolbar .hint {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 /* Thin indeterminate progress under the toolbar while a query/table is busy. */
 /* Always present as a 2px track (transparent when idle) so toggling the
@@ -2742,7 +3045,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .view-toggle button {
   padding: 4px 14px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   background: transparent;
   border: none;
@@ -2755,8 +3058,8 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .view-toggle button.on {
   background: var(--bg-active);
-  color: var(--accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  color: var(--accent-text);
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 .tb-sep {
   width: 1px;
@@ -2786,7 +3089,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   justify-content: center;
   width: 26px;
   height: 26px;
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1;
   color: var(--text-dim);
   border-radius: 999px;
@@ -2801,7 +3104,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .pg-info {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding: 0 9px;
   min-width: 58px;
@@ -2810,7 +3113,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 /* Icon-only ghost buttons in toolbars: square, no text padding. */
 .tb-icon {
   padding: 5px 9px;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 .status-mini {
   background: var(--bg-elevated);
@@ -2820,19 +3123,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .select.sm {
   padding: 4px 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .db-input {
   width: 240px;
 }
 .status-mini {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: var(--mono);
 }
 .dirty-info {
-  color: var(--warn);
-  font-size: 12px;
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
   white-space: nowrap;
 }
 /* Keep its width reserved when there are no edits, so Save/Discard don't slide. */
@@ -2840,19 +3143,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   visibility: hidden;
 }
 .btn.is-saved {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .btn.is-saved .dd-icon {
   fill: currentColor;
 }
 .cancel-btn {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .cancel-btn:hover {
-  background: rgba(229, 97, 106, 0.14);
+  background: var(--danger-soft);
 }
 .ai-btn {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ai-btn:hover {
   background: var(--accent-soft);
@@ -2893,14 +3196,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   gap: 8px;
   width: 100%;
   padding: 6px 14px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .lint-bar:hover {
   background: var(--bg-hover);
 }
 .lint-ic.warn {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .lint-ic.info {
   color: var(--text-faint);
@@ -2912,7 +3215,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .lint-caret {
   margin-left: auto;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 .lint-list {
   padding: 2px 14px 8px;
@@ -2924,7 +3227,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .ldot {
@@ -2961,7 +3264,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .result-tabs .rt {
   flex: none;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   padding: 4px 11px;
   border: 1px solid transparent;
   border-bottom: none;
@@ -2975,7 +3278,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .result-tabs .rt.on {
   background: var(--bg-elevated);
   border-color: var(--border);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .instant-chart {
@@ -3000,7 +3303,11 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .rv-toggle button,
 .rv-types button {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
   padding: 3px 9px;
   border-radius: calc(var(--radius-sm) - 2px);
   color: var(--text-dim);
@@ -3013,14 +3320,14 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 .rv-toggle button.on,
 .rv-types button.on {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .run-error {
   padding: 14px;
-  color: var(--danger);
+  color: var(--danger-text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   white-space: pre-wrap;
   overflow: auto;
   height: 100%;
@@ -3049,7 +3356,7 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .history-sql {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -3062,12 +3369,12 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   align-items: center;
   gap: 10px;
   margin-top: 5px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-family: var(--mono);
 }
 .history-meta .err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .hist-when {
   min-width: 64px;
@@ -3104,13 +3411,13 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   text-align: right;
 }
 .dur-ms.fast {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .dur-ms.mid {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .dur-ms.slow {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .snippet-head {
   display: flex;
@@ -3127,16 +3434,19 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
 }
 .snippet .drop {
   opacity: 0.5;
-  color: var(--danger);
-  width: 20px;
-  height: 20px;
+  color: var(--danger-text);
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
 }
+.snippet .drop:focus-visible {
+  opacity: 1;
+}
 .snippet .drop:hover {
-  background: rgba(229, 97, 106, 0.15);
+  background: var(--danger-soft);
 }
 .btn-danger {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .db-row {
   display: flex;
@@ -3166,16 +3476,16 @@ async function killProcess(tab: Tab, row: unknown[]): Promise<void> {
   cursor: pointer;
 }
 .db-open:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: underline;
 }
 .drop {
-  color: var(--danger);
-  font-size: 11px;
+  color: var(--danger-text);
+  font-size: var(--fs-xs);
   padding: 3px 9px;
   border-radius: 4px;
 }
 .drop:hover {
-  background: rgba(229, 97, 106, 0.15);
+  background: var(--danger-soft);
 }
 </style>

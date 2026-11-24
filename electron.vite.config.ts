@@ -22,6 +22,7 @@ export default defineConfig({
         '@shared': resolve('src/shared')
       }
     },
-    plugins: [vue()]
+    plugins: [vue()],
+    build: { minify: true }
   }
 })

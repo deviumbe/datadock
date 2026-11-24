@@ -38,7 +38,7 @@ watch(focus, load, { immediate: true })
     </header>
     <div class="body">
       <div v-if="loading" class="state">Loading relationships…</div>
-      <div v-else-if="error" class="state err">{{ error }}</div>
+      <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
       <div v-else-if="!focus" class="state">No record selected.</div>
       <RelatedNode
         v-else-if="er"
@@ -72,14 +72,14 @@ watch(focus, load, { immediate: true })
   background: var(--bg-panel);
 }
 .title {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 .sub {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text);
 }
@@ -90,11 +90,11 @@ watch(focus, load, { immediate: true })
 }
 .state {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 24px 0;
   text-align: center;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 </style>

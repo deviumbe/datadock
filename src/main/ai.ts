@@ -530,11 +530,11 @@ export async function generateAnalytics(req: AiAnalyticsRequest): Promise<Analyt
     `- {"op":"createDataset","key":"d1","name":"...","source":<source>}\n` +
     `- {"op":"updateDataset","id":"...","name?":"...","source?":<source>}\n` +
     `- {"op":"deleteDataset","id":"..."}\n` +
-    `- {"op":"createMetric","key":"m1","name":"...","datasetKey":"d1" OR "datasetId":"...","agg":"count|sum|avg|min|max","column?":"<measure col>","format?":<format>,"icon?":"<emoji>"}\n` +
-    `- {"op":"updateMetric","id":"...","name?":"...","agg?":"...","column?":"...","format?":<format>,"icon?":"<emoji>"}\n` +
+    `- {"op":"createMetric","key":"m1","name":"...","datasetKey":"d1" OR "datasetId":"...","agg":"count|sum|avg|min|max","column?":"<measure col>","format?":<format>,"icon?":"<icon>"}\n` +
+    `- {"op":"updateMetric","id":"...","name?":"...","agg?":"...","column?":"...","format?":<format>,"icon?":"<icon>"}\n` +
     `- {"op":"deleteMetric","id":"..."}\n` +
-    `- {"op":"createChart","key":"c1","name":"...","datasetKey":"d1" OR "datasetId":"...","type":<chartType>,"encoding":<encoding>,"icon?":"<emoji, kpi only>"}\n` +
-    `- {"op":"updateChart","id":"...","name?":"...","type?":<chartType>,"encoding?":<encoding>,"datasetId?":"...","icon?":"<emoji>"}\n` +
+    `- {"op":"createChart","key":"c1","name":"...","datasetKey":"d1" OR "datasetId":"...","type":<chartType>,"encoding":<encoding>,"icon?":"<icon, kpi only>"}\n` +
+    `- {"op":"updateChart","id":"...","name?":"...","type?":<chartType>,"encoding?":<encoding>,"datasetId?":"...","icon?":"<icon>"}\n` +
     `- {"op":"deleteChart","id":"..."}\n` +
     `- {"op":"createDashboard","key":"b1","name":"...","widgets":[{"chartKey":"c1" OR "chartId":"...","x":0,"y":0,"w":6,"h":8}]}\n` +
     `- {"op":"updateDashboard","id":"...","name?":"...","widgets?":[...]}\n` +
@@ -545,7 +545,7 @@ export async function generateAnalytics(req: AiAnalyticsRequest): Promise<Analyt
     `Use "sql" for joins, derived columns, pre-filtering or TOP-N (e.g. WHERE id IN (SELECT ... ORDER BY SUM(...) DESC LIMIT 10)). ` +
     `Dataset SQL MUST return ROW-LEVEL data (dimension, measure, optional series columns) and must NOT pre-aggregate — the app aggregates.\n` +
     `<chartType>: ${CHART_TYPES.join(', ')}. Use "line" for time trends, "bar" for category comparisons, "pie"/"donut" for share, ` +
-    `"kpi" for a single headline number (a card; give it a relevant "icon" emoji), "table" for raw rows, ` +
+    `"kpi" for a single headline number (a card; give it a relevant "icon": one of money, trendUp, trendDown, cart, users, package, star, bolt, flame, check, clock, globe), "table" for raw rows, ` +
     `"pivot" for a rows × columns cross-tab (set encoding.x = the row dimension and encoding.series = the column dimension; measure in cells).\n` +
     `<encoding>: {"x":"<dimension col, omit for kpi>","bucket":"none|day|week|month|quarter|year","yAgg":"count|sum|avg|min|max",` +
     `"yColumn":"<measure col, required unless count>","series":"<optional split col>","limit":<max rows>,"metricId?":"<bind measure to a saved metric id/key>"}. ` +

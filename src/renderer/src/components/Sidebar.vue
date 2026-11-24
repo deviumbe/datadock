@@ -6,7 +6,7 @@ import { useTheme } from '../stores/theme'
 import { useTabs } from '../stores/tabs'
 import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
 import { isConnectionOpen, serverDatabaseId } from '@shared/types'
-import logoUrl from '../assets/logo.png'
+import logoUrl from '../assets/logo.webp'
 import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConnTaskIndicator from './ConnTaskIndicator.vue'
@@ -50,7 +50,8 @@ function openWorkspaceMenu(e: MouseEvent): void {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const active = ws.activeWorkspace
   const items: MenuItem[] = ws.workspaces.map((c) => ({
-    label: `${c.id === active?.id ? '✓' : '\u2007'} ${c.name}`,
+    label: c.name,
+    checked: c.id === active?.id,
     action: () => void ws.setActiveWorkspace(c.id)
   }))
   if (items.length) items.push({ sep: true })
@@ -191,6 +192,10 @@ function stateTitle(id: string): string {
   return title
 }
 
+function isWorking(id: string): boolean {
+  return ws.connStates[id] === 'connecting' || ws.connStates[id] === 'reconnecting'
+}
+
 const DRIVER_LABEL: Record<string, string> = {
   postgres: 'PG',
   mysql: 'SQL',
@@ -203,15 +208,15 @@ const DRIVER_LABEL: Record<string, string> = {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ explorer }">
+  <aside class="sidebar" :class="{ explorer }" aria-label="Connections">
     <div class="side-head">
       <img class="logo" :src="logoUrl" alt="DataDock" />
       <span class="brand">DataDock</span>
-      <button class="btn-ghost icon" title="Workspaces" @click="openWorkspaceMenu"><Icon name="building" :size="14" /></button>
+      <button class="btn-ghost icon" title="Workspaces" aria-haspopup="menu" @click="openWorkspaceMenu"><Icon name="building" :size="14" /></button>
       <button class="btn-ghost icon" title="New project" @click="emit('newProject')"><Icon name="plus" :size="14" /></button>
     </div>
 
-    <button v-if="multiWorkspace" class="workspace-row" title="Switch workspace" @click="openWorkspaceMenu">
+    <button v-if="multiWorkspace" class="workspace-row" title="Switch workspace" aria-haspopup="menu" @click="openWorkspaceMenu">
       <span class="workspace-icon"><Icon name="building" :size="13" /></span>
       <span class="workspace-name">{{ ws.activeWorkspace?.name ?? 'No workspace' }}</span>
       <span class="workspace-caret"><Icon name="chevronDown" :size="12" /></span>
@@ -222,14 +227,15 @@ const DRIVER_LABEL: Record<string, string> = {
       <input
         v-model="query"
         class="filter-input"
-        placeholder="Filter projects, connections, databases"
+        aria-label="Filter projects, connections and databases"
+        placeholder="Filter connections"
         spellcheck="false"
         @keydown.esc="query = ''"
       />
       <button v-if="query" class="btn-ghost icon filter-clear" title="Clear filter" @click="query = ''"><Icon name="x" :size="11" /></button>
     </div>
 
-    <div class="tree">
+    <div class="tree" :role="tree.length ? 'tree' : undefined" aria-label="Projects and connections" data-rows>
       <div v-if="!empty && needle && !tree.length" class="hint-row muted no-match">No matches for “{{ query.trim() }}”.</div>
       <div v-if="empty" class="empty">
         <p v-if="multiWorkspace && ws.activeWorkspace">No projects for {{ ws.activeWorkspace.name }} yet.</p>
@@ -239,13 +245,17 @@ const DRIVER_LABEL: Record<string, string> = {
 
       <div v-for="{ project, envs, open: projectOpen } in tree" :key="project.id" class="project">
         <div
+          v-row
+          role="treeitem"
+          aria-level="1"
+          :aria-expanded="projectOpen"
           class="row project-row"
           @click="ws.toggleProject(project.id)"
           @contextmenu.prevent="openProjectMenu($event, project)"
         >
           <span class="caret" :class="{ open: projectOpen }"><Icon name="chevronRight" :size="11" /></span>
           <span class="label">{{ project.name }}</span>
-          <div class="row-actions" @click.stop>
+          <div class="row-actions" data-row-actions @click.stop>
             <button class="btn-ghost icon" title="New environment" @click="emit('newEnvironment', project.id)"><Icon name="plus" :size="13" /></button>
             <button class="btn-ghost icon" title="Rename" @click="emit('editProject', project)"><Icon name="pencil" :size="12" /></button>
             <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteProject', project)"><Icon name="trash" :size="12" /></button>
@@ -253,16 +263,21 @@ const DRIVER_LABEL: Record<string, string> = {
         </div>
 
         <div v-show="projectOpen" class="children">
-          <div v-if="project.environments.length === 0" class="hint-row">
-            <button class="link" @click="emit('newEnvironment', project.id)">+ Add environment</button>
-          </div>
+          <div
+            v-if="project.environments.length === 0"
+            v-row
+            role="treeitem"
+            aria-level="2"
+            class="hint-row link"
+            @click="emit('newEnvironment', project.id)"
+          >+ Add environment</div>
 
           <div v-for="{ env, conns, open: envOpen } in envs" :key="env.id" class="env">
-            <div class="row env-row" @click="ws.toggleEnv(env.id)">
+            <div v-row role="treeitem" aria-level="2" :aria-expanded="envOpen" class="row env-row" @click="ws.toggleEnv(env.id)">
               <span class="caret" :class="{ open: envOpen }"><Icon name="chevronRight" :size="11" /></span>
               <span class="folder"><Icon name="folder" :size="12" /></span>
               <span class="label">{{ env.name }}</span>
-              <div class="row-actions" @click.stop>
+              <div class="row-actions" data-row-actions @click.stop>
                 <button class="btn-ghost icon" title="New connection" @click="emit('newConnection', env.id)"><Icon name="plus" :size="13" /></button>
                 <button class="btn-ghost icon" title="Rename" @click="emit('editEnvironment', env)"><Icon name="pencil" :size="12" /></button>
                 <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteEnvironment', env)"><Icon name="trash" :size="12" /></button>
@@ -270,11 +285,22 @@ const DRIVER_LABEL: Record<string, string> = {
             </div>
 
             <div v-show="envOpen" class="children">
-              <div v-if="env.connections.length === 0" class="hint-row">
-                <button class="link" @click="emit('newConnection', env.id)">+ Add connection</button>
-              </div>
+              <div
+                v-if="env.connections.length === 0"
+                v-row
+                role="treeitem"
+                aria-level="3"
+                class="hint-row link"
+                @click="emit('newConnection', env.id)"
+              >+ Add connection</div>
               <template v-for="{ conn, databases, open: serverOpen } in conns" :key="conn.id">
               <div
+                v-row
+                role="treeitem"
+                aria-level="3"
+                :aria-expanded="conn.serverMode ? serverOpen : undefined"
+                :aria-selected="ws.activeConnectionId === conn.id"
+                :aria-description="stateTitle(conn.id)"
                 class="row conn-row"
                 :class="{ active: ws.activeConnectionId === conn.id, server: conn.serverMode }"
                 @click="conn.serverMode ? openServer(conn) : open(conn)"
@@ -284,6 +310,7 @@ const DRIVER_LABEL: Record<string, string> = {
                   class="caret server-caret"
                   :class="{ open: serverOpen }"
                   title="Show or hide databases"
+                  data-toggle
                   @click.stop="ws.toggleServer(conn.id)"
                 ><Icon name="chevronRight" :size="11" /></span>
                 <span v-if="conn.serverMode" class="conn-icon" :style="{ color: conn.color || 'var(--text-faint)' }"><Icon name="server" :size="13" /></span>
@@ -294,10 +321,11 @@ const DRIVER_LABEL: Record<string, string> = {
                 <span class="badge">{{ DRIVER_LABEL[conn.driver] }}</span>
                 <span
                   class="state"
+                  :data-busy="isWorking(conn.id) || undefined"
                   :class="ws.connStates[conn.id] || 'disconnected'"
                   :title="stateTitle(conn.id)"
                 />
-                <div class="row-actions" @click.stop>
+                <div class="row-actions" data-row-actions @click.stop>
                   <button v-if="conn.serverMode" class="btn-ghost icon" title="Refresh databases" @click="ws.loadServerDatabases(conn.id)"><Icon name="refresh" :size="12" /></button>
                   <button class="btn-ghost icon" title="Duplicate" @click="emit('duplicateConnection', conn)"><Icon name="copy" :size="12" /></button>
                   <button class="btn-ghost icon" title="Edit" @click="emit('editConnection', conn, env.id)"><Icon name="pencil" :size="12" /></button>
@@ -305,22 +333,36 @@ const DRIVER_LABEL: Record<string, string> = {
                 </div>
               </div>
               <div v-if="conn.serverMode" v-show="serverOpen" class="children server-dbs">
-                <input
+                <div
                   v-if="(ws.serverDatabases[conn.id]?.length ?? 0) > DB_FILTER_THRESHOLD"
+                  role="treeitem"
+                  aria-level="4"
+                  aria-label="Filter databases"
+                ><input
                   v-model="dbFilter[conn.id]"
                   class="input db-filter"
+                  aria-label="Filter databases"
                   placeholder="Filter databases…"
                   @keydown.esc="dbFilter[conn.id] = ''"
-                />
+                /></div>
                 <div v-if="ws.serverLoading[conn.id] && !ws.serverDatabases[conn.id]" class="hint-row muted">Loading databases…</div>
-                <div v-else-if="ws.serverErrors[conn.id]" class="hint-row error" :title="ws.serverErrors[conn.id]">
-                  Could not list databases.
-                  <button class="link" @click="ws.loadServerDatabases(conn.id)">Retry</button>
-                </div>
+                <div
+                  v-else-if="ws.serverErrors[conn.id]"
+                  v-row
+                  role="treeitem"
+                  aria-level="4"
+                  class="hint-row error"
+                  :data-tooltip="ws.serverErrors[conn.id]"
+                  @click="ws.loadServerDatabases(conn.id)"
+                >Could not list databases. <span class="link">Retry</span></div>
                 <div v-else-if="ws.serverDatabases[conn.id]?.length === 0" class="hint-row muted">No databases.</div>
                 <div
                   v-for="db in databases"
                   :key="db"
+                  v-row
+                  role="treeitem"
+                  aria-level="4"
+                  :aria-selected="ws.activeConnectionId === serverDatabaseId(conn.id, db)"
                   class="row conn-row db-row"
                   :class="{ active: ws.activeConnectionId === serverDatabaseId(conn.id, db) }"
                   @click="ws.connectAndOpen(serverDatabaseId(conn.id, db))"
@@ -343,14 +385,18 @@ const DRIVER_LABEL: Record<string, string> = {
     </div>
 
     <!-- Replication topologies (Phase 1: live monitoring) -->
-    <div class="topo-section">
+    <div class="topo-section" data-rows>
       <div class="topo-head">
         <span class="topo-title">Topologies</span>
         <button class="btn-ghost icon" title="New topology" @click="emit('newTopology')"><Icon name="plus" :size="13" /></button>
       </div>
+      <div v-if="ws.topologies.length" role="list" aria-label="Topologies">
       <div
         v-for="t in ws.topologies"
         :key="t.id"
+        v-row
+        role="listitem"
+        :aria-current="ui.topologyId === t.id || undefined"
         class="row topo-row"
         :class="{ active: ui.topologyId === t.id }"
         @click="ui.openTopology(t.id)"
@@ -359,10 +405,11 @@ const DRIVER_LABEL: Record<string, string> = {
         <span class="topo-dot"><Icon name="diagram" :size="12" /></span>
         <span class="topo-name">{{ t.name }}</span>
         <span class="topo-count">{{ t.nodes.length }}</span>
-        <div class="row-actions" @click.stop>
+        <div class="row-actions" data-row-actions @click.stop>
           <button class="btn-ghost icon" title="Edit" @click="emit('editTopology', t)"><Icon name="pencil" :size="12" /></button>
           <button class="btn-ghost icon danger" title="Delete" @click="emit('deleteTopology', t)"><Icon name="trash" :size="12" /></button>
         </div>
+      </div>
       </div>
       <p v-if="!ws.topologies.length" class="topo-empty">
         Group replicas into a set to watch live lag & health.
@@ -399,7 +446,7 @@ const DRIVER_LABEL: Record<string, string> = {
 .brand {
   font-weight: 700;
   letter-spacing: 0.02em;
-  font-size: 13px;
+  font-size: var(--fs-base);
   flex: 1;
   margin-right: auto;
 }
@@ -436,7 +483,7 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .workspace-name {
   flex: 1;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -512,7 +559,7 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .project-row .label {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-dim);
@@ -535,7 +582,7 @@ const DRIVER_LABEL: Record<string, string> = {
   flex-shrink: 0;
 }
 .badge {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text-faint);
   background: var(--bg-elevated);
@@ -599,8 +646,9 @@ const DRIVER_LABEL: Record<string, string> = {
   pointer-events: auto;
 }
 .icon {
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   color: var(--text-dim);
   display: inline-flex;
@@ -613,18 +661,18 @@ const DRIVER_LABEL: Record<string, string> = {
   color: var(--text);
 }
 .icon.danger:hover {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .hint-row {
   padding: 2px 8px 4px 26px;
 }
 .hint-row.muted {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .hint-row.error {
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
 }
 .db-icon {
   display: inline-flex;
@@ -636,7 +684,7 @@ const DRIVER_LABEL: Record<string, string> = {
   width: calc(100% - 16px);
   margin: 2px 8px 4px;
   height: 24px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .explorer .db-row {
   --indent: 56px;
@@ -689,14 +737,14 @@ const DRIVER_LABEL: Record<string, string> = {
   outline: none;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .filter-input::placeholder {
   color: var(--text-faint);
 }
 .filter-clear {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
 }
 .no-match {
   padding: 10px 12px;
@@ -724,7 +772,7 @@ const DRIVER_LABEL: Record<string, string> = {
   padding: 4px 8px 6px;
 }
 .topo-title {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -747,18 +795,18 @@ const DRIVER_LABEL: Record<string, string> = {
 .topo-dot {
   display: inline-flex;
   align-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 .topo-name {
   flex: 1;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .topo-count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   background: var(--bg-elevated);
   border-radius: 9px;
@@ -772,16 +820,21 @@ const DRIVER_LABEL: Record<string, string> = {
 }
 .topo-empty {
   padding: 2px 10px 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   line-height: 1.5;
 }
+.hint-row.link {
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
 .link {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .link:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 /* ---- Explorer layout: a flat, dense tree with indent guides, in the style of
    a file explorer. Every rule below only narrows the comfortable layout. ---- */
@@ -794,7 +847,7 @@ const DRIVER_LABEL: Record<string, string> = {
   min-height: 36px;
 }
 .explorer .brand {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -810,7 +863,7 @@ const DRIVER_LABEL: Record<string, string> = {
   background: transparent;
 }
 .explorer .workspace-name {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -823,17 +876,17 @@ const DRIVER_LABEL: Record<string, string> = {
   padding: 28px 12px;
 }
 .explorer .row {
-  height: 22px;
+  height: 24px;
   gap: 5px;
   padding: 0 8px 0 var(--indent, 8px);
   border-radius: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .explorer .project-row {
   --indent: 8px;
 }
 .explorer .project-row .label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -893,7 +946,7 @@ const DRIVER_LABEL: Record<string, string> = {
 .explorer .badge {
   padding: 0;
   background: transparent;
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -917,8 +970,8 @@ const DRIVER_LABEL: Record<string, string> = {
   transition: opacity var(--dur-1);
 }
 .explorer .icon {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 3px;
 }
 .explorer .project > .children > .hint-row {
@@ -935,17 +988,17 @@ const DRIVER_LABEL: Record<string, string> = {
   padding: 0 8px;
 }
 .explorer .topo-row {
-  height: 22px;
+  height: 24px;
   gap: 5px;
   padding: 0 8px;
   border-radius: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .explorer .topo-row.active {
   background: var(--bg-active);
 }
 .explorer .topo-name {
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .explorer .topo-empty {
   padding: 2px 8px 4px 22px;

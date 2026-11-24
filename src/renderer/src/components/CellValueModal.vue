@@ -76,11 +76,11 @@ async function copy(): Promise<void> {
     </div>
 
     <div class="content">
-      <textarea v-if="editing" v-model="draft" class="editor" spellcheck="false"></textarea>
+      <textarea v-if="editing" aria-label="Cell value" v-model="draft" class="editor" spellcheck="false"></textarea>
       <JsonTree v-else-if="isJson && view === 'tree'" :data="parsed.data" />
       <pre v-else class="raw" :class="{ null: isNull }">{{ isNull ? 'NULL' : pretty }}</pre>
     </div>
-    <p v-if="editError" class="err">{{ editError }}</p>
+    <p v-if="editError" class="err" role="alert">{{ editError }}</p>
 
     <template v-if="editing" #footer>
       <button class="btn" @click="editing = false">Cancel</button>
@@ -97,7 +97,7 @@ async function copy(): Promise<void> {
   margin-bottom: 10px;
 }
 .count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .spacer {
@@ -112,13 +112,13 @@ async function copy(): Promise<void> {
 }
 .seg button {
   padding: 3px 12px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   border-radius: 999px;
   color: var(--text-dim);
 }
 .seg button.on {
   background: var(--bg-active);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .content {
   max-height: 56vh;
@@ -130,7 +130,7 @@ async function copy(): Promise<void> {
 }
 .raw {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
@@ -148,16 +148,16 @@ async function copy(): Promise<void> {
   outline: none;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
 }
 .err {
   margin-top: 8px;
-  font-size: 11.5px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
 }
 .sm {
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 </style>

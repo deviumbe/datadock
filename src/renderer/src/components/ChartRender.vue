@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MetricIcon from './MetricIcon.vue'
 import { computed, ref } from 'vue'
 import type { ChartType, MetricFormat, QueryResult } from '@shared/types'
 import { optionForChart, optionForResult, kpiValue, formatMetric, pivotModel } from '../lib/chartOption'
@@ -33,6 +34,18 @@ const kpiText = computed(() => formatMetric(kpi.value, props.format))
 const pivot = computed(() => (props.result ? pivotModel(props.result) : null))
 const fmtCell = (v: number): string => v.toLocaleString(undefined, { maximumFractionDigits: 2 })
 
+// What a screen reader gets instead of the canvas: every value, up to a sane length.
+const MAX_SPOKEN = 40
+const description = computed(() => {
+  const r = props.result
+  if (!r) return ''
+  const rows = r.rows
+    .slice(0, MAX_SPOKEN)
+    .map((row) => (row as unknown[]).map((v) => (v === null ? 'NULL' : String(v))).join(', '))
+  const more = r.rows.length > MAX_SPOKEN ? `; and ${r.rows.length - MAX_SPOKEN} more` : ''
+  return `${props.label ?? 'Chart'}, ${props.type}. ${r.columns.map((c) => c.name).join(', ')}: ${rows.join('; ')}${more}`
+})
+
 const chartRef = ref<InstanceType<typeof EChart> | null>(null)
 /** PNG snapshot (charts only) for PDF/report export. */
 function image(): string | null {
@@ -48,10 +61,10 @@ defineExpose({ image })
     <!-- KPI card -->
     <div v-else-if="type === 'kpi'" class="kpi" :class="{ 'kpi-compact': hideLabel }">
       <div v-if="!hideLabel" class="kpi-top">
-        <span v-if="icon" class="kpi-chip">{{ icon }}</span>
+        <span v-if="icon" class="kpi-chip"><MetricIcon :value="icon" :size="22" /></span>
         <span class="kpi-label">{{ label ?? 'Value' }}</span>
       </div>
-      <span v-else-if="icon" class="kpi-chip">{{ icon }}</span>
+      <span v-else-if="icon" class="kpi-chip"><MetricIcon :value="icon" :size="22" /></span>
       <div class="kpi-value">{{ kpiText }}</div>
     </div>
 
@@ -73,8 +86,7 @@ defineExpose({ image })
               v-for="c in pivot.colKeys"
               :key="c"
               class="num clickable"
-              @click="emit('drill', { name: r, seriesName: pivot!.singleCol ? undefined : c })"
-            >{{ fmtCell(pivot.value(r, c)) }}</td>
+            ><button class="drill" :title="`Show rows for ${r}, ${c}`" @click="emit('drill', { name: r, seriesName: pivot!.singleCol ? undefined : c })">{{ fmtCell(pivot.value(r, c)) }}</button></td>
             <td class="num tot">{{ fmtCell(pivot.rowTotal(r)) }}</td>
           </tr>
           <tr class="totrow">
@@ -103,7 +115,7 @@ defineExpose({ image })
     </div>
 
     <!-- Graphical chart -->
-    <EChart v-else-if="option" ref="chartRef" :option="option" @point-click="emit('drill', $event)" />
+    <EChart v-else-if="option" ref="chartRef" :option="option" :label="description" @point-click="emit('drill', $event)" />
     <div v-else class="cr-empty">This data can't be charted as a {{ type }}.</div>
   </div>
 </template>
@@ -121,7 +133,7 @@ defineExpose({ image })
   justify-content: center;
   height: 100%;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .kpi {
   display: flex;
@@ -154,13 +166,13 @@ defineExpose({ image })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--fs-lg);
   line-height: 1;
   border-radius: 9px;
   background: var(--accent-soft);
 }
 .kpi-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -184,7 +196,7 @@ defineExpose({ image })
 .cr-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .cr-table th,
 .cr-table td {
@@ -233,6 +245,12 @@ defineExpose({ image })
 }
 .pivot .clickable:hover {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--accent-text);
+}
+.drill {
+  width: 100%;
+  min-height: 24px;
+  text-align: inherit;
+  font: inherit;
 }
 </style>

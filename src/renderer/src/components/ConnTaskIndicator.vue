@@ -15,9 +15,9 @@ const pct = computed(() => (task.value ? progressPercent(task.value.progress) : 
 <template>
   <template v-if="task">
     <button class="task-pct" :title="task.title" @click.stop="ui.tasksOpen = true">
-      <span class="task-spin" />{{ pct !== null ? pct + '%' : '' }}
+      <span class="task-spin" data-busy />{{ pct !== null ? pct + '%' : '' }}
     </button>
-    <span class="task-line" :class="{ indet: pct === null }">
+    <span class="task-line" :data-busy="pct === null || undefined" :class="{ indet: pct === null }">
       <span :style="pct !== null ? { width: pct + '%' } : undefined" />
     </span>
   </template>
@@ -32,8 +32,8 @@ const pct = computed(() => (task.value ? progressPercent(task.value.progress) : 
   padding: 0 2px;
   background: none;
   border: none;
-  color: var(--accent);
-  font-size: 10.5px;
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }

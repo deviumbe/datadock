@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
+import { METRIC_ICONS, metricIconName } from '../lib/metricIcons'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import type {
   AnalyticsChart,
@@ -49,7 +51,6 @@ const availableMetrics = computed(() =>
 const boundMetric = computed(() =>
   metricId.value ? analytics.getMetric(metricId.value) : undefined
 )
-const ICONS = ['💰', '📈', '📉', '🛒', '👥', '📦', '⭐', '⚡', '🔥', '✅', '⏱️', '🌍']
 const enc = reactive({
   x: props.editing?.encoding.x ?? '',
   bucket: (props.editing?.encoding.bucket ?? 'none') as TimeBucket,
@@ -220,14 +221,15 @@ async function save(): Promise<void> {
               @click="icon = ''"
             >∅</button>
             <button
-              v-for="ic in ICONS"
+              v-for="ic in METRIC_ICONS"
               :key="ic"
               type="button"
               class="icon-opt"
-              :class="{ on: icon === ic }"
+              :class="{ on: metricIconName(icon) === ic }"
+              :title="ic"
+              :aria-pressed="metricIconName(icon) === ic"
               @click="icon = ic"
-            >{{ ic }}</button>
-            <input v-model="icon" class="input icon-input" maxlength="2" placeholder="🙂" />
+            ><Icon :name="ic" :size="15" /></button>
           </div>
         </div>
 
@@ -289,7 +291,7 @@ async function save(): Promise<void> {
         <div class="preview-head">Preview</div>
         <div class="preview-body">
           <div v-if="loading" class="pv-state">Running…</div>
-          <div v-else-if="previewError" class="pv-state err">{{ previewError }}</div>
+          <div v-else-if="previewError" class="pv-state err" role="alert">{{ previewError }}</div>
           <ChartRender v-else :type="type" :result="preview" :label="name || 'Value'" :icon="type === 'kpi' ? icon : ''" />
         </div>
       </div>
@@ -320,7 +322,7 @@ async function save(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   flex: 1;
 }
@@ -332,7 +334,7 @@ async function save(): Promise<void> {
   gap: 10px;
 }
 .input {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 7px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -354,7 +356,7 @@ async function save(): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--fs-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -367,18 +369,13 @@ async function save(): Promise<void> {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
-.icon-input {
-  width: 44px;
-  text-align: center;
-  padding: 4px;
-}
 .warn {
-  font-size: 11.5px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
   margin: 0;
 }
 .metric-note {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin: 0;
   padding: 8px 10px;
@@ -396,7 +393,7 @@ async function save(): Promise<void> {
 }
 .preview-head {
   padding: 7px 12px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-faint);
@@ -415,10 +412,10 @@ async function save(): Promise<void> {
   justify-content: center;
   height: 100%;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .pv-state.err {
-  color: var(--danger);
+  color: var(--danger-text);
   padding: 16px;
   text-align: center;
 }

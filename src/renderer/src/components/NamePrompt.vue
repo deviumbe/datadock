@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
+
+const uid = useId()
 
 const props = defineProps<{ title: string; initial?: string; submitLabel?: string }>()
 const emit = defineEmits<{ submit: [value: string]; close: [] }>()
@@ -18,8 +20,8 @@ function submit(): void {
 <template>
   <Modal :title="title" @close="emit('close')">
     <div class="field">
-      <label>Name</label>
-      <input
+      <label :for="`${uid}-name`">Name</label>
+      <input :id="`${uid}-name`"
         ref="inputEl"
         class="input"
         v-model="value"

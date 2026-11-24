@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, shallowRef, computed, watch } from 'vue'
+import { nextTick, onMounted, onBeforeUnmount, ref, shallowRef, computed, watch, defineAsyncComponent } from 'vue'
 import { useWorkspace } from './stores/workspace'
 import { useTabs } from './stores/tabs'
 import { useUi } from './stores/ui'
@@ -7,20 +7,25 @@ import { useSettings } from './stores/settings'
 import Sidebar from './components/Sidebar.vue'
 import MainPanel from './components/MainPanel.vue'
 import ConnectionModal from './components/ConnectionModal.vue'
-import TopologyPanel from './components/TopologyPanel.vue'
 import TopologyEditorModal from './components/TopologyEditorModal.vue'
 import NamePrompt from './components/NamePrompt.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
-import SettingsModal from './components/SettingsModal.vue'
-import DataGripImportModal from './components/DataGripImportModal.vue'
 import UpdateNotice from './components/UpdateNotice.vue'
 import TaskTray from './components/TaskTray.vue'
 import LockScreen from './components/LockScreen.vue'
 import { useUpdates } from './stores/updates'
 import { useVault } from './stores/vault'
+import { announce, announcement } from './lib/announce'
+import { dialogOpen } from './lib/dialog'
 import type { Workspace, ConnectionConfig, Environment, Project, Topology } from '@shared/types'
+
+// Loaded on first use: these pull in the charting and code-generation libraries,
+// which most sessions never open.
+const TopologyPanel = defineAsyncComponent(() => import('./components/TopologyPanel.vue'))
+const SettingsModal = defineAsyncComponent(() => import('./components/SettingsModal.vue'))
+const DataGripImportModal = defineAsyncComponent(() => import('./components/DataGripImportModal.vue'))
 
 const ws = useWorkspace()
 const tabs = useTabs()
@@ -29,7 +34,7 @@ const settings = useSettings()
 const updates = useUpdates()
 const vault = useVault()
 
-const sidebarWidth = computed(() => (ui.sidebarCollapsed ? '0px' : '264px'))
+const sidebarWidth = computed(() => (ui.sidebarCollapsed ? '0px' : 'min(264px, 34vw)'))
 
 onMounted(async () => {
   // Appearance is local, so the lock screen is themed; the catalog waits for unlock.
@@ -44,6 +49,7 @@ const vaultNotice = ref('')
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
 function showVaultNotice(text: string): void {
   vaultNotice.value = text
+  announce(text)
   if (noticeTimer) clearTimeout(noticeTimer)
   noticeTimer = setTimeout(() => (vaultNotice.value = ''), 4000)
 }
@@ -68,18 +74,37 @@ watch(
       for (const p of ws.allProjects)
         for (const e of p.environments) for (const c of e.connections) tabs.closeForConnection(c.id)
       ws.activeConnectionId = null
-      ui.settingsOpen = false
-      ui.closePalette()
-      ui.closeTopology()
+      closeEverything()
       void ws.load()
     } else if (wasLocked) {
-      void reloadFromVault()
+      void reloadFromVault().then(focusAfterUnlock)
     }
   }
 )
 
+async function focusAfterUnlock(): Promise<void> {
+  await nextTick()
+  const at = document.activeElement
+  if (at && at !== document.body) return
+  document.querySelector<HTMLElement>('.sidebar [data-row][tabindex="0"], .sidebar .filter-input')?.focus()
+}
+
+// Dialogs can hold credentials or a half-finished destructive action, so none of
+// them may survive a lock.
+function closeEverything(): void {
+  ui.closeAllOverlays()
+  connModal.value = false
+  connConfig.value = undefined
+  topoModal.value = false
+  topoEditing.value = undefined
+  prompt.value = false
+  newProject.value = false
+}
+
 // ---- native menu actions ----------------------------------------------------
+const ALLOWED_WHILE_LOCKED = ['toggleTheme', 'checkForUpdates']
 function handleMenu(action: string): void {
+  if (vault.locked && !ALLOWED_WHILE_LOCKED.includes(action)) return
   if (action === 'toggleSidebar') {
     ui.toggleSidebar()
     return
@@ -120,7 +145,7 @@ function handleMenu(action: string): void {
       tabs.openQuery(id)
       break
     case 'closeTab':
-      if (tab) tabs.closeTab(tab.id)
+      if (tab && !dialogOpen()) void tabs.requestCloseTab(tab.id)
       break
     case 'save':
       if (tab?.kind === 'table' && tabs.dirtyCount(tab) > 0) void tabs.commit(tab)
@@ -211,7 +236,7 @@ function handleMenu(action: string): void {
       ui.cloneSqliteOpen = true
       break
     case 'disconnect':
-      void ws.disconnect(id)
+      void tabs.disconnect(id)
       break
   }
 }
@@ -316,6 +341,7 @@ function submitPrompt(name: string): void {
 
 // ---- command palette --------------------------------------------------------
 function onGlobalKeydown(e: KeyboardEvent): void {
+  if (vault.locked) return
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     ui.togglePalette()
@@ -363,19 +389,34 @@ const onNewEnvironment = (projectId: string) =>
 const onEditEnvironment = (e: Environment) =>
   askName('Rename Environment', e.name, (n) => ws.renameEnvironment(e.id, n))
 
-function onDeleteProject(p: Project): void {
-  if (confirm(`Delete project "${p.name}" and all its environments and connections?`)) {
-    ws.deleteProject(p.id)
-  }
+async function onDeleteProject(p: Project): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Delete project',
+    message: `Delete "${p.name}" and all its environments and connections?`,
+    confirmLabel: 'Delete project',
+    danger: true
+  })
+  if (ok) void ws.deleteProject(p.id)
 }
-function onDeleteEnvironment(e: Environment): void {
-  if (confirm(`Delete environment "${e.name}" and its connections?`)) ws.deleteEnvironment(e.id)
+async function onDeleteEnvironment(e: Environment): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Delete environment',
+    message: `Delete "${e.name}" and its connections?`,
+    confirmLabel: 'Delete environment',
+    danger: true
+  })
+  if (ok) void ws.deleteEnvironment(e.id)
 }
-function onDeleteConnection(c: ConnectionConfig): void {
-  if (confirm(`Delete connection "${c.name}"?`)) {
-    tabs.closeForConnection(c.id)
-    ws.deleteConnection(c.id)
-  }
+async function onDeleteConnection(c: ConnectionConfig): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Delete connection',
+    message: `Delete "${c.name}"? The database itself is not affected.`,
+    confirmLabel: 'Delete connection',
+    danger: true
+  })
+  if (!ok) return
+  tabs.closeForConnection(c.id)
+  void ws.deleteConnection(c.id)
 }
 function onDuplicateConnection(c: ConnectionConfig): void {
   void ws.duplicateConnection(c.id)
@@ -384,71 +425,74 @@ function onDuplicateConnection(c: ConnectionConfig): void {
 
 <template>
   <div class="layout" :class="{ mac: ui.isMac, collapsed: ui.sidebarCollapsed }">
-    <Sidebar
-      class="sidebar-slot"
-      @new-project="onNewProject"
-      @edit-project="onEditProject"
-      @delete-project="onDeleteProject"
-      @move-project="onMoveProject"
-      @move-project-to-new-workspace="onMoveProjectToNewWorkspace"
-      @new-workspace="onNewWorkspace"
-      @edit-workspace="onEditWorkspace"
-      @delete-workspace="onDeleteWorkspace"
-      @new-environment="onNewEnvironment"
-      @edit-environment="onEditEnvironment"
-      @delete-environment="onDeleteEnvironment"
-      @new-connection="openNewConnection"
-      @edit-connection="openEditConnection"
-      @delete-connection="onDeleteConnection"
-      @duplicate-connection="onDuplicateConnection"
-      @new-topology="openNewTopology"
-      @edit-topology="openEditTopology"
-      @delete-topology="deleteTopology"
-    />
-    <MainPanel />
+    <template v-if="!vault.locked">
+      <Sidebar
+        class="sidebar-slot"
+        @new-project="onNewProject"
+        @edit-project="onEditProject"
+        @delete-project="onDeleteProject"
+        @move-project="onMoveProject"
+        @move-project-to-new-workspace="onMoveProjectToNewWorkspace"
+        @new-workspace="onNewWorkspace"
+        @edit-workspace="onEditWorkspace"
+        @delete-workspace="onDeleteWorkspace"
+        @new-environment="onNewEnvironment"
+        @edit-environment="onEditEnvironment"
+        @delete-environment="onDeleteEnvironment"
+        @new-connection="openNewConnection"
+        @edit-connection="openEditConnection"
+        @delete-connection="onDeleteConnection"
+        @duplicate-connection="onDuplicateConnection"
+        @new-topology="openNewTopology"
+        @edit-topology="openEditTopology"
+        @delete-topology="deleteTopology"
+      />
+      <MainPanel />
 
-    <TopologyPanel
-      v-if="ui.topologyId"
-      :topology-id="ui.topologyId"
-      @edit="openEditTopology"
-    />
-    <TopologyEditorModal
-      v-if="topoModal"
-      :topology="topoEditing"
-      @save="saveTopology"
-      @close="topoModal = false"
-    />
+      <TopologyPanel
+        v-if="ui.topologyId"
+        :topology-id="ui.topologyId"
+        @edit="openEditTopology"
+      />
+      <TopologyEditorModal
+        v-if="topoModal"
+        :topology="topoEditing"
+        @save="saveTopology"
+        @close="topoModal = false"
+      />
 
-    <ConnectionModal
-      v-if="connModal"
-      :environment-id="connEnvId"
-      :config="connConfig"
-      @save="saveConnection"
-      @close="connModal = false"
-    />
-    <NamePrompt
-      v-if="prompt"
-      :title="promptTitle"
-      :initial="promptInitial"
-      @submit="submitPrompt"
-      @close="prompt = false"
-    />
-    <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
-    <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
-    <DataGripImportModal v-if="ui.dataGripImportOpen" @close="ui.dataGripImportOpen = false" />
-    <NewProjectModal
-      v-if="newProject"
-      :workspace-name="ws.workspaces.length > 1 ? ws.activeWorkspace?.name : undefined"
-      @submit="submitNewProject"
-      @close="newProject = false"
-    />
-    <ConfirmModal />
-    <UpdateNotice />
-    <TaskTray />
+      <ConnectionModal
+        v-if="connModal"
+        :environment-id="connEnvId"
+        :config="connConfig"
+        @save="saveConnection"
+        @close="connModal = false"
+      />
+      <NamePrompt
+        v-if="prompt"
+        :title="promptTitle"
+        :initial="promptInitial"
+        @submit="submitPrompt"
+        @close="prompt = false"
+      />
+      <CommandPalette v-if="ui.paletteOpen" @close="ui.closePalette()" />
+      <SettingsModal v-if="ui.settingsOpen" @close="ui.settingsOpen = false" />
+      <DataGripImportModal v-if="ui.dataGripImportOpen" @close="ui.dataGripImportOpen = false" />
+      <NewProjectModal
+        v-if="newProject"
+        :workspace-name="ws.workspaces.length > 1 ? ws.activeWorkspace?.name : undefined"
+        @submit="submitNewProject"
+        @close="newProject = false"
+      />
+      <ConfirmModal />
+      <UpdateNotice />
+      <TaskTray />
+    </template>
     <Transition name="notice">
       <div v-if="vaultNotice" class="vault-notice">{{ vaultNotice }}</div>
     </Transition>
     <LockScreen v-if="vault.locked" />
+    <div class="sr-only" role="status" aria-live="polite">{{ announcement }}</div>
   </div>
 </template>
 
@@ -475,7 +519,7 @@ function onDuplicateConnection(c: ConnectionConfig): void {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   box-shadow: var(--shadow-pop);
 }
 .notice-enter-active,

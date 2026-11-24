@@ -45,7 +45,7 @@ const mssqlNote = props.driver === 'mssql'
 <style scoped>
 .names {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-bottom: 14px;
   word-break: break-word;
@@ -55,7 +55,7 @@ const mssqlNote = props.driver === 'mssql'
   align-items: flex-start;
   gap: 9px;
   padding: 7px 0;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .opt input {
@@ -63,8 +63,8 @@ const mssqlNote = props.driver === 'mssql'
 }
 .note {
   margin-top: 10px;
-  font-size: 11px;
-  color: var(--warn);
+  font-size: var(--fs-xs);
+  color: var(--warn-text);
   line-height: 1.5;
 }
 .note code {
@@ -72,16 +72,16 @@ const mssqlNote = props.driver === 'mssql'
 }
 .warn {
   margin-top: 12px;
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
 }
 .drop-go {
   background: var(--danger);
   border-color: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-weight: 600;
 }
 .drop-go:hover {
-  background: #d6535c;
+  background: var(--danger-hover);
 }
 </style>

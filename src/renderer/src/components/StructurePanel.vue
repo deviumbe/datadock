@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useUi } from '../stores/ui'
 import Icon from './Icon.vue'
 import { ref, watch, computed } from 'vue'
 import type { AlterOp, ColumnDef, TableStructure } from '@shared/types'
+
+const ui = useUi()
 
 const props = defineProps<{
   structure: TableStructure | null
@@ -45,8 +48,14 @@ function commitNullable(i: number): void {
   const v = cols.value[i]
   if (o && v.nullable !== o.nullable) fire({ kind: 'setNullable', name: o.name, nullable: v.nullable })
 }
-function dropColumn(name: string): void {
-  if (confirm(`Drop column "${name}"? This deletes its data.`)) fire({ kind: 'dropColumn', name })
+async function dropColumn(name: string): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Drop column',
+    message: `Drop column "${name}"? This deletes its data.`,
+    confirmLabel: 'Drop column',
+    danger: true
+  })
+  if (ok) fire({ kind: 'dropColumn', name })
 }
 
 // Add-column form
@@ -76,8 +85,14 @@ function addFk(): void {
   })
   fk.value = { column: '', refTable: '', refColumn: '', onDelete: '' }
 }
-function dropFk(name: string): void {
-  if (confirm(`Drop foreign key "${name}"?`)) fire({ kind: 'dropForeignKey', name })
+async function dropFk(name: string): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Drop foreign key',
+    message: `Drop foreign key "${name}"?`,
+    confirmLabel: 'Drop foreign key',
+    danger: true
+  })
+  if (ok) fire({ kind: 'dropForeignKey', name })
 }
 
 // Add-index form
@@ -96,16 +111,22 @@ function addIndex(): void {
   })
   ix.value = { columns: '', unique: false, name: '' }
 }
-function dropIndex(name: string): void {
-  if (confirm(`Drop index "${name}"?`)) fire({ kind: 'dropIndex', name })
+async function dropIndex(name: string): Promise<void> {
+  const ok = await ui.confirmDialog({
+    title: 'Drop index',
+    message: `Drop index "${name}"?`,
+    confirmLabel: 'Drop index',
+    danger: true
+  })
+  if (ok) fire({ kind: 'dropIndex', name })
 }
 </script>
 
 <template>
   <div class="structure">
-    <div v-if="readOnly" class="ro-note">🔒 Read-only connection — structure changes are disabled.</div>
+    <div v-if="readOnly" class="ro-note"><Icon name="lock" :size="13" /> Read-only connection: structure changes are disabled.</div>
     <section>
-      <h3>Columns</h3>
+      <h2>Columns</h2>
       <table class="cols">
         <thead>
           <tr>
@@ -113,61 +134,63 @@ function dropIndex(name: string): void {
             <th>Type</th>
             <th class="c">Null</th>
             <th>Default</th>
-            <th></th>
+            <th><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(c, i) in cols" :key="structure?.columns[i]?.name ?? i">
             <td>
-              <span v-if="c.isPrimaryKey" class="pk" title="Primary key">PK</span>
-              <input class="input sm" v-model="c.name" :disabled="locked" @keydown.enter="commitName(i)" @blur="commitName(i)" />
+              <div class="namecell">
+              <span v-if="c.isPrimaryKey" class="pk" data-tooltip="Primary key">PK</span>
+              <input class="input sm" v-model="c.name" aria-label="Column name" :disabled="locked" @keydown.enter="commitName(i)" @blur="commitName(i)" />
+              </div>
             </td>
-            <td><input class="input sm" v-model="c.type" :disabled="locked" @keydown.enter="commitType(i)" @blur="commitType(i)" /></td>
-            <td class="c"><input type="checkbox" v-model="c.nullable" :disabled="locked" @change="commitNullable(i)" /></td>
+            <td><input class="input sm" v-model="c.type" aria-label="Column type" :disabled="locked" @keydown.enter="commitType(i)" @blur="commitType(i)" /></td>
+            <td class="c"><input type="checkbox" v-model="c.nullable" aria-label="Nullable" :disabled="locked" @change="commitNullable(i)" /></td>
             <td class="def">{{ c.default ?? '—' }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropColumn(structure!.columns[i].name)"><Icon name="x" :size="12" /></button></td>
+            <td class="c"><button class="drop" title="Drop column" :disabled="locked" @click="dropColumn(structure!.columns[i].name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>
 
       <div class="add-row">
-        <input class="input sm" v-model="nc.name" placeholder="new column" />
-        <input class="input sm" v-model="nc.type" placeholder="type (e.g. text, int)" />
+        <input aria-label="New column name" class="input sm" v-model="nc.name" placeholder="new column" />
+        <input aria-label="New column type" class="input sm" v-model="nc.type" placeholder="type (e.g. text, int)" />
         <label class="nn"><input type="checkbox" v-model="nc.nullable" /> null</label>
-        <input class="input sm" v-model="nc.default" placeholder="default (optional)" />
+        <input aria-label="New column default" class="input sm" v-model="nc.default" placeholder="default (optional)" />
         <button class="btn btn-primary sm" :disabled="locked || !nc.name.trim()" @click="addColumn">Add column</button>
       </div>
     </section>
 
     <section>
-      <h3>Foreign keys</h3>
+      <h2>Foreign keys</h2>
       <table class="cols" v-if="structure && structure.foreignKeys.length">
         <thead>
-          <tr><th>Name</th><th>Column</th><th>References</th><th></th></tr>
+          <tr><th>Name</th><th>Column</th><th>References</th><th><span class="sr-only">Actions</span></th></tr>
         </thead>
         <tbody>
           <tr v-for="f in structure.foreignKeys" :key="f.name">
             <td class="mono">{{ f.name }}</td>
             <td class="mono">{{ f.column }}</td>
             <td class="mono">{{ f.refTable }}.{{ f.refColumn }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropFk(f.name)"><Icon name="x" :size="12" /></button></td>
+            <td class="c"><button class="drop" title="Drop foreign key" :disabled="locked" @click="dropFk(f.name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>
       <p v-else class="none">No foreign keys.</p>
 
       <div class="add-row">
-        <select class="select sm" v-model="fk.column">
+        <select class="select sm" v-model="fk.column" aria-label="Column">
           <option value="" disabled>column…</option>
           <option v-for="c in cols" :key="c.name" :value="c.name">{{ c.name }}</option>
         </select>
-        <span class="arrow">→</span>
-        <select class="select sm" v-model="fk.refTable">
+        <span class="arrow"><Icon name="arrowRight" :size="14" /></span>
+        <select class="select sm" v-model="fk.refTable" aria-label="Referenced table">
           <option value="" disabled>table…</option>
           <option v-for="t in tables" :key="t" :value="t">{{ t }}</option>
         </select>
-        <input class="input sm" v-model="fk.refColumn" placeholder="ref column" />
-        <select class="select sm" v-model="fk.onDelete">
+        <input aria-label="Referenced column" class="input sm" v-model="fk.refColumn" placeholder="ref column" />
+        <select class="select sm" v-model="fk.onDelete" aria-label="On delete">
           <option value="">ON DELETE…</option>
           <option value="cascade">CASCADE</option>
           <option value="set null">SET NULL</option>
@@ -179,26 +202,26 @@ function dropIndex(name: string): void {
     </section>
 
     <section>
-      <h3>Indexes</h3>
+      <h2>Indexes</h2>
       <table class="cols" v-if="structure && structure.indexes.length">
         <thead>
-          <tr><th>Name</th><th>Columns</th><th class="c">Unique</th><th></th></tr>
+          <tr><th>Name</th><th>Columns</th><th class="c">Unique</th><th><span class="sr-only">Actions</span></th></tr>
         </thead>
         <tbody>
           <tr v-for="idx in structure.indexes" :key="idx.name">
             <td class="mono">{{ idx.name }}</td>
             <td class="mono">{{ idx.columns.join(', ') }}</td>
-            <td class="c">{{ idx.unique ? '✓' : '' }}</td>
-            <td class="c"><button class="drop" :disabled="locked" @click="dropIndex(idx.name)"><Icon name="x" :size="12" /></button></td>
+            <td class="c"><Icon v-if="idx.unique" name="check" :size="13" /><span v-if="idx.unique" class="sr-only">unique</span></td>
+            <td class="c"><button class="drop" title="Drop index" :disabled="locked" @click="dropIndex(idx.name)"><Icon name="x" :size="12" /></button></td>
           </tr>
         </tbody>
       </table>
       <p v-else class="none">No indexes.</p>
 
       <div class="add-row">
-        <input class="input sm" v-model="ix.columns" placeholder="columns (comma-separated)" />
+        <input aria-label="Index columns, comma-separated" class="input sm" v-model="ix.columns" placeholder="columns (comma-separated)" />
         <label class="nn"><input type="checkbox" v-model="ix.unique" /> unique</label>
-        <input class="input sm" v-model="ix.name" placeholder="name (optional)" />
+        <input aria-label="Index name" class="input sm" v-model="ix.name" placeholder="name (optional)" />
         <button class="btn btn-primary sm" :disabled="locked || !ix.columns.trim()" @click="addIndex">Add index</button>
       </div>
     </section>
@@ -216,15 +239,15 @@ function dropIndex(name: string): void {
   margin-bottom: 14px;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(224, 161, 74, 0.13);
-  color: var(--warn);
-  font-size: 12px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
 }
 section {
   margin-bottom: 26px;
 }
-h3 {
-  font-size: 12px;
+h2 {
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
@@ -234,7 +257,7 @@ h3 {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .cols th {
   text-align: left;
@@ -258,7 +281,7 @@ h3 {
 .input.sm,
 .select.sm {
   padding: 4px 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   width: 100%;
 }
 .def {
@@ -268,23 +291,28 @@ h3 {
 .mono {
   font-family: var(--mono);
 }
+.namecell {
+  display: flex;
+  align-items: center;
+}
 .pk {
-  font-size: 9px;
+  flex: none;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 1px 4px;
   border-radius: 3px;
   margin-right: 6px;
 }
 .drop {
-  color: var(--danger);
-  width: 22px;
-  height: 22px;
+  color: var(--danger-text);
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
 }
 .drop:hover {
-  background: rgba(229, 97, 106, 0.15);
+  background: var(--danger-soft);
 }
 .add-row {
   display: flex;
@@ -307,14 +335,14 @@ h3 {
   align-items: center;
   gap: 5px;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .arrow {
   color: var(--text-faint);
 }
 .none {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px 0;
 }
 </style>

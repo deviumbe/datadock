@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, useId } from 'vue'
 import Modal from './Modal.vue'
+
+const uid = useId()
 
 type Mode = 'generate' | 'explain' | 'fix'
 
@@ -115,22 +117,22 @@ const canRun = computed(() => {
 </script>
 
 <template>
-  <Modal title="✨ AI SQL Assistant" wide @close="emit('close')">
+  <Modal title="AI SQL Assistant" wide @close="emit('close')">
     <div v-if="ready === null" class="centered">Checking…</div>
 
     <!-- Key setup -->
     <div v-else-if="ready === false" class="key-setup">
       <p class="lead">No AI provider is configured yet.</p>
       <div class="field">
-        <label>API key for the active provider</label>
-        <input class="input" v-model="keyInput" type="password" placeholder="paste key…" @keydown.enter="saveKey" />
+        <label :for="`${uid}-api-key-for-the-active-p`">API key for the active provider</label>
+        <input :id="`${uid}-api-key-for-the-active-p`" class="input" v-model="keyInput" type="password" placeholder="paste key…" @keydown.enter="saveKey" />
       </div>
       <p class="hint">
         Pasting a key here sets it for your active provider. To choose between Anthropic, Google,
         Mistral, Grok or a local Ollama server — and pick models — open <b>Settings (⌘,) → AI</b>.
         Keys are encrypted with your OS keychain and used only by the app's main process.
       </p>
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
     </div>
 
     <!-- Assistant -->
@@ -143,8 +145,8 @@ const canRun = computed(() => {
 
       <!-- Generate -->
       <div v-if="mode === 'generate'" class="field">
-        <label>Describe what you want</label>
-        <textarea
+        <label :for="`${uid}-describe-what-you-want`">Describe what you want</label>
+        <textarea :id="`${uid}-describe-what-you-want`"
           class="input prompt"
           v-model="prompt"
           rows="3"
@@ -162,7 +164,7 @@ const canRun = computed(() => {
         <p v-if="mode === 'fix' && hasError" class="ctx-err">{{ props.error }}</p>
       </div>
 
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
 
       <div v-if="explanation" class="explanation">{{ explanation }}</div>
 
@@ -202,7 +204,7 @@ const canRun = computed(() => {
 }
 .hint {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   line-height: 1.5;
 }
@@ -216,7 +218,7 @@ const canRun = computed(() => {
 }
 .modes button {
   padding: 5px 16px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   border: none;
   background: transparent;
@@ -228,7 +230,7 @@ const canRun = computed(() => {
 }
 .modes button.on {
   background: var(--bg-active);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .modes button:disabled {
   opacity: 0.4;
@@ -240,8 +242,8 @@ const canRun = computed(() => {
 }
 .err {
   margin-top: 10px;
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
 }
 .sql {
   background: var(--bg-input);
@@ -249,7 +251,7 @@ const canRun = computed(() => {
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -263,8 +265,8 @@ const canRun = computed(() => {
 .ctx-err {
   margin-top: 8px;
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
   white-space: pre-wrap;
 }
 .result {
@@ -272,7 +274,7 @@ const canRun = computed(() => {
 }
 .explanation {
   margin-top: 16px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
@@ -285,7 +287,7 @@ const canRun = computed(() => {
 }
 .notes {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .change-key {

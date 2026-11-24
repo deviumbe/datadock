@@ -39,7 +39,7 @@ function fmtRows(n: number | null): string {
 <template>
   <Modal title="Table sizes" wide @close="emit('close')">
     <div v-if="loading" class="state">Measuring tables…</div>
-    <div v-else-if="error" class="state err">{{ error }}</div>
+    <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
     <div v-else-if="!sizes.length" class="state">No tables found.</div>
     <table v-else class="sizes">
       <thead>
@@ -78,20 +78,20 @@ function fmtRows(n: number | null): string {
 <style scoped>
 .state {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   padding: 8px 0;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .sizes {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .sizes th {
   text-align: left;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-dim);
@@ -116,7 +116,7 @@ function fmtRows(n: number | null): string {
   color: var(--text-faint);
 }
 .link {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   font-family: var(--mono);
 }
@@ -144,12 +144,12 @@ function fmtRows(n: number | null): string {
 .bar-label {
   position: relative;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .hint {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-top: 12px;
 }
 </style>

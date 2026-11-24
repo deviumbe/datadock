@@ -101,7 +101,7 @@ async function run(): Promise<void> {
   gap: 14px;
 }
 .seg-row label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -121,11 +121,11 @@ async function run(): Promise<void> {
 .seg button.on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .hint {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .formats {
   display: grid;
@@ -144,7 +144,7 @@ async function run(): Promise<void> {
   text-align: left;
 }
 .fmt span {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .fmt.on {
@@ -152,7 +152,7 @@ async function run(): Promise<void> {
   background: var(--accent-soft);
 }
 .fmt.on strong {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .msg {
   margin-top: 12px;
@@ -160,7 +160,7 @@ async function run(): Promise<void> {
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   word-break: break-all;
 }
 </style>

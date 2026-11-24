@@ -68,7 +68,7 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
         <em>External changes aren't tracked.</em>
       </p>
 
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
       <div v-if="loading && !versions.length" class="state">Loading…</div>
       <div v-else-if="!versions.length" class="state">
         No recorded history for this row yet. Edits you make here will show up the next time.
@@ -118,7 +118,7 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   gap: 12px;
 }
 .intro {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-dim);
 }
@@ -137,12 +137,12 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   font-style: normal;
 }
 .err {
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .state {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 18px;
   text-align: center;
@@ -158,19 +158,9 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
 }
 .ver {
   border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg-elevated);
   padding: 10px 13px;
-}
-.ver.update {
-  border-left-color: var(--accent);
-}
-.ver.delete {
-  border-left-color: var(--danger);
-}
-.ver.insert {
-  border-left-color: var(--ok);
 }
 .ver-head {
   display: flex;
@@ -179,25 +169,25 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   margin-bottom: 7px;
 }
 .op-tag {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 2px 7px;
   border-radius: 999px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 .op-tag.delete {
-  color: var(--danger);
-  background: rgba(248, 113, 113, 0.14);
+  color: var(--danger-text);
+  background: var(--danger-soft);
 }
 .op-tag.insert {
-  color: var(--ok);
-  background: rgba(34, 197, 94, 0.14);
+  color: var(--ok-text);
+  background: var(--ok-soft);
 }
 .when {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   font-family: var(--mono);
   flex: 1;
@@ -206,14 +196,14 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   color: var(--text-dim);
 }
 .revert:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 .changes {
@@ -228,7 +218,7 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .change.empty {
@@ -262,7 +252,7 @@ const OP_LABEL = { update: 'Updated', delete: 'Deleted', insert: 'Inserted' } as
   flex: none;
 }
 .ver-note {
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
 }
 </style>

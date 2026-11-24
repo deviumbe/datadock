@@ -145,7 +145,7 @@ function keyOf(c: DocColumn): string {
       Introspecting schema… {{ progress }}<span v-if="total">/{{ total }}</span> tables
       <div class="pbar"><div class="pfill" :style="{ width: total ? (progress / total) * 100 + '%' : '0%' }" /></div>
     </div>
-    <div v-else-if="error" class="state err">{{ error }}</div>
+    <div v-else-if="error" class="state err" role="alert">{{ error }}</div>
     <div v-else-if="model && !model.tables.length" class="state">No tables to document.</div>
 
     <div v-else-if="model" class="doc-body">
@@ -164,7 +164,7 @@ function keyOf(c: DocColumn): string {
 
       <section v-for="t in model.tables" :key="t.name" :id="`tbl-${slug(t.name)}`" class="tbl">
         <div class="tbl-head">
-          <h3>{{ t.name }}</h3>
+          <h2>{{ t.name }}</h2>
           <span class="tbl-meta">
             <template v-if="t.rows != null">{{ t.rows.toLocaleString() }} rows</template>
             <template v-if="t.bytes != null"> · {{ fmtBytes(t.bytes) }}</template>
@@ -221,10 +221,10 @@ function keyOf(c: DocColumn): string {
   flex: none;
 }
 .docs-head h2 {
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 .sub {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .spacer {
@@ -235,11 +235,11 @@ function keyOf(c: DocColumn): string {
   padding: 50px 20px;
   text-align: center;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
   max-width: 420px;
 }
 .state.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .pbar {
   margin-top: 12px;
@@ -262,10 +262,10 @@ function keyOf(c: DocColumn): string {
   margin: 0 auto;
 }
 .doc-title h1 {
-  font-size: 24px;
+  font-size: var(--fs-xl);
 }
 .gen {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin-top: 4px;
 }
@@ -278,7 +278,7 @@ function keyOf(c: DocColumn): string {
   border-bottom: 1px solid var(--border);
 }
 .toc-link {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -293,7 +293,7 @@ function keyOf(c: DocColumn): string {
   color: var(--text);
 }
 .toc-rows {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -307,12 +307,12 @@ function keyOf(c: DocColumn): string {
   gap: 10px;
   margin-bottom: 10px;
 }
-.tbl-head h3 {
-  font-size: 17px;
+.tbl-head h2 {
+  font-size: var(--fs-lg);
   color: var(--text);
 }
 .tbl-meta {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .tbl-desc {
@@ -320,17 +320,17 @@ function keyOf(c: DocColumn): string {
   align-items: flex-start;
   gap: 6px;
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--text-dim);
 }
 .tbl-desc :deep(.dd-icon) {
   margin-top: 2px;
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ai-describe {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ai-describe:hover {
   background: var(--accent-soft);
@@ -341,14 +341,14 @@ function keyOf(c: DocColumn): string {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .cols th {
   text-align: left;
   background: var(--bg-panel);
   color: var(--text-faint);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   padding: 7px 12px;
@@ -375,16 +375,16 @@ function keyOf(c: DocColumn): string {
   color: var(--text-faint);
 }
 .kbadge {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .kbadge.fk {
-  background: rgba(176, 122, 214, 0.18);
-  color: #b07ad6;
+  background: color-mix(in srgb, var(--hue-violet) 18%, transparent);
+  color: var(--hue-violet);
 }
 .meta-list {
   display: flex;
@@ -394,14 +394,14 @@ function keyOf(c: DocColumn): string {
   margin-top: 10px;
 }
 .ml-title {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-faint);
   margin-right: 2px;
 }
 .chip {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-family: var(--mono);
   color: var(--text-dim);
   background: var(--bg-panel);
@@ -411,6 +411,6 @@ function keyOf(c: DocColumn): string {
 }
 .chip.uniq {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 </style>

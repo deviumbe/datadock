@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useUi } from '../stores/ui'
 import { ref, reactive, computed, watch } from 'vue'
 import { isSqlDriver } from '@shared/types'
 import type {
@@ -18,6 +19,8 @@ import ChartBuilderModal from './ChartBuilderModal.vue'
 import MetricEditorModal from './MetricEditorModal.vue'
 import ReportScheduleModal from './ReportScheduleModal.vue'
 import DashboardView from './DashboardView.vue'
+
+const ui = useUi()
 
 const props = defineProps<{ connId: string; driver: string }>()
 
@@ -44,7 +47,13 @@ async function newDashboard(): Promise<void> {
   openDashboardId.value = saved.id
 }
 async function deleteDashboard(id: string, dname: string): Promise<void> {
-  if (confirm(`Delete dashboard “${dname}”? (Charts are kept.)`)) await analytics.removeDashboard(id)
+  const ok = await ui.confirmDialog({
+    title: 'Delete dashboard',
+    message: `Delete “${dname}”? Its charts are kept.`,
+    confirmLabel: 'Delete dashboard',
+    danger: true
+  })
+  if (ok) await analytics.removeDashboard(id)
 }
 
 // ---- scheduled reports ----
@@ -52,6 +61,7 @@ const reports = ref<ScheduledReport[]>([])
 const reportOpen = ref(false)
 const editingReport = ref<ScheduledReport | null>(null)
 const runningReport = ref('')
+const reportError = ref('')
 
 async function loadReports(id: string): Promise<void> {
   reports.value = await window.api.analytics.listReports(id)
@@ -73,7 +83,13 @@ async function toggleReport(r: ScheduledReport): Promise<void> {
   await loadReports(props.connId)
 }
 async function removeReport(r: ScheduledReport): Promise<void> {
-  if (!confirm(`Delete scheduled report “${r.name}”?`)) return
+  const ok = await ui.confirmDialog({
+    title: 'Delete scheduled report',
+    message: `Delete “${r.name}”?`,
+    confirmLabel: 'Delete report',
+    danger: true
+  })
+  if (!ok) return
   await window.api.analytics.removeReport(r.id)
   await loadReports(props.connId)
 }
@@ -81,7 +97,7 @@ async function runReportNow(r: ScheduledReport): Promise<void> {
   runningReport.value = r.id
   try {
     const res = await window.api.analytics.runReport(r.id)
-    if (!res.ok) alert(`Report failed: ${res.error}`)
+    reportError.value = res.ok ? '' : `“${r.name}” could not run: ${res.error}`
     await loadReports(props.connId)
   } finally {
     runningReport.value = ''
@@ -154,7 +170,13 @@ function editChart(c: AnalyticsChart): void {
   builderOpen.value = true
 }
 async function removeChart(c: AnalyticsChart): Promise<void> {
-  if (confirm(`Delete chart “${c.name}”?`)) await analytics.removeChart(c.id)
+  const ok = await ui.confirmDialog({
+    title: 'Delete chart',
+    message: `Delete “${c.name}”?`,
+    confirmLabel: 'Delete chart',
+    danger: true
+  })
+  if (ok) await analytics.removeChart(c.id)
 }
 
 // ---- metric editor ----
@@ -169,8 +191,13 @@ function editMetric(m: AnalyticsMetric): void {
   metricOpen.value = true
 }
 async function removeMetric(m: AnalyticsMetric): Promise<void> {
-  if (confirm(`Delete metric “${m.name}”? Charts bound to it keep their own measure.`))
-    await analytics.removeMetric(m.id)
+  const ok = await ui.confirmDialog({
+    title: 'Delete metric',
+    message: `Delete “${m.name}”? Charts bound to it keep their own measure.`,
+    confirmLabel: 'Delete metric',
+    danger: true
+  })
+  if (ok) await analytics.removeMetric(m.id)
 }
 
 // ---- dataset editor ----
@@ -207,8 +234,13 @@ async function saveDataset(): Promise<void> {
   dsOpen.value = false
 }
 async function removeDataset(id: string, name: string): Promise<void> {
-  if (confirm(`Delete dataset “${name}”? Charts built on it will also be removed.`))
-    await analytics.removeDataset(id)
+  const ok = await ui.confirmDialog({
+    title: 'Delete dataset',
+    message: `Delete “${name}”? Charts built on it are removed too.`,
+    confirmLabel: 'Delete dataset',
+    danger: true
+  })
+  if (ok) await analytics.removeDataset(id)
 }
 
 function sourceLabel(src: DatasetSource): string {
@@ -249,7 +281,7 @@ function sourceLabel(src: DatasetSource): string {
       <section class="ai-card">
         <div class="ai-row">
           <span class="ai-ic"><Icon name="sparkles" :size="18" /></span>
-          <input
+          <input aria-label="Ask AI to build charts"
             v-model="aiPrompt"
             class="ai-input"
             :disabled="aiBusy || !aiHasKey"
@@ -261,13 +293,13 @@ function sourceLabel(src: DatasetSource): string {
           </button>
         </div>
         <p v-if="!aiHasKey" class="ai-hint">Configure an AI provider in Settings (⌘,) to build charts from a prompt.</p>
-        <p v-else-if="aiError" class="ai-hint err">{{ aiError }}</p>
+        <p v-else-if="aiError" class="ai-hint err" role="alert">{{ aiError }}</p>
         <p v-else-if="aiNotes" class="ai-hint ok">{{ aiNotes }}</p>
       </section>
 
       <!-- Dashboards -->
       <section class="sect">
-        <h3>Dashboards <span class="count">{{ dashboardList.length }}</span></h3>
+        <h2>Dashboards <span class="count">{{ dashboardList.length }}</span></h2>
         <div v-if="!dashboardList.length" class="empty">
           No dashboards yet. Create one and drag charts onto a resizable grid — or ask the AI to build a whole dashboard above.
         </div>
@@ -283,7 +315,8 @@ function sourceLabel(src: DatasetSource): string {
 
       <!-- Scheduled reports -->
       <section v-if="reports.length" class="sect">
-        <h3>Scheduled reports <span class="count">{{ reports.length }}</span></h3>
+        <h2>Scheduled reports <span class="count">{{ reports.length }}</span></h2>
+        <p v-if="reportError" class="ai-hint err" role="alert">{{ reportError }}</p>
         <div class="ds-list">
           <div v-for="r in reports" :key="r.id" class="ds report-row" :class="{ off: !r.enabled }">
             <button
@@ -311,7 +344,7 @@ function sourceLabel(src: DatasetSource): string {
 
       <!-- Saved metrics -->
       <section class="sect">
-        <h3>Saved metrics <span class="count">{{ metrics.length }}</span></h3>
+        <h2>Saved metrics <span class="count">{{ metrics.length }}</span></h2>
         <div v-if="!metrics.length" class="empty">
           No metrics yet. A metric is a reusable measure (e.g. “Total revenue” = SUM of amount) that KPI cards and charts can share — edit it once, every chart using it updates.
         </div>
@@ -331,7 +364,7 @@ function sourceLabel(src: DatasetSource): string {
 
       <!-- Datasets -->
       <section class="sect">
-        <h3>Datasets <span class="count">{{ datasets.length }}</span></h3>
+        <h2>Datasets <span class="count">{{ datasets.length }}</span></h2>
         <div v-if="!datasets.length" class="empty">
           No datasets yet. A dataset is a reusable source (a table, view or saved query) that charts are built on.
         </div>
@@ -346,7 +379,7 @@ function sourceLabel(src: DatasetSource): string {
 
       <!-- Charts -->
       <section class="sect">
-        <h3>Charts <span class="count">{{ charts.length }}</span></h3>
+        <h2>Charts <span class="count">{{ charts.length }}</span></h2>
         <div v-if="!charts.length" class="empty">
           No charts yet. Create a dataset, then add a chart to visualize it.
         </div>
@@ -456,13 +489,13 @@ function sourceLabel(src: DatasetSource): string {
   background: var(--bg-panel);
 }
 .atitle {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: var(--text);
 }
 .asub {
   margin-left: 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .aactions {
@@ -474,7 +507,7 @@ function sourceLabel(src: DatasetSource): string {
   margin: auto;
   padding: 60px;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .abody {
   flex: 1;
@@ -497,11 +530,11 @@ function sourceLabel(src: DatasetSource): string {
   gap: 8px;
 }
 .ai-ic {
-  font-size: 16px;
+  font-size: var(--fs-md);
 }
 .ai-input {
   flex: 1;
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   padding: 9px 11px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -515,23 +548,23 @@ function sourceLabel(src: DatasetSource): string {
 }
 .ai-hint {
   margin: 8px 2px 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .ai-hint.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .ai-hint.ok {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .sect {
   margin-bottom: 30px;
 }
-.sect h3 {
+.sect h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -539,7 +572,7 @@ function sourceLabel(src: DatasetSource): string {
   margin: 0 0 14px;
 }
 .count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -547,7 +580,7 @@ function sourceLabel(src: DatasetSource): string {
   color: var(--text-dim);
 }
 .empty {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--text-dim);
   padding: 18px;
@@ -581,33 +614,33 @@ function sourceLabel(src: DatasetSource): string {
   opacity: 0.6;
 }
 .report-row .toggle {
-  font-size: 13px;
+  font-size: var(--fs-base);
   margin-left: 0;
 }
 .rstatus {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-left: 8px;
 }
 .rstatus :deep(.dd-icon) {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .rstatus.err :deep(.dd-icon) {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .rstatus.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .ds-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .ds-src {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   font-family: var(--mono);
 }
@@ -616,7 +649,7 @@ function sourceLabel(src: DatasetSource): string {
   align-items: center;
   justify-content: center;
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   padding: 4px 6px;
   border-radius: var(--radius-sm);
@@ -650,14 +683,14 @@ function sourceLabel(src: DatasetSource): string {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .fld > span {
   font-weight: 600;
 }
 .input {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 7px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);

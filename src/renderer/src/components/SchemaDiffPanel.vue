@@ -78,8 +78,8 @@ const badge = (s: TableDiff['status']): string =>
     <div class="toolbar">
       <strong>Schema Diff</strong>
       <span class="muted">{{ connName }}</span>
-      <span class="arrow">↔</span>
-      <select class="select" v-model="targetId" :disabled="busy">
+      <span class="arrow"><Icon name="swap" :size="14" /></span>
+      <select class="select" v-model="targetId" aria-label="Compare with" :disabled="busy">
         <option value="" disabled>Compare with…</option>
         <option v-for="c in candidates" :key="c.id" :value="c.id">{{ c.label }}</option>
       </select>
@@ -96,7 +96,7 @@ const badge = (s: TableDiff['status']): string =>
       ><Icon name="download" :size="13" /> Migration script</button>
     </div>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
 
     <div v-if="!diff && !busy && !error" class="empty">
       Pick another connection to compare schemas. (“{{ connName }}” on the left, target on the right.)
@@ -117,16 +117,16 @@ const badge = (s: TableDiff['status']): string =>
         </div>
         <div class="spacer" />
         <button class="btn btn-ghost" @click="copyMigration"><Icon :name="copied ? 'check' : 'copy'" :size="13" /> {{ copied ? 'Copied' : 'Copy' }}</button>
-        <button class="btn btn-primary" @click="openMigrationAsQuery">Open as query →</button>
+        <button class="btn btn-primary" @click="openMigrationAsQuery">Open as query</button>
       </div>
       <pre class="mig-sql">{{ migration }}</pre>
-      <p class="mig-note">⚠ Heuristic — covers tables, columns, types, nullability & PKs (not defaults, FKs, indexes or data). Review before running.</p>
+      <p class="mig-note"><Icon name="warn" :size="12" /> Heuristic — covers tables, columns, types, nullability & PKs (not defaults, FKs, indexes or data). Review before running.</p>
     </div>
 
     <div v-if="diff" class="list">
       <div v-for="t in visible" :key="t.name" class="trow">
-        <div class="thead" :class="t.status" @click="toggle(t.name)">
-          <span class="caret">{{ expanded.has(t.name) ? '▾' : '▸' }}</span>
+        <div v-press class="thead" :aria-expanded="expanded.has(t.name)" :class="t.status" @click="toggle(t.name)">
+          <span class="caret"><Icon :name="expanded.has(t.name) ? 'chevronDown' : 'chevronRight'" :size="11" /></span>
           <span class="tname">{{ t.name }}</span>
           <span class="tbadge" :class="t.status">{{ badge(t.status) }}</span>
         </div>
@@ -143,7 +143,7 @@ const badge = (s: TableDiff['status']): string =>
           </div>
         </div>
       </div>
-      <div v-if="visible.length === 0" class="empty">No differences. 🎉</div>
+      <div v-if="visible.length === 0" class="empty">No differences.</div>
     </div>
   </div>
 </template>
@@ -165,14 +165,14 @@ const badge = (s: TableDiff['status']): string =>
 }
 .muted {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .arrow {
   color: var(--text-faint);
 }
 .btn.on {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .migration {
   border-bottom: 1px solid var(--border);
@@ -192,14 +192,14 @@ const badge = (s: TableDiff['status']): string =>
   overflow: hidden;
 }
 .dir button {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   padding: 4px 10px;
   color: var(--text-dim);
   background: var(--bg-app);
 }
 .dir button.on {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .mig-sql {
   margin: 0;
@@ -210,14 +210,14 @@ const badge = (s: TableDiff['status']): string =>
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   color: var(--text);
   white-space: pre;
 }
 .mig-note {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .select {
@@ -230,15 +230,15 @@ const badge = (s: TableDiff['status']): string =>
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .err {
   padding: 10px 12px;
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .empty {
   padding: 30px;
@@ -249,17 +249,17 @@ const badge = (s: TableDiff['status']): string =>
   gap: 14px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   flex-shrink: 0;
 }
 .summary .changed {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .summary .onlyA {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .summary .onlyB {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .summary .same {
   color: var(--text-faint);
@@ -282,31 +282,31 @@ const badge = (s: TableDiff['status']): string =>
 }
 .caret {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   width: 12px;
 }
 .tname {
   flex: 1;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .tbadge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 10px;
 }
 .tbadge.changed {
-  background: rgba(224, 161, 74, 0.18);
-  color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn-text);
 }
 .tbadge.onlyA {
-  background: rgba(229, 97, 106, 0.16);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 .tbadge.onlyB {
-  background: rgba(63, 207, 142, 0.16);
-  color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok-text);
 }
 .tbadge.same {
   background: var(--bg-elevated);
@@ -321,16 +321,16 @@ const badge = (s: TableDiff['status']): string =>
   gap: 8px;
   padding: 3px 10px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .crow.added {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .crow.removed {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .crow.changed {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .crow.same {
   color: var(--text-faint);

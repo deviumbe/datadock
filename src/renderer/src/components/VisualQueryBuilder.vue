@@ -704,13 +704,15 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
       <!-- Left sidebar: available tables -->
       <aside class="vqb-sidebar">
         <div class="vqb-sidebar-head">
-          <input class="input" v-model="tableSearch" placeholder="Filter tables…" />
+          <input aria-label="Filter tables" class="input" v-model="tableSearch" placeholder="Filter tables…" />
         </div>
         <div class="vqb-sidebar-hint">Click a table to add it</div>
-        <div class="vqb-table-list">
+        <div class="vqb-table-list" data-rows>
           <div
             v-for="t in filteredAvailable"
             :key="t.name"
+            v-row
+            role="button"
             class="vqb-table-item"
             title="Add to query"
             @click="addTable(t.name)"
@@ -731,7 +733,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
         <!-- Empty state -->
         <div v-if="selectedTables.length === 0" class="vqb-empty">
           <div class="vqb-empty-icon"><Icon name="diagram" :size="30" /></div>
-          <h3>Build a query without writing SQL</h3>
+          <h2>Build a query without writing SQL</h2>
           <p>Pick a table from the left, tick the columns you want, then add filters, joins or sorting. The SQL is written for you and you can run it in one click.</p>
           <div class="vqb-steps">
             <div class="vqb-step"><span class="vqb-step-n">1</span> Add a table</div>
@@ -810,7 +812,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
                       >
                         <option v-for="(lbl, fn) in AGG_LABEL" :key="fn" :value="fn">{{ lbl }}</option>
                       </select>
-                      <input
+                      <input aria-label="Rename column"
                         class="input vqb-mini vqb-alias"
                         :value="aliasOf(t.name, col)"
                         placeholder="rename…"
@@ -881,17 +883,17 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
                 </select>
                 <span v-else class="vqb-where-lead">where</span>
                 <template v-if="f.mode === 'simple'">
-                  <select class="select vqb-col-select" :value="f.column" @change="f.column = ($event.target as HTMLSelectElement).value">
+                  <select aria-label="Filter field" class="select vqb-col-select" :value="f.column" @change="f.column = ($event.target as HTMLSelectElement).value">
                     <option value="" disabled>Column…</option>
                     <optgroup v-for="t in selectedTables" :key="t.name" :label="t.name">
                       <option v-for="col in colsOfTable(t.name)" :key="col" :value="`${t.name}.${col}`">{{ col }}</option>
                     </optgroup>
                   </select>
-                  <select class="select vqb-op-select" :value="f.op" @change="f.op = ($event.target as HTMLSelectElement).value as FilterOp">
+                  <select aria-label="Filter operator" class="select vqb-op-select" :value="f.op" @change="f.op = ($event.target as HTMLSelectElement).value as FilterOp">
                     <option v-for="op in FILTER_OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
                   </select>
                   <template v-if="f.op !== 'is null' && f.op !== 'not null'">
-                    <input
+                    <input aria-label="Value"
                       class="input vqb-val-input"
                       v-model="f.value"
                       placeholder="Value"
@@ -903,7 +905,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
                     </datalist>
                   </template>
                 </template>
-                <input
+                <input aria-label="Condition"
                   v-else
                   class="input vqb-raw-input"
                   v-model="f.raw"
@@ -933,13 +935,13 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
             <div v-if="openSections.having" class="vqb-section-body">
               <p class="vqb-desc">Keep only the groups whose total matches — e.g. only customers whose <em>total amount</em> is more than 1000.</p>
               <div v-for="h in having" :key="h.id" class="vqb-filter-row">
-                <select class="select vqb-col-select" v-model="h.ref">
+                <select aria-label="Summary filter field" class="select vqb-col-select" v-model="h.ref">
                   <option v-for="a in aggItems" :key="a.id" :value="a.id">{{ a.label }}</option>
                 </select>
-                <select class="select vqb-op-select" v-model="h.op">
+                <select aria-label="Summary filter operator" class="select vqb-op-select" v-model="h.op">
                   <option v-for="op in HAVING_OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
                 </select>
-                <input class="input vqb-val-input" v-model="h.value" placeholder="e.g. 1000" />
+                <input aria-label="Value" class="input vqb-val-input" v-model="h.value" placeholder="e.g. 1000" />
                 <button class="vqb-card-remove" @click="removeHaving(h.id)" title="Remove"><Icon name="x" :size="12" /></button>
               </div>
               <button class="btn btn-ghost vqb-add-btn" @click="addHaving"><Icon name="plus" :size="13" /> Add condition</button>
@@ -956,11 +958,11 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
             <div v-if="openSections.sort" class="vqb-section-body">
               <p class="vqb-desc">Put the results in order. Add more than one to break ties (e.g. by date, then by name).</p>
               <div v-for="(s, idx) in orderBy" :key="idx" class="vqb-filter-row">
-                <select class="select vqb-col-select" v-model="s.key">
+                <select aria-label="Sort field" class="select vqb-col-select" v-model="s.key">
                   <option v-for="o in sortOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
                 </select>
                 <button class="btn btn-ghost vqb-dir-btn" @click="toggleSortDir(idx)" title="Click to flip the order">
-                  {{ s.dir === 'ASC' ? '↑ Low to high' : '↓ High to low' }}
+                  <Icon :name="s.dir === 'ASC' ? 'chevronUp' : 'chevronDown'" :size="12" /> {{ s.dir === 'ASC' ? 'Low to high' : 'High to low' }}
                 </button>
                 <button class="vqb-card-remove" @click="removeSort(idx)" title="Remove sort"><Icon name="x" :size="12" /></button>
               </div>
@@ -979,7 +981,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
               <p class="vqb-desc">Only fetch the first few rows — handy for a quick preview of big tables.</p>
               <div class="vqb-filter-row">
                 <label class="vqb-limit-label">Show at most</label>
-                <input
+                <input aria-label="Row limit"
                   class="input vqb-limit-input"
                   type="number"
                   :value="limit ?? ''"
@@ -988,7 +990,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
                   @input="limit = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
                 />
                 <label class="vqb-limit-label">rows, skipping the first</label>
-                <input
+                <input aria-label="0"
                   class="input vqb-limit-input"
                   type="number"
                   :value="offset ?? ''"
@@ -1046,7 +1048,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
           </button>
         </div>
         <div v-if="previewOpen" class="vqb-preview-grid">
-          <div v-if="previewError" class="vqb-prev-error"><Icon name="warn" :size="14" /><span>{{ previewError }}</span></div>
+          <div v-if="previewError" class="vqb-prev-error" role="alert"><Icon name="warn" :size="14" /><span>{{ previewError }}</span></div>
           <template v-else-if="preview && preview.columns.length">
             <div v-if="effectiveView === 'chart'" class="vqb-prev-chart"><ChartRender :type="previewChartType" :result="preview" instant /></div>
             <ResultsGrid v-else :result="preview" />
@@ -1062,7 +1064,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   <div v-else class="vqb-non-sql">
     <div class="vqb-empty">
       <div class="vqb-empty-icon"><Icon name="warn" :size="28" /></div>
-      <h3>Query Builder not available</h3>
+      <h2>Query Builder not available</h2>
       <p>The visual query builder works with SQL databases only.</p>
       <p class="vqb-hint">{{ driver }} does not support SQL queries.</p>
     </div>
@@ -1100,7 +1102,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-muted {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .vqb-spacer {
   flex: 1;
@@ -1125,12 +1127,12 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-sidebar-head .input {
   width: 100%;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 6px 10px;
 }
 .vqb-sidebar-hint {
   padding: 2px 12px 8px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .vqb-table-list {
@@ -1145,7 +1147,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   padding: 5px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .vqb-table-item:hover {
   background: var(--bg-hover);
@@ -1153,7 +1155,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 .vqb-ticon {
   display: inline-flex;
   align-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vqb-tname {
   flex: 1;
@@ -1167,13 +1169,14 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   opacity: 0;
   transition: opacity 0.12s;
 }
+.vqb-table-item:focus-visible .vqb-tadd,
 .vqb-table-item:hover .vqb-tadd {
   opacity: 1;
 }
 .vqb-empty-list {
   color: var(--text-faint);
   padding: 12px 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 
@@ -1256,7 +1259,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   align-items: center;
   gap: 5px;
   padding: 3px 11px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   border: none;
   border-radius: 999px;
@@ -1269,32 +1272,32 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-view-toggle button.on {
   background: var(--bg-active);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vqb-prev-chart {
   height: 100%;
   padding: 8px 12px;
 }
 .vqb-preview-title {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .vqb-prev-state {
-  font-size: 11px;
-  color: var(--accent);
+  font-size: var(--fs-xs);
+  color: var(--accent-text);
 }
 .vqb-prev-state.err {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .vqb-prev-count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: var(--mono);
   color: var(--text-faint);
 }
 .vqb-prev-hint {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-family: var(--mono);
 }
@@ -1315,9 +1318,9 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   align-items: flex-start;
   gap: 8px;
   padding: 12px 14px;
-  color: var(--danger);
+  color: var(--danger-text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .vqb-prev-empty {
@@ -1326,7 +1329,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   justify-content: center;
   height: 100%;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 /* Sections must keep their natural height. Without this they'd flex-shrink to
    fit the canvas (a flex column) and their overflow:hidden would clip the
@@ -1354,17 +1357,17 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   height: 64px;
   margin-bottom: 18px;
   border-radius: 18px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
-.vqb-empty h3 {
-  font-size: 17px;
+.vqb-empty h2 {
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 8px;
 }
 .vqb-empty p {
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   max-width: 420px;
 }
@@ -1380,7 +1383,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   align-items: center;
   gap: 7px;
   padding: 6px 12px 6px 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
@@ -1393,14 +1396,14 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--on-accent);
   background: var(--accent);
 }
 .vqb-hint {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-top: 10px;
 }
 
@@ -1417,12 +1420,12 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 .vqb-summary-ic {
   display: inline-flex;
   margin-top: 1px;
-  color: var(--accent);
+  color: var(--accent-text);
   flex: none;
 }
 .vqb-summary p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--text);
 }
@@ -1442,7 +1445,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -1457,14 +1460,14 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 .vqb-opt-eg {
   font-weight: 400;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .vqb-group-note {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -1485,7 +1488,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   padding: 11px 14px 4px;
 }
 .vqb-section-title {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -1509,9 +1512,9 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   background: var(--bg-hover);
 }
 .vqb-section-count {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   padding: 1px 8px;
   border-radius: 999px;
@@ -1532,7 +1535,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   transform: rotate(90deg);
 }
 .vqb-desc {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--text-faint);
   margin: 0 0 4px;
@@ -1543,7 +1546,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-desc code {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   background: var(--bg-elevated);
   padding: 1px 5px;
@@ -1551,7 +1554,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-desc em {
   font-style: normal;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .vqb-desc strong {
@@ -1565,11 +1568,11 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
-  color: var(--warn);
-  background: rgba(240, 180, 41, 0.1);
-  border: 1px solid rgba(240, 180, 41, 0.3);
+  color: var(--warn-text);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
   border-radius: var(--radius-sm);
   padding: 7px 10px;
 }
@@ -1598,20 +1601,20 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   align-items: center;
   gap: 7px;
   padding: 8px 10px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   border-bottom: 1px solid var(--border-soft);
 }
 .vqb-card-name {
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-base);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .vqb-card-count {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-family: var(--mono);
   background: var(--bg-panel);
@@ -1619,7 +1622,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   border-radius: var(--radius-sm);
 }
 .vqb-card-btn {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-faint);
   padding: 2px 6px;
@@ -1642,15 +1645,15 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   flex-shrink: 0;
 }
 .vqb-card-remove:hover {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 .vqb-card-cols {
   padding: 4px 0;
 }
 .vqb-no-cols {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 8px 12px;
   text-align: center;
 }
@@ -1660,7 +1663,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   flex-wrap: wrap;
   gap: 4px 8px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .vqb-col:hover {
   background: var(--bg-hover);
@@ -1680,7 +1683,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 .vqb-fx {
   flex: none;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1;
   color: var(--text-faint);
   padding: 3px 7px;
@@ -1693,7 +1696,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   background: var(--bg-hover);
 }
 .vqb-fx.on {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -1713,10 +1716,10 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-col.pk .vqb-col-name {
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vqb-col.fk .vqb-col-name {
-  color: #7cacf8;
+  color: var(--hue-blue);
 }
 .vqb-col-ctrls {
   display: flex;
@@ -1726,7 +1729,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   padding-left: 21px; /* line up under the column name, past the checkbox */
 }
 .vqb-badge {
-  font-size: 8px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 0 4px;
   border-radius: 3px;
@@ -1735,14 +1738,14 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-badge.pk {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vqb-badge.fk {
-  background: rgba(91, 141, 239, 0.18);
-  color: #5b8def;
+  background: color-mix(in srgb, var(--hue-blue) 18%, transparent);
+  color: var(--hue-blue);
 }
 .vqb-mini {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 3px 6px;
 }
 .vqb-alias {
@@ -1768,7 +1771,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 .vqb-join-explain {
   margin: 6px 0 0;
   padding-left: 22px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .vqb-join-check {
@@ -1776,7 +1779,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   cursor: pointer;
 }
 .vqb-join-type {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   min-width: 76px;
 }
@@ -1794,7 +1797,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-where-lead,
 .vqb-conn {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text-faint);
   letter-spacing: 0.04em;
@@ -1804,32 +1807,32 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-conn {
   width: 64px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vqb-col-select {
   flex: 1;
   min-width: 130px;
   max-width: 240px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 .vqb-op-select {
   width: 108px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 .vqb-val-input {
   flex: 1;
   min-width: 90px;
   max-width: 200px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 .vqb-raw-input {
   flex: 1;
   min-width: 200px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 .vqb-mode-btn {
@@ -1848,19 +1851,19 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   background: var(--bg-hover);
 }
 .vqb-mode-btn.on {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 .vqb-dir-btn {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   font-family: var(--mono);
 }
 .vqb-add-btn {
   align-self: flex-start;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px 12px;
   border-radius: 999px;
   margin-top: 2px;
@@ -1868,7 +1871,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 
 /* ---- limit ---- */
 .vqb-limit-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-faint);
   font-family: var(--mono);
@@ -1876,7 +1879,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-limit-input {
   width: 110px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 
@@ -1886,7 +1889,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
 }
 .vqb-sql-opt {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-faint);
   text-transform: uppercase;
@@ -1905,7 +1908,7 @@ const openSections = ref({ joins: true, filters: true, having: true, sort: false
   margin: 6px 0 0;
   padding: 12px 14px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--text);
   background: var(--bg-input);

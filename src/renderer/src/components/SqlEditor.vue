@@ -27,6 +27,7 @@ import {
 
 const props = defineProps<{
   modelValue: string
+  label?: string
   placeholder?: string
   schema?: Record<string, string[]>
   /** Saved snippets to offer as autocomplete (typing the name expands the SQL). */
@@ -103,9 +104,34 @@ const theme = EditorView.theme(
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
       backgroundColor: 'var(--accent-selection)'
     },
-    '&.cm-focused': { outline: 'none' }
-  },
-  { dark: true }
+    '&.cm-focused': { outline: 'none' },
+    '.cm-tooltip': {
+      backgroundColor: 'var(--bg-elevated)',
+      color: 'var(--text)',
+      border: '1px solid var(--border-strong)',
+      borderRadius: 'var(--radius-sm)',
+      boxShadow: 'var(--shadow-pop)',
+      overflow: 'hidden'
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+      fontFamily: 'var(--mono)',
+      fontSize: 'var(--fs-sm)',
+      maxHeight: '16em'
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '4px 10px' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: 'var(--bg-active)',
+      color: 'var(--text)'
+    },
+    '.cm-completionMatchedText': {
+      textDecoration: 'none',
+      fontWeight: '600',
+      color: 'var(--accent-text)'
+    },
+    '.cm-completionDetail': { color: 'var(--text-dim)', fontStyle: 'normal' },
+    '.cm-completionInfo': { padding: '8px 10px', fontFamily: 'var(--mono)', fontSize: 'var(--fs-xs)' },
+    '&.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--accent-soft)', color: 'inherit' }
+  }
 )
 
 onMounted(() => {
@@ -142,11 +168,12 @@ onMounted(() => {
         bracketMatching(),
         closeBrackets(),
         indentOnInput(),
-        autocompletion(),
+        autocompletion({ icons: false }),
         sqlConf.of(sqlExt()),
         EditorState.languageData.of(() => [{ autocomplete: snippetCompletions }]),
         syntaxHighlighting(highlight),
         theme,
+        EditorView.contentAttributes.of({ 'aria-label': props.label ?? 'SQL editor' }),
         cmPlaceholder(props.placeholder ?? ''),
         runKey,
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),

@@ -47,7 +47,11 @@ const hover = ref<number | null>(null)
 
 <template>
   <div class="chart">
-    <svg :viewBox="`0 0 ${W} ${height}`" preserveAspectRatio="none" class="svg">
+    <table class="sr-only">
+      <caption>Chart data</caption>
+      <tr v-for="(b, i) in bars" :key="i"><th scope="row">{{ b.title || b.label }}</th><td>{{ b.value }}</td></tr>
+    </table>
+    <svg :viewBox="`0 0 ${W} ${height}`" preserveAspectRatio="none" class="svg" aria-hidden="true">
       <!-- baseline -->
       <line :x1="PAD_L" :x2="W - PAD_R" :y1="PAD_T + innerH" :y2="PAD_T + innerH" class="axis" />
       <g v-for="(b, i) in bars" :key="i" @mouseenter="hover = i" @mouseleave="hover = null">
@@ -64,7 +68,7 @@ const hover = ref<number | null>(null)
         />
       </g>
     </svg>
-    <div class="xlabels">
+    <div class="xlabels" aria-hidden="true">
       <span
         v-for="(b, i) in bars"
         :key="i"
@@ -109,7 +113,7 @@ const hover = ref<number | null>(null)
   margin-top: 4px;
 }
 .xl {
-  font-size: 9.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   text-align: center;
   white-space: nowrap;
@@ -124,7 +128,7 @@ const hover = ref<number | null>(null)
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text);
   pointer-events: none;
   white-space: nowrap;

@@ -150,8 +150,8 @@ defineExpose({ snapshot })
       </span>
       <span class="card-meta">{{ chart.type }}</span>
       <div class="card-actions">
-        <div class="exp">
-          <button class="ic" title="Export data" @click="exportOpen = !exportOpen"><Icon name="download" :size="14" /></button>
+        <div class="exp" @keydown.esc.stop="exportOpen = false">
+          <button class="ic" title="Export data" :aria-expanded="exportOpen" @click="exportOpen = !exportOpen"><Icon name="download" :size="14" /></button>
           <div v-if="exportOpen" class="exp-menu" @mouseleave="exportOpen = false">
             <button @click="exportData('xlsx')">Excel (.xlsx)</button>
             <button @click="exportData('csv')">CSV</button>
@@ -232,6 +232,7 @@ defineExpose({ snapshot })
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
 }
+.card:focus-within .card-actions,
 .card:hover .card-actions {
   opacity: 1;
 }
@@ -242,7 +243,7 @@ defineExpose({ snapshot })
   padding: 10px 14px;
 }
 .card-title {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -252,13 +253,13 @@ defineExpose({ snapshot })
 .card-meta {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   text-transform: lowercase;
   letter-spacing: 0.03em;
 }
 .bound {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   margin-right: 2px;
 }
@@ -282,13 +283,13 @@ defineExpose({ snapshot })
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
 }
 .exp-menu button {
   text-align: left;
   padding: 7px 11px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   background: transparent;
 }
@@ -300,6 +301,8 @@ defineExpose({ snapshot })
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
+  min-width: 26px;
+  min-height: 24px;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
@@ -318,15 +321,15 @@ defineExpose({ snapshot })
   justify-content: center;
   height: 100%;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .cstate.err {
-  color: var(--danger);
+  color: var(--danger-text);
   padding: 12px;
   text-align: center;
 }
 .drill-hint {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   text-align: center;
   padding: 2px 0 5px;
@@ -337,14 +340,14 @@ defineExpose({ snapshot })
   overflow: auto;
 }
 .drill-count {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-bottom: 8px;
 }
 .drill-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .drill-table th,
 .drill-table td {

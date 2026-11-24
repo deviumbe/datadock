@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useId } from 'vue'
 import Icon from './Icon.vue'
 import type { ColumnMeta } from '@shared/types'
+
+const uid = useId()
 
 const props = defineProps<{
   columns: ColumnMeta[]
@@ -53,21 +56,21 @@ function toggleNull(col: ColumnMeta, i: number): void {
 </script>
 
 <template>
-  <aside class="detail">
+  <aside class="detail" aria-label="Row details">
     <header class="detail-head">
       <span class="title">Row {{ rowIndex + 1 }}</span>
       <div class="spacer" />
-      <button class="btn-ghost close" @click="emit('close')"><Icon name="x" :size="14" /></button>
+      <button class="btn-ghost close" title="Close row details" @click="emit('close')"><Icon name="x" :size="14" /></button>
     </header>
 
     <div class="fields">
       <div v-for="(col, i) in columns" :key="col.name" class="field-row" :class="{ dirty: dirty(col) }">
-        <label>
+        <label :for="`${uid}-${i}`">
           {{ col.name }}
           <span v-if="isPk(col.name)" class="pk" title="Primary key">PK</span>
           <span v-if="col.type" class="type">{{ col.type }}</span>
         </label>
-        <input
+        <input :id="`${uid}-${i}`"
           class="input"
           :class="{ 'is-null': isNull(col, i) }"
           :value="value(col, i)"
@@ -83,7 +86,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
           :title="isNull(col, i) ? 'Restore the original value' : 'Set this field to NULL'"
           @click="toggleNull(col, i)"
         >
-          {{ isNull(col, i) ? '✓ NULL' : 'Set NULL' }}
+          <Icon v-if="isNull(col, i)" name="check" :size="11" /> {{ isNull(col, i) ? 'NULL' : 'Set NULL' }}
         </button>
       </div>
     </div>
@@ -153,7 +156,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
   border-left-color: var(--warn);
 }
 .field-row label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
   display: flex;
@@ -161,10 +164,10 @@ function toggleNull(col: ColumnMeta, i: number): void {
   gap: 6px;
 }
 .pk {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -182,7 +185,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
 }
 .null-toggle {
   align-self: flex-start;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 2px 7px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
@@ -194,7 +197,7 @@ function toggleNull(col: ColumnMeta, i: number): void {
 }
 .null-toggle.on {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 .detail-foot {
@@ -206,11 +209,11 @@ function toggleNull(col: ColumnMeta, i: number): void {
 }
 .detail-foot.readonly {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   justify-content: center;
 }
 .dirty-info {
-  font-size: 11px;
-  color: var(--warn);
+  font-size: var(--fs-xs);
+  color: var(--warn-text);
 }
 </style>

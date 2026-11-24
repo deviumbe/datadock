@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
+import Icon from './Icon.vue'
+import { reactive, computed, useId } from 'vue'
 import Modal from './Modal.vue'
 import { useWorkspace } from '../stores/workspace'
 import type { ConnectionConfig, ReplicationRole, Topology, TopologyNode } from '@shared/types'
+
+const uid = useId()
 
 const props = defineProps<{ topology?: Topology }>()
 const emit = defineEmits<{ save: [topology: Topology]; close: [] }>()
@@ -70,34 +73,34 @@ function save(): void {
   <Modal :title="props.topology ? 'Edit Topology' : 'New Topology'" wide @close="emit('close')">
     <div class="te-grid">
       <div class="field span2">
-        <label>Name</label>
-        <input class="input" v-model="form.name" placeholder="e.g. Production Postgres HA" />
+        <label :for="`${uid}-name`">Name</label>
+        <input :id="`${uid}-name`" class="input" v-model="form.name" placeholder="e.g. Production Postgres HA" />
       </div>
 
       <div class="field">
-        <label>Amber lag (seconds)</label>
-        <input class="input" type="number" min="0" step="0.5" v-model.number="form.lagWarnSeconds" />
+        <label :for="`${uid}-amber-lag-seconds`">Amber lag (seconds)</label>
+        <input :id="`${uid}-amber-lag-seconds`" class="input" type="number" min="0" step="0.5" v-model.number="form.lagWarnSeconds" />
       </div>
       <div class="field">
-        <label>Red lag (seconds)</label>
-        <input class="input" type="number" min="0" step="1" v-model.number="form.lagCritSeconds" />
+        <label :for="`${uid}-red-lag-seconds`">Red lag (seconds)</label>
+        <input :id="`${uid}-red-lag-seconds`" class="input" type="number" min="0" step="1" v-model.number="form.lagCritSeconds" />
       </div>
 
       <div class="field span2">
-        <label>Members</label>
+        <span class="field-title">Members</span>
         <div v-if="!form.nodes.length" class="te-empty">No members yet — add connections below.</div>
         <div v-for="n in form.nodes" :key="n.connectionId" class="te-node">
           <span class="te-driver">{{ (connDriver(n.connectionId) || '?').toUpperCase().slice(0, 4) }}</span>
           <span class="te-name" :title="connName(n.connectionId)">{{ connName(n.connectionId) }}</span>
           <span v-if="connDriver(n.connectionId) && !REPL_DRIVERS.has(connDriver(n.connectionId)!)" class="te-warn" title="This engine doesn't report replication status">no repl</span>
-          <select class="select te-role" v-model="n.role">
+          <select aria-label="Role" class="select te-role" v-model="n.role">
             <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
           </select>
-          <button class="btn-ghost icon danger" title="Remove" @click="removeNode(n)">✕</button>
+          <button class="btn-ghost icon danger" title="Remove node" @click="removeNode(n)"><Icon name="x" :size="12" /></button>
         </div>
 
         <div v-if="available.length" class="te-add">
-          <select class="select" @change="addNode(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
+          <select aria-label="Add member" class="select" @change="addNode(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
             <option value="">+ Add connection…</option>
             <option v-for="c in available" :key="c.id" :value="c.id">{{ c.name }} ({{ c.driver }})</option>
           </select>
@@ -127,7 +130,7 @@ function save(): void {
   gap: 5px;
 }
 .field label {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .te-node {
@@ -142,9 +145,9 @@ function save(): void {
 }
 .te-driver {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   border-radius: 4px;
   padding: 2px 5px;
@@ -154,11 +157,11 @@ function save(): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .te-warn {
-  font-size: 10px;
-  color: var(--warn);
+  font-size: var(--fs-xs);
+  color: var(--warn-text);
   border: 1px solid var(--warn);
   border-radius: 4px;
   padding: 1px 5px;
@@ -171,7 +174,14 @@ function save(): void {
 }
 .te-empty {
   color: var(--text-faint);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   padding: 4px 0 8px;
+}
+.field-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 </style>

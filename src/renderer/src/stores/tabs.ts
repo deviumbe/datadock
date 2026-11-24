@@ -129,13 +129,13 @@ function dangerousStatement(sql: string): string | null {
     const s = raw.replace(/--[^\n]*/g, '').trim()
     if (!s) continue
     if (/^update\b/i.test(s) && !/\bwhere\b/i.test(s)) {
-      return '⚠ This UPDATE has no WHERE clause — it will modify EVERY row.'
+      return 'This UPDATE has no WHERE clause — it will modify EVERY row.'
     }
     if (/^delete\s+from\b/i.test(s) && !/\bwhere\b/i.test(s)) {
-      return '⚠ This DELETE has no WHERE clause — it will remove EVERY row.'
+      return 'This DELETE has no WHERE clause — it will remove EVERY row.'
     }
-    if (/^truncate\b/i.test(s)) return '⚠ TRUNCATE empties the entire table.'
-    if (/^drop\s+(table|database|schema)\b/i.test(s)) return `⚠ ${s.slice(0, 60)} — this drops a database object.`
+    if (/^truncate\b/i.test(s)) return 'TRUNCATE empties the entire table.'
+    if (/^drop\s+(table|database|schema)\b/i.test(s)) return `${s.slice(0, 60)} — this drops a database object.`
   }
   return null
 }
@@ -467,7 +467,7 @@ export const useTabs = defineStore('tabs', () => {
     } catch (e) {
       tab.chatMessages = [
         ...(tab.chatMessages ?? []),
-        { role: 'assistant', content: `⚠ ${e instanceof Error ? e.message : String(e)}` }
+        { role: 'assistant', content: `Error: ${e instanceof Error ? e.message : String(e)}` }
       ]
     } finally {
       off()
@@ -562,6 +562,43 @@ export const useTabs = defineStore('tabs', () => {
       const siblings = forConnection(connectionId)
       activeByConn.value[connectionId] = siblings.length ? siblings[siblings.length - 1].id : ''
     }
+  }
+
+  /** Close a tab on the user's behalf, first asking when that would discard edits. */
+  async function requestCloseTab(id: string): Promise<boolean> {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (!tab) return false
+    const dirty = dirtyCount(tab)
+    if (dirty > 0) {
+      setActive(tab.connectionId, id)
+      const ok = await useUi().confirmDialog({
+        title: 'Discard unsaved changes?',
+        message: `“${tab.title}” has ${dirty} unsaved change${dirty === 1 ? '' : 's'}. Closing the tab discards ${dirty === 1 ? 'it' : 'them'}.`,
+        confirmLabel: 'Discard and close',
+        danger: true
+      })
+      if (!ok) return false
+    }
+    closeTab(id)
+    return true
+  }
+
+  /** Disconnect, first asking when that would silently roll back open work. */
+  async function disconnect(id: string): Promise<void> {
+    const ws = useWorkspace()
+    const open = Object.keys(ws.txn).some(
+      (k) => ws.txn[k] && (k === id || parseServerDatabaseId(k)?.serverId === id)
+    )
+    if (open) {
+      const ok = await useUi().confirmDialog({
+        title: 'Disconnect with an open transaction?',
+        message: 'The transaction is not committed. Disconnecting rolls back every change made in it.',
+        confirmLabel: 'Disconnect and roll back',
+        danger: true
+      })
+      if (!ok) return
+    }
+    await ws.disconnect(id)
   }
 
   /** Close a connection's tabs, including those of its databases when it is a server. */
@@ -1237,7 +1274,9 @@ export const useTabs = defineStore('tabs', () => {
     saveSnippet,
     deleteSnippet,
     closeTab,
+    requestCloseTab,
     closeForConnection,
+    disconnect,
     run,
     selectResult,
     cancel,

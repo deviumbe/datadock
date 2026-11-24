@@ -47,7 +47,16 @@ const text = computed(() => {
 
 <template>
   <div v-if="progress" class="pb">
-    <div class="track" :class="{ indet: percent === null }">
+    <div
+      class="track"
+      :class="{ indet: percent === null }"
+      :data-busy="percent === null || undefined"
+      role="progressbar"
+      :aria-label="text"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      :aria-valuenow="percent ?? undefined"
+    >
       <div class="fill" :style="percent !== null ? { width: percent + '%' } : undefined" />
     </div>
     <div class="row">
@@ -90,7 +99,7 @@ const text = computed(() => {
   justify-content: space-between;
   gap: 12px;
   margin-top: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .lbl {
@@ -101,7 +110,7 @@ const text = computed(() => {
 }
 .pct {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 </style>

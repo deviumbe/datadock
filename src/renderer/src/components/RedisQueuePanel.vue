@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
+import { useUi } from '../stores/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BarChart from './BarChart.vue'
 import type {
@@ -8,6 +10,8 @@ import type {
   QueueOverview,
   RedisServerStats
 } from '@shared/types'
+
+const ui = useUi()
 
 const props = defineProps<{ connId: string }>()
 
@@ -92,14 +96,26 @@ async function loadJobs(queue: string, state: QueueJobState, toggle = true): Pro
 
 async function removeJob(job: QueueJob): Promise<void> {
   if (!open.value) return
-  if (!window.confirm(`Remove this job from "${open.value.queue}" (${open.value.state})?`)) return
+  const ok = await ui.confirmDialog({
+    title: 'Remove job',
+    message: `Remove this job from "${open.value.queue}" (${open.value.state})?`,
+    confirmLabel: 'Remove job',
+    danger: true
+  })
+  if (!ok || !open.value) return
   await window.api.redis.queueAction(props.connId, 'delete', open.value.queue, open.value.state, job.member)
   await loadJobs(open.value.queue, open.value.state, false)
   await poll()
 }
 
 async function purge(queue: string, state: QueueJobState): Promise<void> {
-  if (!window.confirm(`Purge ALL ${STATE_LABEL[state].toLowerCase()} jobs from "${queue}"? This can't be undone.`)) return
+  const ok = await ui.confirmDialog({
+    title: 'Purge jobs',
+    message: `Purge all ${STATE_LABEL[state].toLowerCase()} jobs from "${queue}"? This cannot be undone.`,
+    confirmLabel: 'Purge jobs',
+    danger: true
+  })
+  if (!ok) return
   await window.api.redis.queueAction(props.connId, 'purge', queue, state)
   await poll()
   if (open.value?.queue === queue && open.value?.state === state) await loadJobs(queue, state, false)
@@ -158,12 +174,12 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
         <span class="live" :class="{ off: paused }">{{ paused ? 'paused' : 'live' }}</span>
       </div>
       <div class="head-actions">
-        <button class="btn" @click="paused = !paused">{{ paused ? '▶ Resume' : '⏸ Pause' }}</button>
-        <button class="btn" @click="poll()">↻ Refresh</button>
+        <button class="btn" @click="paused = !paused"><Icon :name="paused ? 'play' : 'pause'" :size="13" /> {{ paused ? 'Resume' : 'Pause' }}</button>
+        <button class="btn" @click="poll()"><Icon name="refresh" :size="13" /> Refresh</button>
       </div>
     </header>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
     <div v-if="firstLoad" class="muted">Connecting…</div>
 
     <template v-else>
@@ -222,7 +238,7 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
             <ul v-else class="job-list">
               <li v-for="(j, i) in jobs" :key="i" class="job">
                 <div class="job-row" @click="expanded = expanded === i ? null : i">
-                  <span class="caret">{{ expanded === i ? '▾' : '▸' }}</span>
+                  <button class="caret" title="Toggle payload" :aria-expanded="expanded === i" @click.stop="expanded = expanded === i ? null : i"><Icon :name="expanded === i ? 'chevronDown' : 'chevronRight'" :size="11" /></button>
                   <span class="job-name">{{ j.name || '(unnamed job)' }}</span>
                   <span v-if="j.attempts != null" class="job-attempts">×{{ j.attempts }}</span>
                   <span v-if="j.exception" class="job-exc">{{ j.exception }}</span>
@@ -265,21 +281,26 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   gap: 10px;
 }
 .title h2 {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .live {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ok);
+  color: var(--ok-text);
   border: 1px solid var(--ok);
   border-radius: 10px;
   padding: 1px 8px;
 }
 .live::before {
-  content: '●';
-  margin-right: 4px;
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 5px;
   animation: pulse 1.4s ease-in-out infinite;
 }
 .live.off {
@@ -298,19 +319,19 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   gap: 8px;
 }
 .err {
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-bottom: 12px;
 }
 .muted {
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .muted.sm {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 
@@ -331,18 +352,18 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   gap: 3px;
 }
 .stat .lbl {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
 }
 .stat .num {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 .stat.ver .num {
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 
 /* charts */
@@ -359,7 +380,7 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   padding: 10px 12px;
 }
 .chart-title {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-bottom: 6px;
 }
@@ -384,22 +405,22 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
 }
 .qname {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text);
 }
 .badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 7px;
   border-radius: 9px;
   background: var(--bg-elevated);
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
-.badge.laravel, .badge.horizon { color: #e0915a; border-color: #e0915a; }
-.badge.bullmq, .badge.bull { color: #5b8def; border-color: #5b8def; }
-.badge.sidekiq { color: #e5616a; border-color: #e5616a; }
-.badge.rq, .badge.celery { color: #3fcf8e; border-color: #3fcf8e; }
+.badge.laravel, .badge.horizon { color: var(--hue-orange); border-color: currentColor; }
+.badge.bullmq, .badge.bull { color: var(--hue-blue); border-color: var(--hue-blue); }
+.badge.sidekiq { color: var(--danger-text); border-color: currentColor; }
+.badge.rq, .badge.celery { color: var(--ok-text); border-color: currentColor; }
 
 .cells {
   display: flex;
@@ -431,18 +452,18 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   cursor: default;
 }
 .cell .cn {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
 }
 .cell .cl {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
 }
-.cell.failed .cn { color: var(--danger); }
-.cell.reserved .cn { color: var(--accent); }
+.cell.failed .cn { color: var(--danger-text); }
+.cell.reserved .cn { color: var(--accent-text); }
 
 /* jobs drill-down */
 .jobs {
@@ -454,7 +475,7 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-bottom: 6px;
 }
@@ -475,26 +496,30 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   gap: 8px;
   padding: 6px 9px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .job-row:hover {
   background: var(--bg-elevated);
 }
 .caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--text-faint);
-  font-size: 10px;
 }
 .job-name {
   font-family: var(--mono);
   color: var(--text);
 }
 .job-attempts {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .job-exc {
-  font-size: 11px;
-  color: var(--danger);
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -509,7 +534,7 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
   background: var(--bg-elevated);
   border-top: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   white-space: pre-wrap;
   word-break: break-word;
@@ -519,13 +544,13 @@ function stateCells(q: QueueOverview): { state: QueueJobState; label: string; n:
 .btn-link {
   background: none;
   border: none;
-  color: var(--accent);
-  font-size: 11px;
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
   cursor: pointer;
   padding: 0;
 }
 .btn-link.danger {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .empty {
   text-align: center;

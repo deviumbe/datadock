@@ -135,7 +135,7 @@ async function restoreAll(c: Candidate): Promise<void> {
         <Icon name="check" :size="15" /> No soft-deleted rows found — every table looks clean.
       </div>
 
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
 
       <div v-if="isSql" class="list">
         <div v-for="c in candidates" :key="c.table" class="rec-row" :class="{ open: openTable === c.table }">
@@ -181,20 +181,20 @@ async function restoreAll(c: Candidate): Promise<void> {
   gap: 14px;
 }
 .intro {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-dim);
 }
 .intro code {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
   background: var(--bg-elevated);
   padding: 1px 5px;
   border-radius: 4px;
 }
 .state {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 14px;
   text-align: center;
@@ -204,15 +204,15 @@ async function restoreAll(c: Candidate): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 12.5px;
-  color: var(--ok);
+  font-size: var(--fs-base);
+  color: var(--ok-text);
   padding: 18px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
 .err {
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .list {
@@ -246,7 +246,7 @@ async function restoreAll(c: Candidate): Promise<void> {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--accent);
+  color: var(--accent-text);
   text-align: left;
 }
 .caret {
@@ -259,19 +259,19 @@ async function restoreAll(c: Candidate): Promise<void> {
 }
 .rec-table {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .rec-count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--warn);
-  background: rgba(240, 180, 41, 0.13);
+  color: var(--warn-text);
+  background: var(--warn-soft);
   padding: 1px 8px;
   border-radius: 999px;
 }
 .rec-col {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: var(--mono);
   color: var(--text-faint);
   margin-left: auto;

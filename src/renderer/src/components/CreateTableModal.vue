@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, useId } from 'vue'
 import Modal from './Modal.vue'
 import { COLUMN_TYPES, type DriverType, type NewColumn } from '@shared/types'
+
+const uid = useId()
 
 const props = defineProps<{ connId: string; driver: DriverType }>()
 const emit = defineEmits<{ close: []; created: [] }>()
@@ -66,8 +68,8 @@ async function create(): Promise<void> {
 <template>
   <Modal title="New table" wide @close="emit('close')">
     <div class="field">
-      <label>Table name</label>
-      <input class="input" v-model="name" placeholder="e.g. customers" autofocus />
+      <label :for="`${uid}-table-name`">Table name</label>
+      <input :id="`${uid}-table-name`" class="input" v-model="name" placeholder="e.g. customers" autofocus />
     </div>
 
     <div class="cols-head">Columns</div>
@@ -84,24 +86,24 @@ async function create(): Promise<void> {
       </thead>
       <tbody>
         <tr v-for="(c, i) in columns" :key="i">
-          <td><input class="input sm" v-model="c.name" placeholder="column" /></td>
+          <td><input aria-label="column" class="input sm" v-model="c.name" placeholder="column" /></td>
           <td>
-            <select class="select sm" v-model="c.type">
+            <select class="select sm" aria-label="Column type" v-model="c.type">
               <option v-for="ty in types" :key="ty" :value="ty">{{ ty }}</option>
             </select>
           </td>
-          <td class="c"><input type="checkbox" v-model="c.nullable" /></td>
-          <td class="c"><input type="checkbox" v-model="c.primaryKey" /></td>
-          <td><input class="input sm" v-model="c.default" placeholder="optional" /></td>
+          <td class="c"><input type="checkbox" v-model="c.nullable" aria-label="Nullable" /></td>
+          <td class="c"><input type="checkbox" v-model="c.primaryKey" aria-label="Primary key" /></td>
+          <td><input aria-label="Default value" class="input sm" v-model="c.default" placeholder="optional" /></td>
           <td class="c">
-            <button class="drop" :disabled="columns.length <= 1" @click="removeColumn(i)"><Icon name="x" :size="12" /></button>
+            <button class="drop" title="Remove column" :disabled="columns.length <= 1" @click="removeColumn(i)"><Icon name="x" :size="12" /></button>
           </td>
         </tr>
       </tbody>
     </table>
-    <button class="btn btn-ghost add" @click="addColumn">＋ Add column</button>
+    <button class="btn btn-ghost add" @click="addColumn"><Icon name="plus" :size="13" /> Add column</button>
 
-    <div v-if="error" class="err">{{ error }}</div>
+    <div v-if="error" class="err" role="alert">{{ error }}</div>
 
     <template #footer>
       <button class="btn" @click="emit('close')">Cancel</button>
@@ -115,7 +117,7 @@ async function create(): Promise<void> {
 <style scoped>
 .cols-head {
   margin: 16px 0 8px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
@@ -125,7 +127,7 @@ async function create(): Promise<void> {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .cols th {
   text-align: left;
@@ -148,7 +150,7 @@ async function create(): Promise<void> {
 .input.sm,
 .select.sm {
   padding: 4px 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   width: 100%;
 }
 .add {
@@ -156,13 +158,13 @@ async function create(): Promise<void> {
   padding: 5px 10px;
 }
 .drop {
-  color: var(--danger);
+  color: var(--danger-text);
   width: 22px;
   height: 22px;
   border-radius: 4px;
 }
 .drop:hover:not(:disabled) {
-  background: rgba(229, 97, 106, 0.15);
+  background: var(--danger-soft);
 }
 .drop:disabled {
   opacity: 0.3;
@@ -171,9 +173,9 @@ async function create(): Promise<void> {
   margin-top: 12px;
   padding: 8px 11px;
   border-radius: var(--radius-sm);
-  background: rgba(229, 97, 106, 0.13);
-  color: var(--danger);
-  font-size: 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 </style>

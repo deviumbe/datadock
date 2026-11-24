@@ -380,7 +380,7 @@ function endDrag(): void {
 </script>
 
 <template>
-  <div class="er" @keydown="onKeydown" tabindex="0">
+  <div class="er" @keydown="onKeydown">
     <div class="er-toolbar">
       <strong>Schema Diagram</strong>
       <span class="muted">
@@ -391,18 +391,18 @@ function endDrag(): void {
 
       <!-- Zoom controls -->
       <div class="zoom-group">
-        <button class="btn btn-ghost zoom-btn" title="Zoom out (⌘−)" @click="zoomOut">−</button>
+        <button class="btn btn-ghost zoom-btn" title="Zoom out (⌘−)" @click="zoomOut"><Icon name="minus" :size="13" /></button>
         <button class="zoom-label btn btn-ghost" title="Reset zoom (⌘0)" @click="resetZoom">{{ zoomPct }}</button>
-        <button class="btn btn-ghost zoom-btn" title="Zoom in (⌘+)" @click="zoomIn">＋</button>
+        <button class="btn btn-ghost zoom-btn" title="Zoom in (⌘+)" @click="zoomIn"><Icon name="plus" :size="13" /></button>
       </div>
-      <button class="btn btn-ghost" title="Fit diagram to view" @click="fitView">⊞ Fit</button>
+      <button class="btn btn-ghost" title="Fit diagram to view" @click="fitView"><Icon name="fit" :size="13" /> Fit</button>
       <button class="btn btn-ghost" @click="layout()">Re-layout</button>
       <button class="btn btn-ghost" title="Export as SVG" @click="exportSvg">SVG</button>
       <button class="btn btn-ghost" title="Export as PNG" @click="exportPng">PNG</button>
-      <button class="btn btn-ghost" @click="emit('reload')"><Icon name="refresh" :size="14" /></button>
+      <button class="btn btn-ghost" title="Reload diagram" @click="emit('reload')"><Icon name="refresh" :size="14" /></button>
     </div>
 
-    <div ref="container" class="er-canvas">
+    <div ref="container" class="er-canvas" tabindex="0" role="region" aria-label="Schema diagram. Arrow keys scroll, ⌘ plus and minus zoom.">
       <div v-if="model && model.tables.length === 0" class="empty">No tables to diagram.</div>
 
       <!-- Spacer reserves the correct scroll area for the scaled content. -->
@@ -458,7 +458,6 @@ function endDrag(): void {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  outline: none; /* tabindex focus ring suppressed */
 }
 .er-toolbar {
   display: flex;
@@ -470,16 +469,17 @@ function endDrag(): void {
 }
 .er-toolbar .muted {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .er-toolbar .hint {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .spacer { flex: 1; }
 
 /* zoom controls */
 .zoom-group {
+  flex: none;
   display: flex;
   align-items: center;
   border: 1px solid var(--border);
@@ -490,7 +490,7 @@ function endDrag(): void {
   border: none;
   border-radius: 0;
   padding: 3px 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .zoom-group .btn + .btn {
   border-left: 1px solid var(--border);
@@ -498,16 +498,22 @@ function endDrag(): void {
 .zoom-label {
   min-width: 44px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: var(--mono);
   color: var(--text-dim);
 }
 .zoom-btn {
-  font-size: 16px;
+  flex: none;
+  min-width: 28px;
+  min-height: 24px;
+  font-size: var(--fs-md);
   line-height: 1;
   color: var(--text-dim);
 }
 
+.er-canvas:focus-visible {
+  outline-offset: -2px;
+}
 .er-canvas {
   flex: 1;
   overflow: auto;
@@ -541,9 +547,9 @@ function endDrag(): void {
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 14px var(--shadow-color);
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .node-head {
   height: 30px;
@@ -552,7 +558,7 @@ function endDrag(): void {
   padding: 0 10px;
   font-weight: 700;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   cursor: grab;
   white-space: nowrap;
   overflow: hidden;
@@ -578,13 +584,13 @@ function endDrag(): void {
 .col-name.pkcol { font-weight: 600; }
 .col-badges { display: flex; gap: 3px; flex-shrink: 0; }
 .b {
-  font-size: 8px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 0 3px;
   border-radius: 3px;
   line-height: 14px;
 }
-.b.pk { background: var(--accent-soft); color: var(--accent); }
-.b.fk { background: rgba(91,141,239,0.18); color: #5b8def; }
+.b.pk { background: var(--accent-soft); color: var(--accent-text); }
+.b.fk { background: color-mix(in srgb, var(--hue-blue) 18%, transparent); color: var(--hue-blue); }
 .empty { padding: 40px; color: var(--text-faint); }
 </style>

@@ -222,7 +222,7 @@ async function saveAll(): Promise<void> {
 
         <div class="cg-preview">
           <div v-if="loading" class="cg-msg">Loading schema…</div>
-          <div v-else-if="error" class="cg-msg err">{{ error }}</div>
+          <div v-else-if="error" class="cg-msg err" role="alert">{{ error }}</div>
           <div v-else-if="!files.length" class="cg-msg">Nothing to generate.</div>
           <template v-else>
             <div v-if="files.length > 1" class="cg-file-tabs">
@@ -286,7 +286,7 @@ async function saveAll(): Promise<void> {
   min-height: 420px;
 }
 .cg-section-label {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
@@ -324,15 +324,15 @@ async function saveAll(): Promise<void> {
   gap: 6px;
 }
 .cg-fw-name {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 500;
   color: var(--text);
 }
 .cg-fw.on .cg-fw-name {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .cg-fw-note {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-top: 2px;
 }
@@ -341,7 +341,7 @@ async function saveAll(): Promise<void> {
   gap: 3px;
 }
 .cg-badge {
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   width: 14px;
   height: 14px;
@@ -352,7 +352,7 @@ async function saveAll(): Promise<void> {
 }
 .cg-badge.m {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .cg-badge.g {
   background: var(--bg-hover);
@@ -378,7 +378,7 @@ async function saveAll(): Promise<void> {
 }
 .cg-seg button {
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   border-right: 1px solid var(--border);
 }
@@ -387,10 +387,10 @@ async function saveAll(): Promise<void> {
 }
 .cg-seg button.on {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .cg-single-kind {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding: 4px 0;
 }
@@ -398,7 +398,7 @@ async function saveAll(): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .cg-tablesel {
@@ -411,7 +411,7 @@ async function saveAll(): Promise<void> {
   margin-bottom: 5px;
 }
 .cg-mini {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -436,7 +436,7 @@ async function saveAll(): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   cursor: pointer;
 }
@@ -464,8 +464,8 @@ async function saveAll(): Promise<void> {
 }
 .cg-file-tab {
   padding: 4px 10px;
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  font-family: var(--mono);
   color: var(--text-dim);
   border-radius: 4px 4px 0 0;
   white-space: nowrap;
@@ -476,8 +476,8 @@ async function saveAll(): Promise<void> {
 }
 .cg-file-name {
   padding: 6px 10px;
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  font-family: var(--mono);
   color: var(--text-faint);
   border-bottom: 1px solid var(--border-soft);
   flex-shrink: 0;
@@ -487,8 +487,8 @@ async function saveAll(): Promise<void> {
   margin: 0;
   padding: 12px 14px;
   overflow: auto;
-  font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
   line-height: 1.55;
   color: var(--text);
   white-space: pre;
@@ -517,20 +517,20 @@ async function saveAll(): Promise<void> {
   color: var(--syn-type);
 }
 .cg-code :deep(.hl-dec) {
-  color: #e0a458;
+  color: var(--hue-orange);
 }
 .cg-msg {
   padding: 24px;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .cg-msg.err {
-  color: var(--danger);
+  color: var(--danger-text);
   white-space: pre-wrap;
 }
 .cg-count {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 </style>

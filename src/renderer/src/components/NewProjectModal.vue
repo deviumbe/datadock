@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
 import { ENVIRONMENT_TEMPLATE } from '@shared/types'
+
+const uid = useId()
 
 defineProps<{ workspaceName?: string }>()
 const emit = defineEmits<{ submit: [name: string, environments: string[]]; close: [] }>()
@@ -21,8 +23,8 @@ function submit(): void {
 <template>
   <Modal title="New Project" @close="emit('close')">
     <div class="field">
-      <label>Name</label>
-      <input
+      <label :for="`${uid}-name`">Name</label>
+      <input :id="`${uid}-name`"
         ref="inputEl"
         class="input"
         v-model="name"
@@ -52,7 +54,7 @@ function submit(): void {
   gap: 8px;
   margin-top: 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .template input {
   margin-top: 2px;
@@ -60,7 +62,7 @@ function submit(): void {
 .template small {
   display: block;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-top: 2px;
 }
 </style>

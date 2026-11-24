@@ -120,7 +120,7 @@ async function clone(): Promise<void> {
         </div>
       </template>
 
-      <p v-if="error" class="err">{{ error }}</p>
+      <p v-if="error" class="err" role="alert">{{ error }}</p>
     </div>
 
     <template #footer>
@@ -147,7 +147,7 @@ async function clone(): Promise<void> {
   gap: 13px;
 }
 .intro {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-dim);
 }
@@ -155,7 +155,7 @@ async function clone(): Promise<void> {
   color: var(--text);
 }
 .state {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 16px;
   text-align: center;
@@ -166,26 +166,26 @@ async function clone(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 .opt em {
   color: var(--text-faint);
   font-style: normal;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .tables-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
 }
 .link {
-  font-size: 12px;
-  color: var(--accent);
+  font-size: var(--fs-sm);
+  color: var(--accent-text);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -206,7 +206,7 @@ async function clone(): Promise<void> {
   align-items: center;
   gap: 9px;
   padding: 7px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   cursor: pointer;
   color: var(--text-dim);
   border-bottom: 1px solid var(--border-soft);
@@ -221,11 +221,11 @@ async function clone(): Promise<void> {
   color: var(--text);
 }
 .trow :deep(.dd-icon) {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .err {
-  color: var(--danger);
-  font-size: 12px;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
   font-family: var(--mono);
 }
 .done {
@@ -236,19 +236,19 @@ async function clone(): Promise<void> {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-elevated);
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .done.bad {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .done-head {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .done-path {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-top: 3px;
   word-break: break-all;
@@ -256,7 +256,7 @@ async function clone(): Promise<void> {
 .done-errs {
   margin: 8px 0 0;
   padding-left: 16px;
-  font-size: 11.5px;
-  color: var(--warn);
+  font-size: var(--fs-sm);
+  color: var(--warn-text);
 }
 </style>

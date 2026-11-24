@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 import Modal from './Modal.vue'
 import type { ColumnMeta } from '@shared/types'
+
+const uid = useId()
 
 const props = defineProps<{ columns: ColumnMeta[]; rowCount: number }>()
 const emit = defineEmits<{ apply: [column: string, value: unknown]; close: [] }>()
@@ -24,14 +26,14 @@ function apply(): void {
       staged as a pending edit — review it in the grid and commit with ⌘S.
     </p>
     <div class="field">
-      <label>Column</label>
-      <select class="select" v-model="column">
+      <label :for="`${uid}-column`">Column</label>
+      <select :id="`${uid}-column`" class="select" v-model="column">
         <option v-for="c in columns" :key="c.name" :value="c.name">{{ c.name }}</option>
       </select>
     </div>
     <div class="field">
-      <label>New value</label>
-      <input
+      <label :for="`${uid}-new-value`">New value</label>
+      <input :id="`${uid}-new-value`"
         class="input"
         v-model="value"
         :disabled="setNull"
@@ -55,7 +57,7 @@ function apply(): void {
 <style scoped>
 .lead {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   margin-bottom: 16px;
   line-height: 1.5;
 }
@@ -65,7 +67,7 @@ function apply(): void {
 .field label {
   display: block;
   margin-bottom: 5px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .check {
@@ -73,6 +75,6 @@ function apply(): void {
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 </style>

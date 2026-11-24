@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref } from 'vue'
 import type { PlanNode } from '@shared/types'
 
@@ -18,8 +19,8 @@ function fmtRows(n?: number): string {
 
 <template>
   <div class="plan-node" :style="{ marginLeft: depth ? '18px' : '0' }">
-    <div class="row" :class="{ leaf: !hasChildren }" @click="hasChildren && (open = !open)">
-      <span class="twist" v-if="hasChildren">{{ open ? '▾' : '▸' }}</span>
+    <div v-press="hasChildren" class="row" :aria-expanded="hasChildren ? open : undefined" :class="{ leaf: !hasChildren }" @click="hasChildren && (open = !open)">
+      <span class="twist" v-if="hasChildren"><Icon :name="open ? 'chevronDown' : 'chevronRight'" :size="11" /></span>
       <span class="twist spacer" v-else>•</span>
       <span class="label">{{ node.label }}</span>
       <span v-if="node.rows != null" class="badge rows" title="Estimated rows">~{{ fmtRows(node.rows) }} rows</span>
@@ -53,21 +54,21 @@ function fmtRows(n?: number): string {
 .twist {
   width: 12px;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   flex: none;
   text-align: center;
 }
 .twist.spacer {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .label {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   white-space: nowrap;
 }
 .badge {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   padding: 1px 7px;
   border-radius: 999px;
   white-space: nowrap;
@@ -75,7 +76,7 @@ function fmtRows(n?: number): string {
 }
 .badge.rows {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .badge.cost {
   background: var(--bg-elevated);
@@ -84,7 +85,7 @@ function fmtRows(n?: number): string {
 }
 .detail {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding: 0 8px 4px 20px;
   line-height: 1.4;

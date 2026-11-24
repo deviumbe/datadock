@@ -168,7 +168,7 @@ const main = async () => {
   // 9) Export modal (incl. data masking options)
   await tryStep('export', async () => {
     await page.getByText('orders', { exact: true }).first().click(); await sleep(900)
-    await page.getByText('Export', { exact: true }).first().click(); await sleep(1300)
+    await page.getByTitle('Export', { exact: true }).first().click(); await sleep(1300)
     await shot('export.png'); await closeOverlay()
   })
 

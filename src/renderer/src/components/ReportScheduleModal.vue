@@ -131,14 +131,14 @@ async function save(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .fld > span {
   font-weight: 600;
 }
 .input {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 7px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -159,23 +159,23 @@ async function save(): Promise<void> {
   flex: 1;
 }
 .suffix {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .check {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .warn {
-  font-size: 11.5px;
-  color: var(--danger);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
   margin: 0;
 }
 .note {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin: 4px 0 0;
   line-height: 1.5;

@@ -1,12 +1,7 @@
-<script lang="ts">
-// Escape closes only the topmost modal when dialogs stack (e.g. a confirm
-// prompt over settings), so one keypress never dismisses the whole stack.
-const modalStack: symbol[] = []
-</script>
-
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, computed } from 'vue'
+import { computed, ref, useId } from 'vue'
 import Icon from './Icon.vue'
+import { useDialog } from '../lib/dialog'
 const props = defineProps<{
   title: string
   /** Legacy shorthand for size="wide". */
@@ -14,6 +9,9 @@ const props = defineProps<{
   /** Width tier — all are responsive (capped to the viewport). */
   size?: 'md' | 'wide' | 'lg' | 'xl' | 'full'
   busy?: boolean
+  /** Interrupting prompts (confirmations) are announced with their message. */
+  alert?: boolean
+  describedby?: string
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -25,27 +23,28 @@ function requestClose(): void {
   if (!props.busy) emit('close')
 }
 
-const modalId = Symbol('modal')
-function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && modalStack[modalStack.length - 1] === modalId) requestClose()
-}
-onMounted(() => {
-  modalStack.push(modalId)
-  window.addEventListener('keydown', onKey)
-})
-onBeforeUnmount(() => {
-  modalStack.splice(modalStack.indexOf(modalId), 1)
-  window.removeEventListener('keydown', onKey)
-})
+const titleId = useId()
+const dialog = ref<HTMLElement>()
+useDialog(dialog, { onEscape: requestClose, initial: ['.modal-body', '.modal-foot'] })
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="modal" appear>
       <div class="overlay" @mousedown.self="requestClose">
-        <div class="modal" :class="`size-${sizeClass}`">
+        <div
+          ref="dialog"
+          class="modal"
+          :class="`size-${sizeClass}`"
+          :role="alert ? 'alertdialog' : 'dialog'"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          :aria-describedby="describedby"
+          :aria-busy="busy || undefined"
+          tabindex="-1"
+        >
           <header class="modal-head">
-            <h2>{{ title }}</h2>
+            <h2 :id="titleId">{{ title }}</h2>
             <button class="btn-ghost close" title="Close" :disabled="busy" @click="requestClose">
               <Icon name="x" :size="14" />
             </button>
@@ -66,7 +65,7 @@ onBeforeUnmount(() => {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
@@ -109,7 +108,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .modal-head h2 {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .close {

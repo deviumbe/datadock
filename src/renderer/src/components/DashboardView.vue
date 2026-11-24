@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useUi } from '../stores/ui'
 import Icon from './Icon.vue'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
@@ -12,6 +13,8 @@ import type {
 import { useAnalytics } from '../stores/analytics'
 import { buildReportHtml, type CardSnapshot } from '../lib/reportHtml'
 import ChartCard from './ChartCard.vue'
+
+const ui = useUi()
 
 const props = defineProps<{ dashboard: AnalyticsDashboard; connId: string; driver: string }>()
 const emit = defineEmits<{ back: [] }>()
@@ -78,10 +81,15 @@ watch(addPick, (id) => {
 watch(name, persist)
 
 async function deleteDashboard(): Promise<void> {
-  if (confirm(`Delete dashboard “${props.dashboard.name}”? (Charts are kept.)`)) {
-    await analytics.removeDashboard(props.dashboard.id)
-    emit('back')
-  }
+  const ok = await ui.confirmDialog({
+    title: 'Delete dashboard',
+    message: `Delete “${props.dashboard.name}”? Its charts are kept.`,
+    confirmLabel: 'Delete dashboard',
+    danger: true
+  })
+  if (!ok) return
+  await analytics.removeDashboard(props.dashboard.id)
+  emit('back')
 }
 
 // ---- column-aware dashboard filters ----------------------------------------
@@ -274,7 +282,7 @@ async function askAi(): Promise<void> {
   <div class="dash">
     <header class="dash-head">
       <button class="btn btn-ghost" title="Back to Analytics" @click="emit('back')">‹ Back</button>
-      <input v-model="name" class="dash-name" />
+      <input v-model="name" aria-label="Dashboard name" class="dash-name" />
       <div class="spacer" />
       <label class="rt">
         <span class="rt-dot" :class="{ on: refreshSec > 0 }" />
@@ -284,8 +292,8 @@ async function askAi(): Promise<void> {
           </option>
         </select>
       </label>
-      <select v-if="available.length" v-model="addPick" class="add-select">
-        <option value="">＋ Add chart…</option>
+      <select v-if="available.length" v-model="addPick" aria-label="Add chart" class="add-select">
+        <option value="">Add chart…</option>
         <option v-for="c in available" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
       <span v-else class="no-add">All charts added</span>
@@ -301,9 +309,9 @@ async function askAi(): Promise<void> {
       <div v-for="f in filters" :key="f.id" class="fchip">
         <span class="fchip-label">{{ f.label }}</span>
         <template v-if="f.type === 'daterange'">
-          <input v-model="f.from" type="date" class="fchip-input" @change="onFilterInput" />
+          <input v-model="f.from" type="date" aria-label="From date" class="fchip-input" @change="onFilterInput" />
           <span class="fchip-sep">→</span>
-          <input v-model="f.to" type="date" class="fchip-input" @change="onFilterInput" />
+          <input v-model="f.to" type="date" aria-label="To date" class="fchip-input" @change="onFilterInput" />
         </template>
         <input
           v-else
@@ -316,11 +324,11 @@ async function askAi(): Promise<void> {
       </div>
 
       <div v-if="addingFilter" class="add-filter">
-        <input v-model="nf.label" class="fchip-input" placeholder="Label" />
-        <select v-model="nf.column" class="fchip-input">
+        <input aria-label="Label" v-model="nf.label" class="fchip-input" placeholder="Label" />
+        <select v-model="nf.column" aria-label="Filter column" class="fchip-input">
           <option v-for="c in allColumns" :key="c" :value="c">{{ c }}</option>
         </select>
-        <select v-model="nf.type" class="fchip-input">
+        <select v-model="nf.type" aria-label="Filter type" class="fchip-input">
           <option value="text">contains</option>
           <option value="select">equals</option>
           <option value="daterange">date range</option>
@@ -329,14 +337,14 @@ async function askAi(): Promise<void> {
         <button class="btn btn-ghost sm" @click="addingFilter = false">Cancel</button>
       </div>
       <button v-else class="btn btn-ghost sm" :disabled="!allColumns.length" @click="startAddFilter">
-        ＋ Filter
+        <Icon name="plus" :size="13" /> Filter
       </button>
     </div>
 
     <div class="ai-bar">
-      <span class="ai-ic">✨</span>
+      <span class="ai-ic"><Icon name="sparkles" :size="15" /></span>
       <input
-        v-model="aiPrompt"
+        v-model="aiPrompt" aria-label="Ask AI to change this dashboard"
         class="ai-input"
         :disabled="aiBusy || !aiHasKey"
         placeholder="Ask AI to change this dashboard — e.g. “fix the revenue chart” or “add a KPI for total orders”"
@@ -347,12 +355,12 @@ async function askAi(): Promise<void> {
       </button>
     </div>
     <p v-if="!aiHasKey" class="ai-note">Configure an AI provider in Settings (⌘,) to edit with AI.</p>
-    <p v-else-if="aiError" class="ai-note err">{{ aiError }}</p>
+    <p v-else-if="aiError" class="ai-note err" role="alert">{{ aiError }}</p>
     <p v-else-if="aiNote" class="ai-note ok">{{ aiNote }}</p>
 
     <div class="dash-body">
       <div v-if="!layout.length" class="empty">
-        Empty dashboard. Use <strong>＋ Add chart</strong> above to place charts, then drag their
+        Empty dashboard. Use <strong>Add chart</strong> above to place charts, then drag their
         title bars to move and drag the bottom-right corner to resize.
       </div>
       <GridLayout
@@ -413,7 +421,7 @@ async function askAi(): Promise<void> {
   background: var(--bg-panel);
 }
 .dash-name {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
   background: transparent;
@@ -459,7 +467,7 @@ async function askAi(): Promise<void> {
   background: var(--bg-panel);
 }
 .fb-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-faint);
@@ -476,7 +484,7 @@ async function askAi(): Promise<void> {
   background: var(--bg-app);
 }
 .fchip-label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   font-weight: 600;
 }
@@ -484,7 +492,7 @@ async function askAi(): Promise<void> {
   color: var(--text-faint);
 }
 .fchip-input {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px 7px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -496,17 +504,17 @@ async function askAi(): Promise<void> {
   border-color: var(--accent);
 }
 .fchip-x {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   padding: 2px 5px;
   border-radius: var(--radius-sm);
 }
 .fchip-x:hover {
   background: var(--bg-hover);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .btn.sm {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 4px 9px;
 }
 .ai-bar {
@@ -518,11 +526,11 @@ async function askAi(): Promise<void> {
   background: var(--bg-app);
 }
 .ai-ic {
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 .ai-input {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 7px 10px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -536,18 +544,18 @@ async function askAi(): Promise<void> {
 .ai-note {
   margin: 0;
   padding: 6px 16px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
 }
 .ai-note.err {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .ai-note.ok {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .add-select {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 6px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -556,11 +564,11 @@ async function askAi(): Promise<void> {
   outline: none;
 }
 .no-add {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .danger:hover {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .dash-body {
   flex: 1;
@@ -571,7 +579,7 @@ async function askAi(): Promise<void> {
   margin: 40px auto;
   max-width: 460px;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   padding: 24px;
   border: 1px dashed var(--border);
@@ -597,7 +605,7 @@ async function askAi(): Promise<void> {
   justify-content: center;
   height: 100%;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }

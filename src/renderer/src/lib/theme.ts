@@ -17,6 +17,8 @@ export interface ThemePreset {
 
 // ---- colour maths -----------------------------------------------------------
 
+const AA = 4.5
+
 type Rgb = [number, number, number]
 
 function parse(hex: string): Rgb {
@@ -49,6 +51,26 @@ function luminance(hex: string): number {
   const [r, g, b] = parse(hex)
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 }
+function contrast(a: string, b: string): number {
+  const x = luminance(a)
+  const y = luminance(b)
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+/** Shift `fg` toward `target` only as far as needed to reach `min` on every surface. */
+function ensureContrast(fg: string, surfaces: string[], min: number, target: string): string {
+  let out = fg
+  for (let t = 0; t <= 1; t += 0.02) {
+    out = mix(fg, target, t)
+    if (surfaces.every((s) => contrast(out, s) >= min)) return out
+  }
+  return out
+}
+/** Label colour for a solid fill: white or a tinted near-black, whichever reads. */
+function labelOn(fills: string[]): string {
+  const candidates = ['#ffffff', mix(fills[0], '#000000', 0.78), mix(fills[0], '#000000', 0.9), '#000000']
+  const worst = (c: string): number => Math.min(...fills.map((f) => contrast(c, f)))
+  return candidates.find((c) => worst(c) >= AA) ?? candidates.sort((a, b) => worst(b) - worst(a))[0]
+}
 export function isValidHex(v: string): boolean {
   return /^#[0-9a-f]{6}$/i.test(v.trim())
 }
@@ -73,8 +95,7 @@ export const PRESETS: ThemePreset[] = [
       '--border-strong': '#2e3a55',
       '--text-dim': '#9aa6c4',
       '--text-faint': '#66728f',
-      '--accent-hover': '#45e0cd',
-      '--on-accent': '#00322c'
+      '--accent-hover': '#45e0cd'
     }
   },
   {
@@ -117,7 +138,7 @@ export const PRESETS: ThemePreset[] = [
     id: 'snow',
     label: 'Snow',
     mode: 'light',
-    colors: { bg: '#f5f7fb', surface: '#ffffff', text: '#16203a', accent: '#14b8a6', danger: '#e23b4e', warn: '#c2820f', ok: '#1f9d63' },
+    colors: { bg: '#f5f7fb', surface: '#ffffff', text: '#16203a', accent: '#14b8a6', danger: '#d92f43', warn: '#c2820f', ok: '#1f9d63' },
     overrides: {
       '--bg-sidebar': '#eef1f7',
       '--bg-elevated': '#f1f4f9',
@@ -127,8 +148,7 @@ export const PRESETS: ThemePreset[] = [
       '--border-strong': '#cfd6e2',
       '--text-dim': '#5c6781',
       '--text-faint': '#8a94a8',
-      '--accent-hover': '#0d9488',
-      '--on-accent': '#ffffff'
+      '--accent-hover': '#0d9488'
     }
   },
   {
@@ -222,7 +242,7 @@ export const ICON_WEIGHTS: { id: IconWeight; label: string }[] = [
 ]
 export function iconSetSupportsWeight(id: string): boolean {
   const def = ICON_SETS[id]
-  return !!def && (!!def.strokeWidths || Object.keys(def.variants).length > 1)
+  return !!def?.weights
 }
 
 // ---- derivation ------------------------------------------------------------------
@@ -257,12 +277,20 @@ export function deriveVars(theme: ThemePreset): Record<string, string> {
     '--accent-selection': alpha(accent, 0.2),
     '--accent-glow': alpha(accent, 0.25),
     '--accent-ring': alpha(accent, 0.5),
-    '--on-accent': luminance(accent) > 0.4 ? mix(accent, black, 0.78) : white,
 
     '--danger': danger,
+    '--danger-hover': dark ? mix(danger, white, 0.1) : mix(danger, black, 0.1),
+    '--danger-soft': alpha(danger, 0.14),
+    '--danger-line': alpha(danger, 0.4),
     '--warn': warn,
+    '--warn-soft': alpha(warn, 0.16),
+    '--warn-line': alpha(warn, 0.4),
     '--ok': ok,
+    '--ok-soft': alpha(ok, 0.12),
+    '--ok-line': alpha(ok, 0.4),
 
+    '--scrim': dark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(15, 30, 60, 0.35)',
+    '--shadow-color': dark ? 'rgba(0, 0, 0, 0.35)' : 'rgba(15, 30, 60, 0.16)',
     '--shadow-modal': dark ? '0 24px 60px rgba(0, 0, 0, 0.55)' : '0 24px 60px rgba(15, 30, 60, 0.18)',
     '--shadow-pop': dark ? '0 10px 30px rgba(0, 0, 0, 0.45)' : '0 10px 30px rgba(15, 30, 60, 0.12)',
     '--shadow-card': dark
@@ -288,7 +316,57 @@ export function deriveVars(theme: ThemePreset): Record<string, string> {
     v[`--chart-${i + 2}`] = dark ? h : mix(h, black, 0.1)
   })
   Object.assign(v, theme.overrides ?? {})
+  Object.assign(v, legibleVars(v, theme))
   return v
+}
+
+// Contrast guarantees run last so they also hold for pinned overrides and for
+// the user's own custom colours.
+function legibleVars(v: Record<string, string>, theme: ThemePreset): Record<string, string> {
+  const { text, accent, danger, warn, ok } = theme.colors
+  const extreme = theme.mode === 'dark' ? '#ffffff' : '#000000'
+  const panel = v['--bg-panel']
+  const surfaces = [
+    panel,
+    v['--bg-app'],
+    v['--bg-sidebar'],
+    v['--bg-input'],
+    v['--bg-elevated'],
+    v['--bg-hover']
+  ]
+  const tier = (c: string, min: number): string =>
+    ensureContrast(ensureContrast(c, surfaces, min, text), surfaces, AA, extreme)
+  const tinted = (c: string, strength: number): string =>
+    ensureContrast(
+      c,
+      [...surfaces, v['--bg-active'], ...surfaces.map((s) => mix(s, c, strength))],
+      AA,
+      extreme
+    )
+  const code = (c: string): string => ensureContrast(c, [panel, v['--bg-input']], AA, extreme)
+
+  return {
+    '--text-dim': tier(v['--text-dim'], 5.6),
+    '--text-faint': tier(v['--text-faint'], AA),
+    '--accent-text': tinted(accent, 0.2),
+    '--danger-text': tinted(danger, 0.18),
+    '--warn-text': tinted(warn, 0.22),
+    '--ok-text': tinted(ok, 0.16),
+    '--hue-blue': tinted('#5b8def', 0.18),
+    '--hue-violet': tinted('#b07ad6', 0.18),
+    '--hue-orange': tinted('#e0915a', 0.18),
+    '--on-accent': labelOn([accent, v['--accent-hover']]),
+    '--on-danger': labelOn([danger, v['--danger-hover']]),
+    '--on-warn': labelOn([warn]),
+    '--on-ok': labelOn([ok]),
+    '--syn-keyword': code(v['--syn-keyword']),
+    '--syn-string': code(v['--syn-string']),
+    '--syn-number': code(v['--syn-number']),
+    '--syn-comment': code(v['--syn-comment']),
+    '--syn-function': code(v['--syn-function']),
+    '--syn-type': code(v['--syn-type']),
+    '--syn-operator': code(v['--syn-operator'])
+  }
 }
 
 /** Every variable name deriveVars can emit, so a switch clears stale ones. */

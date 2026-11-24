@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
+import { announce } from '../lib/announce'
 import type { IoProgress } from '@shared/types'
 
 export type TaskKind = 'export' | 'transfer' | 'import'
@@ -24,6 +25,13 @@ export interface TaskResult {
   message?: string
   errors?: string[]
   canceled?: boolean
+}
+
+const OUTCOME: Record<TaskStatus, string> = {
+  running: 'running',
+  done: 'finished',
+  error: 'failed',
+  canceled: 'canceled'
 }
 
 export function progressPercent(p: IoProgress | null): number | null {
@@ -85,6 +93,7 @@ export const useTasks = defineStore('tasks', () => {
       .finally(() => {
         task.progress = null
         task.finishedAt = Date.now()
+        announce(`${task.title}: ${OUTCOME[task.status]}${task.message ? `. ${task.message}` : ''}`)
         // Tidy up: drop dialog-cancelled no-ops automatically.
         if (task.status === 'canceled' && !task.message) dismiss(id)
       })

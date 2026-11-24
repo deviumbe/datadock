@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, nextTick, watch, computed } from 'vue'
 import { useTabs, type Tab } from '../stores/tabs'
 import { useSettings } from '../stores/settings'
@@ -49,7 +50,7 @@ function useSuggestion(s: string): void {
   <div class="chat">
     <div v-if="!settings.aiReady" class="empty">
       <div class="empty-inner">
-        <div class="logo">✨</div>
+        <div class="logo"><Icon name="sparkles" :size="28" /></div>
         <h2>Chat with your data</h2>
         <p>Ask questions in plain English — the assistant runs read-only queries and answers from the real results.</p>
         <p class="muted">No AI provider is configured yet.</p>
@@ -58,9 +59,9 @@ function useSuggestion(s: string): void {
     </div>
 
     <template v-else>
-      <div ref="scroller" class="messages">
+      <div ref="scroller" class="messages" role="log" aria-label="Conversation">
         <div v-if="!messages.length" class="welcome">
-          <div class="logo">✨</div>
+          <div class="logo"><Icon name="sparkles" :size="28" /></div>
           <h2>Chat with your data</h2>
           <p>Ask anything about this database. The assistant can run read-only queries to answer.</p>
           <div class="suggestions">
@@ -69,7 +70,7 @@ function useSuggestion(s: string): void {
         </div>
 
         <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
-          <div class="avatar">{{ m.role === 'user' ? '🧑' : '✨' }}</div>
+          <div class="avatar"><Icon :name="m.role === 'user' ? 'user' : 'sparkles'" :size="15" /></div>
           <div class="bubble">
             <div class="content">{{ m.content }}</div>
             <details v-if="m.steps && m.steps.length" class="steps">
@@ -84,10 +85,10 @@ function useSuggestion(s: string): void {
         </div>
 
         <div v-if="busy" class="msg assistant">
-          <div class="avatar">✨</div>
+          <div class="avatar"><Icon name="sparkles" :size="15" /></div>
           <div class="bubble">
             <div v-if="tab.chatStream" class="content">{{ tab.chatStream }}<span class="cursor" /></div>
-            <div v-else class="typing"><span /><span /><span /></div>
+            <div v-else class="typing" data-busy><span /><span /><span /></div>
           </div>
         </div>
       </div>
@@ -98,7 +99,7 @@ function useSuggestion(s: string): void {
           <button v-if="messages.length" class="link" @click="tabsStore.clearChat(tab)">Clear</button>
         </div>
         <div class="composer-row">
-          <textarea
+          <textarea aria-label="Ask about your data"
             v-model="input"
             class="input"
             rows="1"
@@ -144,18 +145,18 @@ function useSuggestion(s: string): void {
   margin: auto;
 }
 .logo {
-  font-size: 34px;
+  font-size: var(--fs-3xl);
   margin-bottom: 10px;
 }
 .welcome h2,
 .empty h2 {
   color: var(--text);
-  font-size: 17px;
+  font-size: var(--fs-lg);
   margin-bottom: 8px;
 }
 .welcome p,
 .empty p {
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.5;
 }
 .muted {
@@ -173,7 +174,7 @@ function useSuggestion(s: string): void {
   margin-top: 16px;
 }
 .chip {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 7px 12px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
@@ -203,7 +204,7 @@ function useSuggestion(s: string): void {
   justify-content: center;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 .bubble {
   background: var(--bg-elevated);
@@ -216,7 +217,7 @@ function useSuggestion(s: string): void {
   border-color: transparent;
 }
 .content {
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text);
   white-space: pre-wrap;
@@ -243,7 +244,7 @@ function useSuggestion(s: string): void {
   padding-top: 8px;
 }
 .steps summary {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -256,18 +257,18 @@ function useSuggestion(s: string): void {
   border-radius: var(--radius-sm);
   padding: 7px 9px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
 }
 .step-ok {
-  font-size: 11px;
-  color: var(--ok);
+  font-size: var(--fs-xs);
+  color: var(--ok-text);
 }
 .step-err {
-  font-size: 11px;
-  color: var(--danger);
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
 }
 .typing {
   display: flex;
@@ -302,12 +303,12 @@ function useSuggestion(s: string): void {
   margin-bottom: 8px;
 }
 .prov {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .link {
-  font-size: 11.5px;
-  color: var(--accent);
+  font-size: var(--fs-sm);
+  color: var(--accent-text);
 }
 .composer-row {
   display: flex;
@@ -322,7 +323,7 @@ function useSuggestion(s: string): void {
 }
 .disclaimer {
   margin-top: 7px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 </style>

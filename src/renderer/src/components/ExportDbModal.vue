@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, reactive, computed, shallowRef, onMounted } from 'vue'
+import Icon from './Icon.vue'
+import { ref, reactive, computed, shallowRef, onMounted, useId } from 'vue'
 import Modal from './Modal.vue'
 import AnonymizeStep from './AnonymizeStep.vue'
 import { useTasks } from '../stores/tasks'
 import { useWorkspace } from '../stores/workspace'
 import { sqlDialect, type DumpFormat, type TableDumpMode, type TableDumpSpec, type TableInfo } from '@shared/types'
 import { countMasked, type MaskConfig } from '@shared/mask'
+
+const uid = useId()
 
 const props = defineProps<{ connId: string; tables: TableInfo[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -82,7 +85,7 @@ function run(): void {
   <Modal title="Export database" wide @close="emit('close')">
     <div class="steps">
       <span class="stp" :class="{ on: step === 'tables' }">1 · Tables</span>
-      <span class="sarrow">→</span>
+      <span class="sarrow"><Icon name="arrowRight" :size="13" /></span>
       <span class="stp" :class="{ on: step === 'mask' }">2 · Anonymize</span>
     </div>
 
@@ -90,8 +93,8 @@ function run(): void {
     <template v-if="step === 'tables'">
       <div class="top">
         <div class="field">
-          <label>Format</label>
-          <select class="select" v-model="format">
+          <label :for="`${uid}-format`">Format</label>
+          <select :id="`${uid}-format`" class="select" v-model="format">
             <option value="sql">SQL (.sql)</option>
             <option value="sql-zip">Zipped SQL (.zip)</option>
           </select>
@@ -140,10 +143,10 @@ function run(): void {
     <template #footer>
       <template v-if="step === 'tables'">
         <button class="btn" @click="emit('close')">Cancel</button>
-        <button class="btn btn-primary" :disabled="tables.length === 0" @click="step = 'mask'">Next: anonymize →</button>
+        <button class="btn btn-primary" :disabled="tables.length === 0" @click="step = 'mask'">Next: anonymize</button>
       </template>
       <template v-else>
-        <button class="btn" @click="step = 'tables'">← Back</button>
+        <button class="btn" @click="step = 'tables'">Back</button>
         <button class="btn btn-primary" @click="run">
           {{ maskedCount ? `Export (${maskedCount} masked)` : 'Export' }}
         </button>
@@ -158,14 +161,14 @@ function run(): void {
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .stp {
   color: var(--text-faint);
   font-weight: 600;
 }
 .stp.on {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .sarrow {
   color: var(--text-faint);
@@ -204,7 +207,7 @@ function run(): void {
 .tname {
   flex: 1;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -216,7 +219,7 @@ function run(): void {
 }
 .seg button {
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   color: var(--text-dim);
@@ -230,12 +233,12 @@ function run(): void {
 .seg button.on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .seg button.on.skip {
-  background: rgba(229, 97, 106, 0.15);
+  background: var(--danger-soft);
   border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .empty {
   padding: 20px;
@@ -247,21 +250,21 @@ function run(): void {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   cursor: pointer;
 }
 .opt code,
 .engine code {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: var(--bg-elevated);
   padding: 1px 5px;
   border-radius: 4px;
 }
 .engine {
   margin-bottom: 12px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 </style>

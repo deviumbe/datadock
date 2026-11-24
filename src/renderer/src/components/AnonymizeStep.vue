@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { MASK_OPTIONS, guessMask, type MaskType, type MaskConfig, type MaskOption } from '@shared/mask'
 import type { SchemaTable, TableInfo } from '@shared/types'
@@ -96,8 +97,8 @@ watch(
   <div v-else-if="!dataTables.length" class="empty">No table is exporting data — nothing to anonymize.</div>
   <div v-else class="mlist">
     <div v-for="t in dataTables" :key="t.name" class="mtable">
-      <button class="mhead" @click="toggle(t.name)">
-        <span class="caret" :class="{ open: expanded.has(t.name) }">▸</span>
+      <button class="mhead" :aria-expanded="expanded.has(t.name)" @click="toggle(t.name)">
+        <span class="caret" :class="{ open: expanded.has(t.name) }"><Icon name="chevronRight" :size="11" /></span>
         <span class="mtname">{{ t.name }}</span>
         <span v-if="tableMaskedCount(t.name)" class="mbadge">{{ tableMaskedCount(t.name) }} masked</span>
         <span class="mcount">{{ columnsFor(t.name).length }} cols</span>
@@ -111,7 +112,7 @@ watch(
         >
           <span class="mcname">{{ c.name }}<span v-if="c.isPrimaryKey" class="pk">PK</span></span>
           <span class="mctype">{{ c.type }}</span>
-          <select class="select msel" v-model="masks[t.name][c.name]" @change="emitConfig">
+          <select class="select msel" :aria-label="`Masking for ${c.name}`" v-model="masks[t.name][c.name]" @change="emitConfig">
             <option value="none">— Keep original —</option>
             <optgroup v-for="(opts, grp) in maskGroups" :key="grp" :label="grp">
               <option v-for="o in opts" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -129,7 +130,7 @@ watch(
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
 }
 .mask-intro strong {
@@ -137,10 +138,10 @@ watch(
 }
 .msum {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .msum b {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .mask-actions {
   display: flex;
@@ -171,7 +172,7 @@ watch(
   gap: 8px;
   width: 100%;
   padding: 8px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
 }
 .mhead:hover {
@@ -190,16 +191,16 @@ watch(
   font-weight: 600;
 }
 .mbadge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border-radius: 999px;
   padding: 1px 7px;
   font-weight: 600;
 }
 .mcount {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .mcols {
@@ -218,13 +219,13 @@ watch(
 }
 .mcname {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .pk {
-  font-size: 8px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--bg-elevated);
   color: var(--text-dim);
@@ -232,14 +233,14 @@ watch(
   border-radius: 3px;
 }
 .mctype {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .msel {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   padding: 4px 6px;
 }
 </style>

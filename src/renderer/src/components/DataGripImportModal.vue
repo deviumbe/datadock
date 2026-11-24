@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import Modal from './Modal.vue'
 import Icon from './Icon.vue'
 import { useWorkspace } from '../stores/workspace'
 import type { DataGripImportResult, DataGripPlannedConnection, DataGripPreview } from '@shared/types'
 import { DRIVERS } from '@shared/types'
+
+const uid = useId()
 
 const emit = defineEmits<{ close: [] }>()
 const ws = useWorkspace()
@@ -140,14 +142,14 @@ async function runImport(): Promise<void> {
         <button class="btn" :disabled="loading" @click="chooseFolder">Choose folder…</button>
       </div>
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-else-if="loading" class="dim">Reading the DataGrip project…</p>
 
       <template v-else-if="preview">
         <div class="target">
           <div class="field">
-            <label>Import into workspace</label>
-            <select v-if="ws.workspaces.length" class="select" :value="workspaceId" @change="onWorkspaceChange">
+            <label :for="`${uid}-import-into-workspace`">Import into workspace</label>
+            <select :id="`${uid}-import-into-workspace`" v-if="ws.workspaces.length" class="select" :value="workspaceId" @change="onWorkspaceChange">
               <option v-for="w in ws.workspaces" :key="w.id" :value="w.id">{{ w.name }}</option>
             </select>
             <span v-else class="new-workspace">New workspace "{{ preview.projectName }}"</span>
@@ -294,7 +296,7 @@ async function runImport(): Promise<void> {
 }
 .path {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -311,13 +313,13 @@ async function runImport(): Promise<void> {
   min-width: 260px;
 }
 .new-workspace {
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 8px 0;
 }
 .counts {
   display: flex;
   gap: 14px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   padding-bottom: 8px;
 }
@@ -328,7 +330,7 @@ async function runImport(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-bottom: 6px;
 }
 .tree-actions {
@@ -337,7 +339,7 @@ async function runImport(): Promise<void> {
 }
 .btn.small {
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .tree {
   border: 1px solid var(--border);
@@ -357,7 +359,7 @@ async function runImport(): Promise<void> {
   align-items: flex-start;
   gap: 9px;
   padding: 4px 12px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 .node:hover {
@@ -395,7 +397,7 @@ async function runImport(): Promise<void> {
   white-space: nowrap;
 }
 .meta {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -409,19 +411,19 @@ async function runImport(): Promise<void> {
   font-family: var(--mono);
 }
 .note {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 .note.warn {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 .tag {
   flex: none;
   align-self: center;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   padding: 1px 7px;
   border-radius: 999px;
@@ -432,17 +434,17 @@ async function runImport(): Promise<void> {
 .tag.prod {
   border-color: transparent;
   background: color-mix(in srgb, var(--danger) 16%, transparent);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .summary {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-top: 14px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .block h4 {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -463,15 +465,15 @@ async function runImport(): Promise<void> {
 }
 .dim {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .empty {
   padding: 18px;
   text-align: center;
 }
 .error {
-  color: var(--danger);
-  font-size: 13px;
+  color: var(--danger-text);
+  font-size: var(--fs-base);
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
   border-radius: var(--radius-sm);
@@ -483,12 +485,12 @@ async function runImport(): Promise<void> {
   min-width: 420px;
 }
 .done-ic {
-  color: var(--ok);
+  color: var(--ok-text);
   display: inline-flex;
   flex: none;
 }
 .done-title {
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   margin-bottom: 6px;
 }
 </style>

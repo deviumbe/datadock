@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, useId } from 'vue'
 import { useSettings } from '../stores/settings'
 import { useUi } from '../stores/ui'
 import { useTheme } from '../stores/theme'
+import { useDialog } from '../lib/dialog'
 import { useVault } from '../stores/vault'
 import { useWorkspace } from '../stores/workspace'
 import {
@@ -25,7 +26,9 @@ import type {
   ThemeColors,
   ThemeMode
 } from '@shared/types'
-import deviumLogo from '../assets/devium-logo.png'
+import deviumLogo from '../assets/devium-logo.webp'
+
+const uid = useId()
 
 const settings = useSettings()
 const ui = useUi()
@@ -35,12 +38,8 @@ const emit = defineEmits<{ close: [] }>()
 type Section = 'ai' | 'appearance' | 'ssh' | 'mcp' | 'vault' | 'about'
 const section = ref<Section>('ai')
 
-// Escape closes settings — unless a confirm dialog is stacked on top.
-function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && !ui.confirmState) emit('close')
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+const dialog = ref<HTMLElement>()
+useDialog(dialog, { onEscape: () => emit('close') })
 
 const appVersion = ref('0.1.0')
 onMounted(async () => {
@@ -382,15 +381,15 @@ async function lockNow(): Promise<void> {
 <template>
   <Teleport to="body">
     <div class="overlay" @mousedown.self="emit('close')">
-      <div class="settings">
-        <nav class="nav">
+      <div ref="dialog" class="settings" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
+        <nav class="nav" aria-label="Settings sections">
           <div class="nav-title">Settings</div>
-          <button :class="{ on: section === 'ai' }" @click="section = 'ai'"><Icon name="sparkles" :size="13" /> AI Providers</button>
-          <button :class="{ on: section === 'appearance' }" @click="section = 'appearance'"><Icon name="palette" :size="13" /> Appearance</button>
-          <button :class="{ on: section === 'ssh' }" @click="section = 'ssh'"><Icon name="lock" :size="13" /> SSH Tunnels</button>
-          <button :class="{ on: section === 'mcp' }" @click="section = 'mcp'"><Icon name="bolt" :size="13" /> MCP Server</button>
-          <button :class="{ on: section === 'vault' }" @click="section = 'vault'"><Icon name="folder" :size="13" /> Vault</button>
-          <button :class="{ on: section === 'about' }" @click="section = 'about'"><Icon name="info" :size="13" /> About</button>
+          <button data-autofocus :class="{ on: section === 'ai' }" :aria-current="section === 'ai' ? 'page' : undefined" @click="section = 'ai'"><Icon name="sparkles" :size="13" /> AI Providers</button>
+          <button :class="{ on: section === 'appearance' }" :aria-current="section === 'appearance' ? 'page' : undefined" @click="section = 'appearance'"><Icon name="palette" :size="13" /> Appearance</button>
+          <button :class="{ on: section === 'ssh' }" :aria-current="section === 'ssh' ? 'page' : undefined" @click="section = 'ssh'"><Icon name="lock" :size="13" /> SSH Tunnels</button>
+          <button :class="{ on: section === 'mcp' }" :aria-current="section === 'mcp' ? 'page' : undefined" @click="section = 'mcp'"><Icon name="bolt" :size="13" /> MCP Server</button>
+          <button :class="{ on: section === 'vault' }" :aria-current="section === 'vault' ? 'page' : undefined" @click="section = 'vault'"><Icon name="folder" :size="13" /> Vault</button>
+          <button :class="{ on: section === 'about' }" :aria-current="section === 'about' ? 'page' : undefined" @click="section = 'about'"><Icon name="info" :size="13" /> About</button>
           <div class="nav-spacer" />
           <button class="close-x" @click="emit('close')">Close <Icon name="x" :size="12" /></button>
         </nav>
@@ -422,9 +421,9 @@ async function lockNow(): Promise<void> {
 
               <div class="prov-body">
                 <div class="row" v-if="p.needsKey">
-                  <label>API key</label>
+                  <label :for="`${uid}-${p.provider}-api-key`">API key</label>
                   <div class="row-inputs">
-                    <input
+                    <input :id="`${uid}-${p.provider}-api-key`"
                       class="input"
                       type="password"
                       v-model="keyDraft[p.provider]"
@@ -443,9 +442,9 @@ async function lockNow(): Promise<void> {
                 </p>
 
                 <div class="row" v-if="p.provider === 'claude-code'">
-                  <label>CLI path</label>
+                  <label :for="`${uid}-${p.provider}-cli-path`">CLI path</label>
                   <div class="row-inputs">
-                    <input
+                    <input :id="`${uid}-${p.provider}-cli-path`"
                       class="input"
                       :value="urlDraft[p.provider] ?? p.baseUrl"
                       @input="urlDraft[p.provider] = ($event.target as HTMLInputElement).value"
@@ -456,9 +455,9 @@ async function lockNow(): Promise<void> {
                 </div>
 
                 <div class="row" v-if="p.provider === 'ollama'">
-                  <label>Server URL</label>
+                  <label :for="`${uid}-${p.provider}-server-url`">Server URL</label>
                   <div class="row-inputs">
-                    <input
+                    <input :id="`${uid}-${p.provider}-server-url`"
                       class="input"
                       :value="urlDraft[p.provider] ?? p.baseUrl"
                       @input="urlDraft[p.provider] = ($event.target as HTMLInputElement).value"
@@ -469,11 +468,12 @@ async function lockNow(): Promise<void> {
                 </div>
 
                 <div class="row">
-                  <label>Model</label>
+                  <label :for="`${uid}-${p.provider}-model`">Model</label>
                   <div class="row-inputs">
                     <!-- A <select> rather than a <datalist>: datalists filter by the typed
                          value, so a saved "sonnet" would hide every other model. -->
                     <select
+                      aria-label="Detected models"
                       v-if="(models[p.provider]?.length ?? 0) > 0"
                       class="input"
                       :value="modelDraft[p.provider] ?? p.model"
@@ -485,6 +485,7 @@ async function lockNow(): Promise<void> {
                       <option v-for="m in models[p.provider]" :key="m" :value="m">{{ m }}</option>
                     </select>
                     <input
+                      :id="`${uid}-${p.provider}-model`"
                       class="input"
                       :value="modelDraft[p.provider] ?? p.model"
                       @input="modelDraft[p.provider] = ($event.target as HTMLInputElement).value"
@@ -591,7 +592,7 @@ async function lockNow(): Promise<void> {
                 </small>
               </div>
               <div class="setting-control">
-                <select class="select" :value="theme.settings.uiFont" @change="setUiFont">
+                <select class="select" :value="theme.settings.uiFont" aria-label="Interface font" @change="setUiFont">
                   <option v-for="f in UI_FONTS" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </div>
@@ -605,7 +606,7 @@ async function lockNow(): Promise<void> {
                 </small>
               </div>
               <div class="setting-control">
-                <select class="select" :value="theme.settings.codeFont" @change="setCodeFont">
+                <select class="select" :value="theme.settings.codeFont" aria-label="Code font" @change="setCodeFont">
                   <option v-for="f in CODE_FONTS" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </div>
@@ -692,7 +693,7 @@ async function lockNow(): Promise<void> {
                 <small>Zoom the whole UI in or out.</small>
               </div>
               <div class="setting-control range">
-                <input type="range" min="80" max="150" step="5" v-model.number="scalePct" />
+                <input aria-label="Interface scale" type="range" min="80" max="150" step="5" v-model.number="scalePct" />
                 <span class="val">{{ scalePct }}%</span>
               </div>
             </div>
@@ -716,7 +717,7 @@ async function lockNow(): Promise<void> {
                 <small>Rows loaded per page in table view.</small>
               </div>
               <div class="setting-control">
-                <select class="select" :value="settings.appearance.pageSize" @change="setPageSize(Number(($event.target as HTMLSelectElement).value))">
+                <select aria-label="Rows per page" class="select" :value="settings.appearance.pageSize" @change="setPageSize(Number(($event.target as HTMLSelectElement).value))">
                   <option :value="100">100</option>
                   <option :value="200">200</option>
                   <option :value="500">500</option>
@@ -761,20 +762,20 @@ async function lockNow(): Promise<void> {
               <h3>{{ sshEditingId ? 'Edit profile' : 'New profile' }}</h3>
               <div class="form-grid">
                 <div class="field span2">
-                  <label>Name</label>
-                  <input class="input" v-model="sshDraft.name" placeholder="Production bastion" />
+                  <label :for="`${uid}-name`">Name</label>
+                  <input :id="`${uid}-name`" class="input" v-model="sshDraft.name" placeholder="Production bastion" />
                 </div>
                 <div class="field span2-host">
-                  <label>SSH host</label>
-                  <input class="input" v-model="sshDraft.host" placeholder="bastion.example.com" />
+                  <label :for="`${uid}-ssh-host`">SSH host</label>
+                  <input :id="`${uid}-ssh-host`" class="input" v-model="sshDraft.host" placeholder="bastion.example.com" />
                 </div>
                 <div class="field">
-                  <label>Port</label>
-                  <input class="input" type="number" v-model.number="sshDraft.port" />
+                  <label :for="`${uid}-port`">Port</label>
+                  <input :id="`${uid}-port`" class="input" type="number" v-model.number="sshDraft.port" />
                 </div>
                 <div class="field">
-                  <label>User</label>
-                  <input class="input" v-model="sshDraft.user" placeholder="ubuntu" />
+                  <label :for="`${uid}-user`">User</label>
+                  <input :id="`${uid}-user`" class="input" v-model="sshDraft.user" placeholder="ubuntu" />
                 </div>
                 <div class="field">
                   <label>Authentication</label>
@@ -787,15 +788,15 @@ async function lockNow(): Promise<void> {
 
                 <template v-if="sshDraft.authMethod === 'key'">
                   <div class="field span2">
-                    <label>Private key file</label>
+                    <label :for="`${uid}-private-key-file`">Private key file</label>
                     <div class="key-row">
-                      <input class="input" v-model="sshDraft.keyPath" placeholder="~/.ssh/id_ed25519" />
+                      <input :id="`${uid}-private-key-file`" class="input" v-model="sshDraft.keyPath" placeholder="~/.ssh/id_ed25519" />
                       <button class="btn" type="button" @click="pickSshKey">Browse…</button>
                     </div>
                   </div>
                   <div class="field span2">
-                    <label>Key passphrase</label>
-                    <input
+                    <label :for="`${uid}-key-passphrase`">Key passphrase</label>
+                    <input :id="`${uid}-key-passphrase`"
                       class="input"
                       type="password"
                       v-model="sshDraft.passphrase"
@@ -806,8 +807,8 @@ async function lockNow(): Promise<void> {
                 </template>
 
                 <div v-else-if="sshDraft.authMethod === 'password'" class="field span2">
-                  <label>SSH password</label>
-                  <input
+                  <label :for="`${uid}-ssh-password`">SSH password</label>
+                  <input :id="`${uid}-ssh-password`"
                     class="input"
                     type="password"
                     v-model="sshDraft.password"
@@ -825,7 +826,7 @@ async function lockNow(): Promise<void> {
                 </button>
                 <button v-if="sshEditingId" class="btn btn-ghost" @click="cancelSshEdit">Cancel</button>
               </div>
-              <p v-if="sshError" class="ssh-err">{{ sshError }}</p>
+              <p v-if="sshError" class="ssh-err" role="alert">{{ sshError }}</p>
             </div>
           </section>
 
@@ -847,7 +848,7 @@ async function lockNow(): Promise<void> {
               </div>
               <div class="setting-control">
                 <button
-                  class="toggle"
+                  aria-label="MCP server" class="toggle"
                   :class="{ on: mcp?.enabled }"
                   role="switch"
                   :aria-checked="!!mcp?.enabled"
@@ -859,8 +860,8 @@ async function lockNow(): Promise<void> {
             </div>
 
             <p v-if="mcp?.enabled" class="status" :class="{ ok: mcp?.running, bad: !mcp?.running }">
-              <template v-if="mcp?.running">● Listening on http://127.0.0.1:{{ mcp?.port }}/mcp</template>
-              <template v-else>● Not running{{ mcp?.error ? ` — ${mcp.error}` : '' }}</template>
+              <template v-if="mcp?.running"><span class="status-dot" /> Listening on http://127.0.0.1:{{ mcp?.port }}/mcp</template>
+              <template v-else><span class="status-dot" /> Not running{{ mcp?.error ? ` — ${mcp.error}` : '' }}</template>
             </p>
 
             <template v-if="mcp?.enabled">
@@ -871,6 +872,7 @@ async function lockNow(): Promise<void> {
                 </div>
                 <div class="setting-control">
                   <input
+                    aria-label="MCP port"
                     class="input port"
                     type="number"
                     :value="portDraft ?? mcp?.port"
@@ -888,7 +890,7 @@ async function lockNow(): Promise<void> {
                 </div>
                 <div class="setting-control">
                   <button
-                    class="toggle"
+                    aria-label="Allow writes over MCP" class="toggle"
                     :class="{ on: mcp?.allowWrites, warn: mcp?.allowWrites }"
                     role="switch"
                     :aria-checked="!!mcp?.allowWrites"
@@ -900,9 +902,9 @@ async function lockNow(): Promise<void> {
               </div>
 
               <div class="row mcp-field">
-                <label>Access token</label>
+                <label :for="`${uid}-access-token`">Access token</label>
                 <div class="row-inputs">
-                  <input class="input mono" :type="tokenShown ? 'text' : 'password'" :value="mcp?.token" readonly />
+                  <input :id="`${uid}-access-token`" class="input mono" :type="tokenShown ? 'text' : 'password'" :value="mcp?.token" readonly />
                   <button class="btn btn-ghost" @click="tokenShown = !tokenShown">{{ tokenShown ? 'Hide' : 'Show' }}</button>
                   <button class="btn" @click="copy(mcp?.token ?? '', 'token')">{{ copied === 'token' ? 'Copied!' : 'Copy' }}</button>
                   <button class="btn btn-ghost" @click="regenMcpToken">Regenerate</button>
@@ -910,7 +912,7 @@ async function lockNow(): Promise<void> {
               </div>
 
               <div class="row mcp-field">
-                <label>Connect Claude Code</label>
+                <span class="field-title">Connect Claude Code</span>
                 <p class="hint">Run this once in your project, then the agent can use the DataDock tools:</p>
                 <div class="cmd">
                   <code>{{ mcpCommand }}</code>
@@ -959,7 +961,7 @@ async function lockNow(): Promise<void> {
                 </div>
                 <div class="setting-control">
                   <button
-                    class="toggle"
+                    aria-label="Unlock with Touch ID" class="toggle"
                     :class="{ on: vaultStatus.touchIdEnabled }"
                     role="switch"
                     :aria-checked="vaultStatus.touchIdEnabled"
@@ -976,7 +978,7 @@ async function lockNow(): Promise<void> {
                   <small>The vault also locks when the Mac sleeps or its screen locks. Locking closes every database connection.</small>
                 </div>
                 <div class="setting-control">
-                  <select class="input" :value="vaultStatus.autoLockMinutes" @change="setAutoLock">
+                  <select aria-label="Auto-lock after" class="input" :value="vaultStatus.autoLockMinutes" @change="setAutoLock">
                     <option v-for="m in AUTO_LOCK_CHOICES" :key="m" :value="m">{{ autoLockLabel(m) }}</option>
                   </select>
                 </div>
@@ -1004,8 +1006,8 @@ async function lockNow(): Promise<void> {
               <div class="vault-path mono" :title="vaultPath">{{ vaultPath }}</div>
               <div class="form-grid">
                 <div class="field span2">
-                  <label>Passphrase</label>
-                  <input
+                  <label :for="`${uid}-passphrase`">Passphrase</label>
+                  <input :id="`${uid}-passphrase`"
                     class="input"
                     type="password"
                     v-model="vaultPass"
@@ -1015,8 +1017,8 @@ async function lockNow(): Promise<void> {
                   />
                 </div>
                 <div v-if="vaultMode === 'create'" class="field span2">
-                  <label>Repeat passphrase</label>
-                  <input class="input" type="password" v-model="vaultPass2" autocomplete="new-password" />
+                  <label :for="`${uid}-repeat-passphrase`">Repeat passphrase</label>
+                  <input :id="`${uid}-repeat-passphrase`" class="input" type="password" v-model="vaultPass2" autocomplete="new-password" />
                 </div>
                 <label v-if="vaultStatus?.touchIdAvailable" class="check span2">
                   <input type="checkbox" v-model="vaultTouchId" />
@@ -1033,7 +1035,7 @@ async function lockNow(): Promise<void> {
                 <button class="btn btn-ghost" type="button" :disabled="vaultBusy" @click="cancelVault">Cancel</button>
               </div>
             </form>
-            <p v-if="vaultError" class="ssh-err">{{ vaultError }}</p>
+            <p v-if="vaultError" class="ssh-err" role="alert">{{ vaultError }}</p>
           </section>
 
           <!-- About -->
@@ -1041,7 +1043,7 @@ async function lockNow(): Promise<void> {
             <img :src="deviumLogo" alt="Devium" class="dev-logo" />
             <h2>DataDock</h2>
             <p class="ver">Version {{ appVersion }}</p>
-            <p class="tag">Built with a smile for everybody. 🙂</p>
+            <p class="tag">Built with a smile for everybody.</p>
             <p class="by">
               A free product by <a href="https://devium.be/" target="_blank" rel="noreferrer">Devium</a> —
               made with care, given away for nothing.
@@ -1059,12 +1061,12 @@ async function lockNow(): Promise<void> {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 120;
+  z-index: 100;
   animation: settings-fade var(--dur-2) ease;
 }
 .settings {
@@ -1102,7 +1104,7 @@ async function lockNow(): Promise<void> {
   gap: 4px;
 }
 .nav-title {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -1115,7 +1117,7 @@ async function lockNow(): Promise<void> {
   text-align: left;
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   transition: background var(--dur-1), color var(--dur-1);
 }
@@ -1132,7 +1134,7 @@ async function lockNow(): Promise<void> {
 }
 .close-x {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .panel {
   flex: 1;
@@ -1140,13 +1142,13 @@ async function lockNow(): Promise<void> {
   padding: 24px 26px;
 }
 h2 {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 600;
   margin-bottom: 6px;
 }
 .lead {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   margin-bottom: 18px;
 }
@@ -1173,12 +1175,12 @@ h2 {
 }
 .prov-name {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--fs-base);
 }
 .badge-active,
 .badge-set,
 .badge-local {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 2px 8px;
@@ -1186,15 +1188,15 @@ h2 {
 }
 .badge-active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .badge-set {
-  background: rgba(74, 222, 128, 0.14);
-  color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok-text);
 }
 .badge-local {
   background: var(--bg-active);
-  color: var(--text-faint);
+  color: var(--text);
 }
 .prov-body {
   margin-top: 12px;
@@ -1208,7 +1210,7 @@ h2 {
   gap: 5px;
 }
 .row > label {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 .row-inputs {
@@ -1219,17 +1221,17 @@ h2 {
   flex: 1;
 }
 .test {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-top: 2px;
 }
 .test.ok {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .test.fail {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 .hint-models {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-top: 4px;
   color: var(--text-dim);
 }
@@ -1242,11 +1244,11 @@ h2 {
   border-bottom: 1px solid var(--border);
 }
 .setting-label span {
-  font-size: 13px;
+  font-size: var(--fs-base);
   display: block;
 }
 .setting-label small {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .setting-control.range {
@@ -1256,7 +1258,7 @@ h2 {
 }
 .setting-control .val {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   width: 42px;
   text-align: right;
@@ -1270,13 +1272,13 @@ h2 {
 }
 .seg button {
   padding: 5px 14px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   border-radius: 999px;
   color: var(--text-dim);
 }
 .seg button.on {
   background: var(--bg-active);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .seg.disabled {
   opacity: 0.45;
@@ -1332,7 +1334,7 @@ h2 {
   inset: 0 auto 0 0;
   width: 30%;
   background: var(--p-surface, var(--bg-panel));
-  border-right: 1px solid rgba(127, 127, 127, 0.2);
+  border-right: 1px solid var(--border-soft);
 }
 .preset-art .art-bar {
   position: absolute;
@@ -1360,7 +1362,7 @@ h2 {
   color: var(--p-accent, var(--text-dim));
 }
 .preset-name {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .custom-colors {
@@ -1380,7 +1382,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 .color-field input[type='color'] {
@@ -1404,7 +1406,7 @@ h2 {
 }
 .color-field code {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .icon-sets {
@@ -1434,7 +1436,7 @@ h2 {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .layout-card small {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .layout-art {
@@ -1516,19 +1518,26 @@ h2 {
   background: var(--accent);
 }
 .toggle.on.warn {
-  background: rgba(229, 97, 106, 0.18);
+  background: var(--danger-soft);
   border-color: var(--danger);
 }
 .toggle.on.warn .knob {
   background: var(--danger);
 }
 .status {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-family: var(--mono);
   margin: 4px 0 8px;
 }
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .status.ok {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 .status.bad {
   color: var(--text-faint);
@@ -1538,18 +1547,18 @@ h2 {
 }
 .input.mono {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .mcp-field {
   margin-top: 16px;
 }
 .mcp-field > label {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   margin-bottom: 4px;
 }
 .hint {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   line-height: 1.5;
   margin: 4px 0;
@@ -1563,7 +1572,7 @@ h2 {
 .cmd code {
   flex: 1;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1586,31 +1595,31 @@ h2 {
   object-fit: contain;
 }
 .about h2 {
-  font-size: 22px;
+  font-size: var(--fs-xl);
 }
 .ver {
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-top: 2px;
 }
 .tag {
   margin-top: 14px;
-  font-size: 14px;
+  font-size: var(--fs-md);
   color: var(--text);
 }
 .by {
   margin: 10px auto 18px;
   max-width: 360px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   line-height: 1.5;
 }
 .by a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .legal {
   margin-top: 18px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -1645,7 +1654,7 @@ h2 {
   color: var(--text);
 }
 .ssh-item-detail {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   font-family: var(--mono);
 }
@@ -1655,11 +1664,11 @@ h2 {
   flex-shrink: 0;
 }
 .ssh-item-actions .danger:hover {
-  color: var(--danger, #e5616a);
+  color: var(--danger-text);
 }
 .empty-hint {
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
   margin-bottom: 20px;
 }
 .ssh-editor {
@@ -1668,7 +1677,7 @@ h2 {
 }
 .ssh-editor h3 {
   margin: 0 0 14px;
-  font-size: 14px;
+  font-size: var(--fs-md);
   color: var(--text);
 }
 .ssh-editor-actions {
@@ -1695,7 +1704,7 @@ h2 {
   flex: 1;
 }
 .ssh-note {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   line-height: 1.5;
 }
@@ -1715,7 +1724,7 @@ h2 {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .vault-box-main > div {
   min-width: 0;
@@ -1728,14 +1737,14 @@ h2 {
 .vault-box-main small {
   display: block;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   margin-top: 2px;
 }
 .vault-missing {
-  color: var(--warn) !important;
+  color: var(--warn-text) !important;
 }
 .vault-path {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1756,7 +1765,7 @@ h2 {
   border-top: 1px solid var(--border);
 }
 .vault-editor h3 {
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -1765,11 +1774,16 @@ h2 {
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .ssh-err {
   margin-top: 10px;
-  font-size: 12px;
-  color: var(--danger, #e5616a);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
+}
+.field-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
 }
 </style>

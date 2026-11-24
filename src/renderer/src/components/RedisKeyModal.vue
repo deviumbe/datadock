@@ -42,7 +42,7 @@ function bytesLabel(b: number | null): string {
 <template>
   <Modal :title="redisKey" wide @close="emit('close')">
     <div v-if="loading" class="muted">Loading…</div>
-    <div v-else-if="error" class="err">{{ error }}</div>
+    <div v-else-if="error" class="err" role="alert">{{ error }}</div>
     <template v-else-if="data">
       <div class="meta">
         <span class="pill type">{{ data.type }}</span>
@@ -92,11 +92,11 @@ function bytesLabel(b: number | null): string {
 <style scoped>
 .muted {
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .err {
-  color: var(--danger);
-  font-size: 13px;
+  color: var(--danger-text);
+  font-size: var(--fs-base);
 }
 .meta {
   display: flex;
@@ -105,7 +105,7 @@ function bytesLabel(b: number | null): string {
   flex-wrap: wrap;
 }
 .pill {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -113,7 +113,7 @@ function bytesLabel(b: number | null): string {
   padding: 2px 8px;
 }
 .pill.type {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -125,7 +125,7 @@ function bytesLabel(b: number | null): string {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -135,7 +135,7 @@ function bytesLabel(b: number | null): string {
 .kv {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .kv th {
   text-align: left;
@@ -152,13 +152,13 @@ function bytesLabel(b: number | null): string {
 }
 .kv td.k {
   font-family: var(--mono);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .items {
   margin: 0;
   padding-left: 24px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   max-height: 50vh;
   overflow: auto;
@@ -169,7 +169,7 @@ function bytesLabel(b: number | null): string {
 }
 .trunc {
   margin-top: 10px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { Bookmark } from '@shared/types'
 import Icon from './Icon.vue'
 
@@ -16,12 +16,26 @@ async function reload(): Promise<void> {
 }
 watch(() => props.connId, () => { open.value = false })
 
+const trigger = ref<HTMLElement>()
+const menu = ref<HTMLElement>()
+const nameInput = ref<HTMLInputElement>()
+const anchor = ref({ top: 0, right: 0 })
+async function startNaming(): Promise<void> {
+  naming.value = true
+  await nextTick()
+  nameInput.value?.focus()
+}
+
 async function toggle(): Promise<void> {
   open.value = !open.value
   if (open.value) {
+    const r = trigger.value!.getBoundingClientRect()
+    anchor.value = { top: r.bottom + 6, right: window.innerWidth - r.right }
     naming.value = false
     name.value = ''
     await reload()
+    await nextTick()
+    menu.value?.querySelector<HTMLElement>('button:not(:disabled), [data-row]')?.focus()
   }
 }
 function close(): void {
@@ -41,6 +55,11 @@ async function remove(b: Bookmark): Promise<void> {
   await window.api.bookmarks.remove(props.connId, b.id)
   await reload()
 }
+function onEscape(): void {
+  if (naming.value) naming.value = false
+  else close()
+  trigger.value?.focus()
+}
 function pick(b: Bookmark): void {
   emit('load', b.sql)
   close()
@@ -48,20 +67,29 @@ function pick(b: Bookmark): void {
 </script>
 
 <template>
-  <div class="bm" @mouseleave="open && !naming ? close() : undefined">
-    <button class="btn btn-ghost" :class="{ on: open }" title="Bookmarked queries for this connection" @click="toggle">
-      <Icon name="bookmark" :size="13" /> Bookmarks
+  <div class="bm">
+    <button
+      ref="trigger"
+      class="btn btn-ghost"
+      :class="{ on: open }"
+      title="Bookmarked queries for this connection"
+      :aria-expanded="open"
+      @click="toggle"
+    >
+      <Icon name="bookmark" :size="13" /> <span class="lbl">Bookmarks</span>
     </button>
-    <div v-if="open" class="bm-menu">
+    <Teleport to="body">
+    <div v-if="open" class="bm-scrim" @mousedown="close" />
+    <div v-if="open" ref="menu" class="bm-menu" role="dialog" aria-label="Bookmarked queries" @keydown.esc.stop="onEscape" :style="{ top: `${anchor.top}px`, right: `${anchor.right}px` }">
       <div class="bm-save">
         <template v-if="naming">
           <input
+            ref="nameInput"
             v-model="name"
             class="input"
+            aria-label="Bookmark name"
             placeholder="Name this query"
-            autofocus
             @keydown.enter="save"
-            @keydown.esc="naming = false"
           />
           <button class="btn btn-primary sm" @click="save">Save</button>
         </template>
@@ -70,19 +98,20 @@ function pick(b: Bookmark): void {
           class="bm-add"
           :disabled="!currentSql.trim()"
           title="Bookmark the current query"
-          @click="naming = true"
+          @click="startNaming"
         ><Icon name="plus" :size="13" /> Bookmark this query</button>
       </div>
 
-      <div class="bm-list">
-        <div v-for="b in list" :key="b.id" class="bm-item" @click="pick(b)">
+      <div class="bm-list" role="list" data-rows>
+        <div v-for="b in list" :key="b.id" v-row role="listitem" class="bm-item" @click="pick(b)">
           <Icon name="bookmark" :size="12" />
           <span class="bm-name" :title="b.sql">{{ b.name }}</span>
-          <button class="bm-del" title="Remove" @click.stop="remove(b)"><Icon name="x" :size="11" /></button>
+          <span data-row-actions><button class="bm-del" :title="`Remove ${b.name}`" @click.stop="remove(b)"><Icon name="x" :size="11" /></button></span>
         </div>
         <div v-if="!list.length" class="bm-empty">No bookmarks yet for this connection.</div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -92,12 +121,16 @@ function pick(b: Bookmark): void {
   display: inline-flex;
 }
 .btn.on {
-  color: var(--accent);
+  color: var(--accent-text);
+}
+.bm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
 }
 .bm-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  /* Teleported: the toolbar it belongs to scrolls and would clip it. */
+  position: fixed;
   z-index: 60;
   width: 280px;
   background: var(--bg-elevated);
@@ -114,7 +147,7 @@ function pick(b: Bookmark): void {
 }
 .bm-save .input {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 5px 8px;
 }
 .btn.sm {
@@ -126,8 +159,8 @@ function pick(b: Bookmark): void {
   gap: 6px;
   width: 100%;
   padding: 6px 8px;
-  font-size: 12px;
-  color: var(--accent);
+  font-size: var(--fs-sm);
+  color: var(--accent-text);
   border-radius: var(--radius-sm);
 }
 .bm-add:hover:not(:disabled) {
@@ -157,7 +190,7 @@ function pick(b: Bookmark): void {
 .bm-name {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -167,16 +200,18 @@ function pick(b: Bookmark): void {
   display: inline-flex;
   align-items: center;
   color: var(--text-faint);
-  padding: 2px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
 }
 .bm-del:hover {
-  color: var(--danger);
-  background: rgba(248, 113, 113, 0.15);
+  color: var(--danger-text);
+  background: var(--danger-soft);
 }
 .bm-empty {
   padding: 12px 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   text-align: center;
 }
